@@ -3,16 +3,16 @@
 
 ```bash
 mkdir -p ~/.config/systemd/user
-nano ~/.config/systemd/user/bel-sekolah.service
+nano ~/.config/systemd/user/bel-madrasah.service
 ```
 
 ```bash
 [Unit]
-Description=Bel Sekolah Otomatis
+Description=Bel Madrasah Otomatis
 After=default.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/zulfikriyahya/bel-sekolah/main.py
+ExecStart=/usr/bin/python3 /home/zulfikriyahya/bel-madrasah/main.py
 Restart=always
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=DISPLAY=:0
@@ -25,7 +25,7 @@ WantedBy=default.target
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable bel-sekolah.service
-systemctl --user start bel-sekolah.service
+systemctl --user enable bel-madrasah.service
+systemctl --user start bel-madrasah.service
 sudo loginctl enable-linger zulfikriyahya
 ```
