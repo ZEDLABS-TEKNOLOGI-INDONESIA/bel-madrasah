@@ -10,7 +10,7 @@ def expand_path(path):
 def play_sound(file_path):
     full_path = expand_path(file_path)
     subprocess.Popen([
-        "/usr/bin/ffplay", "-nodisp", "-volume", "100", "-autoexit", full_path
+        "/usr/bin/ffplay", "-nodisp", "-volume", "85", "-autoexit", full_path
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def get_hari():
