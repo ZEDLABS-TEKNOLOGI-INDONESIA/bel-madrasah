@@ -1,4 +1,4 @@
-# Bel Madrasah Tsanawiyah Negeri 1 Pandeglang
+# Bell System Madrasah Tsanawiyah Negeri 1 Pandeglang
 ## ✨ Instalasi
 
 ```bash
