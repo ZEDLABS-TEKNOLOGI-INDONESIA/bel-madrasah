@@ -25,7 +25,7 @@ WantedBy=default.target
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable bel-madrasah.service
-systemctl --user start bel-madrasah.service
+systemctl --user enable --now bel-madrasah.service
+systemctl --user restart bel-madrasah.service
 sudo loginctl enable-linger zulfikriyahya
 ```
