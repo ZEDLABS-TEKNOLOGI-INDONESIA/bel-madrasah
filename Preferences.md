@@ -1,5 +1,4 @@
 ## Jadwal Pelajaran:
----
 
 ### Hari Senin:
 | Kegiatan                    | Waktu      | File Suara                                      |
@@ -111,3 +110,4 @@
 | Bel Terakhir / Bel Pulang | 14:50 WIB | ~/bel-sekolah/tone/ap.mp3 |
 | Bel Pramuka               | 14:51 WIB | ~/bel-sekolah/tone/pramuka.mp3 |
 | Bel Hymne                 | 16:30 WIB | ~/bel-sekolah/tone/hymne.mp3 |
+---
