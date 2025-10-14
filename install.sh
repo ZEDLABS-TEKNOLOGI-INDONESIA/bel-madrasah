@@ -18,6 +18,13 @@ SERVICE_FILE="$HOME/.config/systemd/user/$SERVICE_NAME.service"
 PYTHON_CMD="/usr/bin/python3"
 CURRENT_USER=$(whoami)
 
+# Detect if running via pipe
+if [ -t 0 ]; then
+    INTERACTIVE=true
+else
+    INTERACTIVE=false
+fi
+
 # Function to print colored output
 print_status() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -112,11 +119,16 @@ create_project_dir() {
     
     if [ -d "$PROJECT_DIR" ]; then
         print_warning "Direktori $PROJECT_DIR sudah ada"
-        read -p "Apakah Anda ingin melanjutkan dan menimpa file yang ada? [y/N]: " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            print_error "Instalasi dibatalkan oleh user"
-            exit 1
+        
+        if [ "$INTERACTIVE" = true ]; then
+            read -p "Apakah Anda ingin melanjutkan dan menimpa file yang ada? [y/N]: " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_error "Instalasi dibatalkan oleh user"
+                exit 1
+            fi
+        else
+            print_status "Mode non-interaktif: Melanjutkan dengan overwrite..."
         fi
     fi
     
@@ -497,8 +509,7 @@ show_completion() {
     print_status "Status service:"
     systemctl --user is-active "$SERVICE_NAME.service" --quiet && echo -e "  ${GREEN}● AKTIF${NC}" || echo -e "  ${RED}● TIDAK AKTIF${NC}"
     echo
-    print_warning "PENTING: Pastikan file audio sudah ada di $PROJECT_DIR/tone/"
-    print_status "Lihat daftar file audio di: $PROJECT_DIR/audio-list.txt"
+    print_status "File audio: Lihat daftar di $PROJECT_DIR/audio-list.txt"
     echo
     echo "Commands berguna:"
     echo "  - Cek status   : systemctl --user status $SERVICE_NAME"
@@ -518,12 +529,18 @@ main() {
     echo "========================================="
     echo
     
-    # Confirmation
-    read -p "Apakah Anda ingin melanjutkan instalasi? [y/N]: " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_error "Instalasi dibatalkan"
-        exit 1
+    # Confirmation for interactive mode only
+    if [ "$INTERACTIVE" = true ]; then
+        read -p "Apakah Anda ingin melanjutkan instalasi? [y/N]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_error "Instalasi dibatalkan"
+            exit 1
+        fi
+    else
+        print_status "Mode instalasi otomatis (non-interaktif)"
+        print_status "Instalasi akan dimulai dalam 3 detik..."
+        sleep 3
     fi
     
     echo
