@@ -19,13 +19,7 @@
 
 ### ⚡ **Super Simple (Recommended)**
 
-**Copy-paste satu baris ini:**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/install.sh | bash
-```
-
-**Atau download dan jalankan:**
+**Copy-paste baris ini:**
 
 ```bash
 wget https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/install.sh
@@ -51,12 +45,6 @@ chmod +x install.sh
 - ✅ Verify installation
 
 ### 🗑️ **Quick Uninstall**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/uninstall.sh | bash
-```
-
-**Atau:**
 
 ```bash
 wget https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/uninstall.sh
