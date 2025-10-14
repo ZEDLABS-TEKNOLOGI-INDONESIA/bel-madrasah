@@ -191,101 +191,105 @@ create_jadwal_py() {
     cat > "$PROJECT_DIR/jadwal.py" << 'EOF'
 JADWAL = {
     "Senin": [
-        ("06:40", "~/bel-madrasah/tone/sholawat.mp3"),
-        ("07:00", "~/bel-madrasah/tone/hymne.mp3"),
+        ("06:40", "~/bel-madrasah/tone/sholawat-badariyah.mp3"),
+        ("07:00", "~/bel-madrasah/tone/mars-madrasah.mp3"),
         ("07:15", "~/bel-madrasah/tone/upacara.mp3"),
-        ("08:10", "~/bel-madrasah/tone/p2.mp3"),
-        ("08:50", "~/bel-madrasah/tone/p3.mp3"),
-        ("09:30", "~/bel-madrasah/tone/p4.mp3"),
+        ("08:10", "~/bel-madrasah/tone/pelajaran-2.mp3"),
+        ("08:50", "~/bel-madrasah/tone/pelajaran-3.mp3"),
+        ("09:30", "~/bel-madrasah/tone/pelajaran-4.mp3"),
         ("10:00", "~/bel-madrasah/tone/indonesia-raya.mp3"),
-        ("10:10", "~/bel-madrasah/tone/i1.mp3"),
+        ("10:10", "~/bel-madrasah/tone/istirahat-1.mp3"),
         ("10:20", "~/bel-madrasah/tone/kebersihan.mp3"),
-        ("10:30", "~/bel-madrasah/tone/p5.mp3"),
-        ("11:10", "~/bel-madrasah/tone/p6.mp3"),
-        ("11:50", "~/bel-madrasah/tone/i2.mp3"),
-        ("12:40", "~/bel-madrasah/tone/p7.mp3"),
-        ("13:20", "~/bel-madrasah/tone/p8.mp3"),
-        ("14:00", "~/bel-madrasah/tone/p9.mp3"),
-        ("14:40", "~/bel-madrasah/tone/p10.mp3"),
-        ("15:20", "~/bel-madrasah/tone/s.mp3"),
-        ("16:30", "~/bel-madrasah/tone/hymne.mp3")
+        ("10:30", "~/bel-madrasah/tone/pelajaran-5.mp3"),
+        ("11:10", "~/bel-madrasah/tone/pelajaran-6.mp3"),
+        ("11:50", "~/bel-madrasah/tone/istirahat-2.mp3"),
+        ("12:30", "~/bel-madrasah/tone/kebersihan.mp3"),
+        ("12:40", "~/bel-madrasah/tone/pelajaran-7.mp3"),
+        ("13:20", "~/bel-madrasah/tone/pelajaran-8.mp3"),
+        ("14:00", "~/bel-madrasah/tone/pelajaran-9.mp3"),
+        ("14:40", "~/bel-madrasah/tone/pelajaran-10.mp3"),
+        ("15:20", "~/bel-madrasah/tone/pelajaran-selesai.mp3"),
+        ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
     "Selasa": [
-        ("06:40", "~/bel-madrasah/tone/sholawat.mp3"),
-        ("07:00", "~/bel-madrasah/tone/hymne.mp3"),
-        ("07:30", "~/bel-madrasah/tone/p1.mp3"),
-        ("08:10", "~/bel-madrasah/tone/p2.mp3"),
-        ("08:50", "~/bel-madrasah/tone/p3.mp3"),
-        ("09:30", "~/bel-madrasah/tone/p4.mp3"),
-        ("10:10", "~/bel-madrasah/tone/i1.mp3"),
+        ("06:40", "~/bel-madrasah/tone/sholawat-jibril.mp3"),
+        ("07:00", "~/bel-madrasah/tone/mars-madrasah.mp3"),
+        ("07:30", "~/bel-madrasah/tone/pelajaran-1.mp3"),
+        ("08:10", "~/bel-madrasah/tone/pelajaran-2.mp3"),
+        ("08:50", "~/bel-madrasah/tone/pelajaran-3.mp3"),
+        ("09:30", "~/bel-madrasah/tone/pelajaran-4.mp3"),
+        ("10:10", "~/bel-madrasah/tone/istirahat-1.mp3"),
         ("10:20", "~/bel-madrasah/tone/kebersihan.mp3"),
-        ("10:30", "~/bel-madrasah/tone/p5.mp3"),
-        ("11:10", "~/bel-madrasah/tone/p6.mp3"),
-        ("11:50", "~/bel-madrasah/tone/i2.mp3"),
-        ("12:40", "~/bel-madrasah/tone/p7.mp3"),
-        ("13:20", "~/bel-madrasah/tone/p8.mp3"),
-        ("14:00", "~/bel-madrasah/tone/p9.mp3"),
-        ("14:40", "~/bel-madrasah/tone/p10.mp3"),
-        ("15:20", "~/bel-madrasah/tone/s.mp3"),
-        ("16:30", "~/bel-madrasah/tone/hymne.mp3")
+        ("10:30", "~/bel-madrasah/tone/pelajaran-5.mp3"),
+        ("11:10", "~/bel-madrasah/tone/pelajaran-6.mp3"),
+        ("11:50", "~/bel-madrasah/tone/istirahat-2.mp3"),
+        ("12:30", "~/bel-madrasah/tone/kebersihan.mp3"),
+        ("12:40", "~/bel-madrasah/tone/pelajaran-7.mp3"),
+        ("13:20", "~/bel-madrasah/tone/pelajaran-8.mp3"),
+        ("14:00", "~/bel-madrasah/tone/pelajaran-9.mp3"),
+        ("14:40", "~/bel-madrasah/tone/pelajaran-10.mp3"),
+        ("15:20", "~/bel-madrasah/tone/pelajaran-selesai.mp3"),
+        ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
     "Rabu": [
-        ("06:40", "~/bel-madrasah/tone/sholawat.mp3"),
-        ("07:00", "~/bel-madrasah/tone/hymne.mp3"),
-        ("07:30", "~/bel-madrasah/tone/p1.mp3"),
-        ("08:10", "~/bel-madrasah/tone/p2.mp3"),
-        ("08:50", "~/bel-madrasah/tone/p3.mp3"),
-        ("09:30", "~/bel-madrasah/tone/p4.mp3"),
-        ("10:10", "~/bel-madrasah/tone/i1.mp3"),
+        ("06:40", "~/bel-madrasah/tone/sholawat-badariyah.mp3"),
+        ("07:00", "~/bel-madrasah/tone/mars-madrasah.mp3"),
+        ("07:30", "~/bel-madrasah/tone/pelajaran-1.mp3"),
+        ("08:10", "~/bel-madrasah/tone/pelajaran-2.mp3"),
+        ("08:50", "~/bel-madrasah/tone/pelajaran-3.mp3"),
+        ("09:30", "~/bel-madrasah/tone/pelajaran-4.mp3"),
+        ("10:10", "~/bel-madrasah/tone/istirahat-1.mp3"),
         ("10:20", "~/bel-madrasah/tone/kebersihan.mp3"),
-        ("10:30", "~/bel-madrasah/tone/p5.mp3"),
-        ("11:10", "~/bel-madrasah/tone/p6.mp3"),
-        ("11:50", "~/bel-madrasah/tone/i2.mp3"),
-        ("12:40", "~/bel-madrasah/tone/p7.mp3"),
-        ("13:20", "~/bel-madrasah/tone/p8.mp3"),
-        ("14:00", "~/bel-madrasah/tone/p9.mp3"),
-        ("14:40", "~/bel-madrasah/tone/p10.mp3"),
-        ("15:20", "~/bel-madrasah/tone/s.mp3"),
-        ("16:30", "~/bel-madrasah/tone/hymne.mp3")
+        ("10:30", "~/bel-madrasah/tone/pelajaran-5.mp3"),
+        ("11:10", "~/bel-madrasah/tone/pelajaran-6.mp3"),
+        ("11:50", "~/bel-madrasah/tone/istirahat-2.mp3"),
+        ("12:30", "~/bel-madrasah/tone/kebersihan.mp3"),
+        ("12:40", "~/bel-madrasah/tone/pelajaran-7.mp3"),
+        ("13:20", "~/bel-madrasah/tone/pelajaran-8.mp3"),
+        ("14:00", "~/bel-madrasah/tone/pelajaran-9.mp3"),
+        ("14:40", "~/bel-madrasah/tone/pelajaran-10.mp3"),
+        ("15:20", "~/bel-madrasah/tone/pelajaran-selesai.mp3"),
+        ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
     "Kamis": [
-        ("06:40", "~/bel-madrasah/tone/sholawat.mp3"),
-        ("07:00", "~/bel-madrasah/tone/hymne.mp3"),
+        ("06:40", "~/bel-madrasah/tone/sholawat-jibril.mp3"),
+        ("07:00", "~/bel-madrasah/tone/mars-madrasah.mp3"),
         ("07:15", "~/bel-madrasah/tone/literasi.mp3"),
-        ("08:10", "~/bel-madrasah/tone/p2.mp3"),
-        ("08:50", "~/bel-madrasah/tone/p3.mp3"),
-        ("09:30", "~/bel-madrasah/tone/p4.mp3"),
+        ("08:10", "~/bel-madrasah/tone/pelajaran-2.mp3"),
+        ("08:50", "~/bel-madrasah/tone/pelajaran-3.mp3"),
+        ("09:30", "~/bel-madrasah/tone/pelajaran-4.mp3"),
         ("10:00", "~/bel-madrasah/tone/indonesia-raya.mp3"),
-        ("10:10", "~/bel-madrasah/tone/i1.mp3"),
+        ("10:10", "~/bel-madrasah/tone/istirahat-1.mp3"),
         ("10:20", "~/bel-madrasah/tone/kebersihan.mp3"),
-        ("10:30", "~/bel-madrasah/tone/p5.mp3"),
-        ("11:10", "~/bel-madrasah/tone/p6.mp3"),
-        ("11:50", "~/bel-madrasah/tone/i2.mp3"),
-        ("12:40", "~/bel-madrasah/tone/p7.mp3"),
-        ("13:20", "~/bel-madrasah/tone/p8.mp3"),
-        ("14:00", "~/bel-madrasah/tone/p9.mp3"),
-        ("14:40", "~/bel-madrasah/tone/p10.mp3"),
-        ("15:20", "~/bel-madrasah/tone/s.mp3"),
-        ("16:30", "~/bel-madrasah/tone/hymne.mp3")
+        ("10:30", "~/bel-madrasah/tone/pelajaran-5.mp3"),
+        ("11:10", "~/bel-madrasah/tone/pelajaran-6.mp3"),
+        ("11:50", "~/bel-madrasah/tone/istirahat-2.mp3"),
+        ("12:30", "~/bel-madrasah/tone/kebersihan.mp3"),
+        ("12:40", "~/bel-madrasah/tone/pelajaran-7.mp3"),
+        ("13:20", "~/bel-madrasah/tone/pelajaran-8.mp3"),
+        ("14:00", "~/bel-madrasah/tone/pelajaran-9.mp3"),
+        ("14:40", "~/bel-madrasah/tone/pelajaran-10.mp3"),
+        ("15:20", "~/bel-madrasah/tone/pelajaran-selesai.mp3"),
+        ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
     "Jumat": [
-        ("06:40", "~/bel-madrasah/tone/sholawat.mp3"),
-        ("07:00", "~/bel-madrasah/tone/hymne.mp3"),
+        ("06:40", "~/bel-madrasah/tone/murotal-yasin.mp3"),
+        ("07:00", "~/bel-madrasah/tone/mars-madrasah.mp3"),
         ("07:15", "~/bel-madrasah/tone/rohani.mp3"),
-        ("07:50", "~/bel-madrasah/tone/p2.mp3"),
-        ("08:30", "~/bel-madrasah/tone/p3.mp3"),
-        ("09:10", "~/bel-madrasah/tone/p4.mp3"),
-        ("09:50", "~/bel-madrasah/tone/i1.mp3"),
+        ("07:50", "~/bel-madrasah/tone/pelajaran-2.mp3"),
+        ("08:30", "~/bel-madrasah/tone/pelajaran-3.mp3"),
+        ("09:10", "~/bel-madrasah/tone/pelajaran-4.mp3"),
+        ("09:50", "~/bel-madrasah/tone/istirahat-1.mp3"),
         ("10:00", "~/bel-madrasah/tone/kebersihan.mp3"),
-        ("10:10", "~/bel-madrasah/tone/p5.mp3"),
-        ("10:50", "~/bel-madrasah/tone/p6.mp3"),
-        ("11:30", "~/bel-madrasah/tone/i2.mp3"),
-        ("12:50", "~/bel-madrasah/tone/p7.mp3"),
-        ("13:30", "~/bel-madrasah/tone/p8.mp3"),
-        ("14:10", "~/bel-madrasah/tone/p9.mp3"),
-        ("14:50", "~/bel-madrasah/tone/ap.mp3"),
+        ("10:10", "~/bel-madrasah/tone/pelajaran-5.mp3"),
+        ("10:50", "~/bel-madrasah/tone/pelajaran-6.mp3"),
+        ("11:30", "~/bel-madrasah/tone/istirahat-2.mp3"),
+        ("12:50", "~/bel-madrasah/tone/pelajaran-7.mp3"),
+        ("13:30", "~/bel-madrasah/tone/pelajaran-8.mp3"),
+        ("14:10", "~/bel-madrasah/tone/pelajaran-9.mp3"),
+        ("14:50", "~/bel-madrasah/tone/akhir-pekan.mp3"),
         ("14:51", "~/bel-madrasah/tone/pramuka.mp3"),
-        ("16:30", "~/bel-madrasah/tone/hymne.mp3")
+        ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
 }
 EOF
@@ -347,40 +351,99 @@ setup_service() {
     fi
 }
 
-# Function to create audio file list
-create_audio_list() {
-    print_status "Membuat daftar file audio yang diperlukan..."
+# Function to download tone files
+download_tone() {
+    print_status "Mendownload file audio dari repository..."
     
-    cat > "$PROJECT_DIR/audio-list.txt" << 'EOF'
-Daftar file audio yang diperlukan di ~/bel-madrasah/tone/:
-
-1. sholawat.mp3     - Audio sholawat pembuka
-2. hymne.mp3        - Hymne madrasah
-3. indonesia-raya.mp3 - Lagu Indonesia Raya
-4. upacara.mp3      - Audio upacara bendera
-5. literasi.mp3     - Audio literasi
-6. rohani.mp3       - Audio kerohanian
-7. kebersihan.mp3   - Audio kegiatan kebersihan
-8. pramuka.mp3      - Audio pramuka
-9. p1.mp3           - Periode 1
-10. p2.mp3          - Periode 2
-11. p3.mp3          - Periode 3
-12. p4.mp3          - Periode 4
-13. p5.mp3          - Periode 5
-14. p6.mp3          - Periode 6
-15. p7.mp3          - Periode 7
-16. p8.mp3          - Periode 8
-17. p9.mp3          - Periode 9
-18. p10.mp3         - Periode 10
-19. i1.mp3          - Istirahat 1
-20. i2.mp3          - Istirahat 2
-21. s.mp3           - Selesai
-22. ap.mp3          - Akhir pembelajaran
-
-Pastikan semua file audio ini ada sebelum menjalankan sistem!
-EOF
+    # Base URL for raw files
+    BASE_URL="https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/tone"
     
-    print_success "Daftar file audio dibuat: $PROJECT_DIR/audio-list.txt"
+    # Array of audio files based on jadwal.py
+    AUDIO_FILES=(
+        "sholawat-badariyah.mp3"
+        "mars-madrasah.mp3"
+        "upacara.mp3"
+        "pelajaran-1.mp3"
+        "pelajaran-2.mp3"
+        "pelajaran-3.mp3"
+        "pelajaran-4.mp3"
+        "pelajaran-5.mp3"
+        "pelajaran-6.mp3"
+        "pelajaran-7.mp3"
+        "pelajaran-8.mp3"
+        "pelajaran-9.mp3"
+        "pelajaran-10.mp3"
+        "pelajaran-selesai.mp3"
+        "indonesia-raya.mp3"
+        "istirahat-1.mp3"
+        "istirahat-2.mp3"
+        "kebersihan.mp3"
+        "hymne-madrasah.mp3"
+        "sholawat-jibril.mp3"
+        "literasi.mp3"
+        "murotal-yasin.mp3"
+        "rohani.mp3"
+        "akhir-pekan.mp3"
+        "pramuka.mp3"
+    )
+    
+    # Check if curl exists
+    if ! command_exists curl; then
+        print_error "curl tidak ditemukan. Mencoba menginstall curl..."
+        if command_exists apt; then
+            sudo apt install -y curl
+        elif command_exists yum; then
+            sudo yum install -y curl
+        elif command_exists dnf; then
+            sudo dnf install -y curl
+        elif command_exists pacman; then
+            sudo pacman -S --noconfirm curl
+        else
+            print_error "Tidak dapat menginstall curl. Silakan install secara manual."
+            exit 1
+        fi
+    fi
+    
+    # Create tone directory if not exists
+    mkdir -p "$PROJECT_DIR/tone"
+    
+    # Download counter
+    SUCCESS_COUNT=0
+    FAIL_COUNT=0
+    
+    # Download each file
+    for file in "${AUDIO_FILES[@]}"; do
+        print_status "Downloading: $file"
+        
+        if curl -f -L -o "$PROJECT_DIR/tone/$file" "$BASE_URL/$file" 2>/dev/null; then
+            print_success "✓ $file berhasil didownload"
+            ((SUCCESS_COUNT++))
+        else
+            print_warning "✗ Gagal download $file"
+            ((FAIL_COUNT++))
+        fi
+    done
+    
+    # Summary
+    echo
+    print_status "Download selesai:"
+    print_success "Berhasil: $SUCCESS_COUNT file"
+    if [ $FAIL_COUNT -gt 0 ]; then
+        print_warning "Gagal: $FAIL_COUNT file"
+    fi
+    
+    # Create audio list file
+    print_status "Membuat daftar file audio..."
+    ls -lh "$PROJECT_DIR/tone/" > "$PROJECT_DIR/audio-list.txt"
+    print_success "Daftar file audio tersimpan di: $PROJECT_DIR/audio-list.txt"
+    
+    echo
+    if [ $FAIL_COUNT -eq 0 ]; then
+        print_success "Semua file audio berhasil didownload!"
+    else
+        print_warning "Beberapa file gagal didownload. Silakan download manual dari:"
+        print_warning "https://github.com/zulfikriyahya/bel-madrasah/tree/main/tone"
+    fi
 }
 
 # Function to test installation
@@ -473,7 +536,7 @@ main() {
     create_jadwal_py
     create_systemd_service
     setup_service
-    create_audio_list
+    download_tone
     test_installation
     start_service
     show_completion
