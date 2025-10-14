@@ -95,17 +95,12 @@ disable_lingering() {
     print_status "Memeriksa user lingering..."
     
     # Check if lingering is enabled
-    if loginctl show-user "$CURRENT_USER" | grep -q "Linger=yes"; then
-        read -p "User lingering masih aktif. Apakah ingin disable? [y/N]: " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            if sudo loginctl disable-linger "$CURRENT_USER"; then
-                print_success "User lingering di-disable"
-            else
-                print_warning "Gagal disable user lingering"
-            fi
+    if loginctl show-user "$CURRENT_USER" 2>/dev/null | grep -q "Linger=yes"; then
+        print_status "Disable user lingering..."
+        if sudo loginctl disable-linger "$CURRENT_USER"; then
+            print_success "User lingering di-disable"
         else
-            print_status "User lingering tetap aktif (tidak diubah)"
+            print_warning "Gagal disable user lingering"
         fi
     else
         print_status "User lingering sudah tidak aktif"
@@ -114,175 +109,47 @@ disable_lingering() {
 
 # Function to remove project directory
 remove_project_dir() {
-    print_status "Memeriksa direktori proyek..."
+    print_status "Menghapus direktori proyek..."
     
     if [ -d "$PROJECT_DIR" ]; then
-        echo
-        print_warning "Direktori proyek ditemukan: $PROJECT_DIR"
-        echo "Isi direktori:"
-        ls -la "$PROJECT_DIR" 2>/dev/null || echo "  (tidak dapat membaca isi direktori)"
-        echo
-        
-        read -p "Apakah Anda ingin menghapus SEMUA file di direktori ini? [y/N]: " -n 1 -r
-        echo
-        
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            print_status "Menghapus direktori proyek..."
-            if rm -rf "$PROJECT_DIR"; then
-                print_success "Direktori proyek dihapus: $PROJECT_DIR"
-            else
-                print_error "Gagal menghapus direktori proyek"
-                return 1
-            fi
+        print_status "Menghapus: $PROJECT_DIR"
+        if rm -rf "$PROJECT_DIR"; then
+            print_success "Direktori proyek dihapus"
         else
-            print_status "Direktori proyek tidak dihapus"
-            echo
-            print_warning "File-file berikut masih ada di sistem:"
-            echo "  - $PROJECT_DIR/main.py"
-            echo "  - $PROJECT_DIR/jadwal.py"
-            echo "  - $PROJECT_DIR/tone/ (file audio)"
-            echo "  - $PROJECT_DIR/audio-list.txt"
-            echo
-            print_status "Anda dapat menghapus manual jika diperlukan: rm -rf $PROJECT_DIR"
+            print_error "Gagal menghapus direktori proyek"
+            return 1
         fi
     else
         print_status "Direktori proyek tidak ditemukan"
     fi
 }
 
-# Function to check for remaining files
+# Function to check and remove remaining files
 check_remaining_files() {
-    print_status "Memeriksa file yang tersisa..."
+    print_status "Memeriksa file tersisa..."
     
-    local remaining_files=()
+    local files_removed=0
     
-    # Check service file
-    if [ -f "$SERVICE_FILE" ]; then
-        remaining_files+=("$SERVICE_FILE")
-    fi
-    
-    # Check project directory
-    if [ -d "$PROJECT_DIR" ]; then
-        remaining_files+=("$PROJECT_DIR")
-    fi
-    
-    # Check if any systemd user services contain our service name
+    # Check systemd user directory for any related files
     local systemd_dir="$HOME/.config/systemd/user"
     if [ -d "$systemd_dir" ]; then
         local found_services=$(find "$systemd_dir" -name "*$SERVICE_NAME*" 2>/dev/null)
         if [ -n "$found_services" ]; then
-            remaining_files+=($found_services)
+            while IFS= read -r file; do
+                if [ -f "$file" ]; then
+                    print_status "Menghapus: $file"
+                    rm -f "$file"
+                    ((files_removed++))
+                fi
+            done <<< "$found_services"
         fi
     fi
     
-    if [ ${#remaining_files[@]} -gt 0 ]; then
-        echo
-        print_warning "File/direktori berikut masih ada di sistem:"
-        for file in "${remaining_files[@]}"; do
-            echo "  - $file"
-        done
-        echo
-        read -p "Apakah ingin menghapus semua file tersisa? [y/N]: " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            for file in "${remaining_files[@]}"; do
-                if [ -f "$file" ] || [ -d "$file" ]; then
-                    print_status "Menghapus: $file"
-                    rm -rf "$file"
-                fi
-            done
-            print_success "File tersisa dihapus"
-        fi
+    if [ $files_removed -gt 0 ]; then
+        print_success "Dihapus $files_removed file tersisa"
+        systemctl --user daemon-reload
     else
         print_success "Tidak ada file tersisa"
-    fi
-}
-
-# Function to show uninstallation summary
-show_summary() {
-    echo
-    echo "========================================="
-    print_success "UNINSTALL SELESAI!"
-    echo "========================================="
-    echo
-    
-    # Check what's left
-    local items_removed=()
-    local items_remaining=()
-    
-    # Check service
-    if service_exists; then
-        items_remaining+=("Systemd service")
-    else
-        items_removed+=("Systemd service")
-    fi
-    
-    # Check project directory
-    if [ -d "$PROJECT_DIR" ]; then
-        items_remaining+=("Project directory")
-    else
-        items_removed+=("Project directory")
-    fi
-    
-    # Check lingering
-    if loginctl show-user "$CURRENT_USER" | grep -q "Linger=yes"; then
-        items_remaining+=("User lingering")
-    else
-        items_removed+=("User lingering")
-    fi
-    
-    # Show summary
-    if [ ${#items_removed[@]} -gt 0 ]; then
-        print_success "Berhasil dihapus:"
-        for item in "${items_removed[@]}"; do
-            echo "  ✓ $item"
-        done
-    fi
-    
-    if [ ${#items_remaining[@]} -gt 0 ]; then
-        print_warning "Masih tersisa:"
-        for item in "${items_remaining[@]}"; do
-            echo "  ⚠ $item"
-        done
-        echo
-        print_status "Item tersisa dapat dihapus manual jika diperlukan"
-    fi
-    
-    echo
-    print_status "Untuk uninstall ffmpeg (jika diperlukan):"
-    echo "  sudo apt remove ffmpeg        # Ubuntu/Debian"
-    echo "  sudo yum remove ffmpeg        # RHEL/CentOS"
-    echo "  sudo dnf remove ffmpeg        # Fedora"
-    echo "  sudo pacman -R ffmpeg         # Arch Linux"
-    echo
-    print_success "Terima kasih telah menggunakan Bell System Madrasah!"
-}
-
-# Function to backup before uninstall
-create_backup() {
-    if [ -d "$PROJECT_DIR" ]; then
-        read -p "Apakah ingin membuat backup sebelum uninstall? [y/N]: " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            local backup_dir="$HOME/bel-madrasah-backup-$(date +%Y%m%d-%H%M%S)"
-            print_status "Membuat backup ke: $backup_dir"
-            
-            if cp -r "$PROJECT_DIR" "$backup_dir"; then
-                print_success "Backup berhasil dibuat: $backup_dir"
-                echo
-                print_status "Backup berisi:"
-                ls -la "$backup_dir" 2>/dev/null
-                echo
-            else
-                print_error "Gagal membuat backup"
-                read -p "Lanjutkan uninstall tanpa backup? [y/N]: " -n 1 -r
-                echo
-                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                    print_error "Uninstall dibatalkan"
-                    exit 1
-                fi
-            fi
-        fi
     fi
 }
 
@@ -305,19 +172,85 @@ show_current_status() {
     # Check project directory
     if [ -d "$PROJECT_DIR" ]; then
         local file_count=$(find "$PROJECT_DIR" -type f 2>/dev/null | wc -l)
-        echo -e "  Project Directory: ${GREEN}● ADA${NC} ($file_count files)"
+        local dir_size=$(du -sh "$PROJECT_DIR" 2>/dev/null | cut -f1)
+        echo -e "  Project Directory: ${GREEN}● ADA${NC} ($file_count files, $dir_size)"
     else
         echo -e "  Project Directory: ${RED}● TIDAK ADA${NC}"
     fi
     
     # Check lingering
-    if loginctl show-user "$CURRENT_USER" | grep -q "Linger=yes"; then
+    if loginctl show-user "$CURRENT_USER" 2>/dev/null | grep -q "Linger=yes"; then
         echo -e "  User Lingering: ${GREEN}● AKTIF${NC}"
     else
         echo -e "  User Lingering: ${RED}● TIDAK AKTIF${NC}"
     fi
     
     echo
+}
+
+# Function to show uninstallation summary
+show_summary() {
+    echo
+    echo "========================================="
+    print_success "UNINSTALL SELESAI!"
+    echo "========================================="
+    echo
+    
+    # Verify removal
+    local all_clean=true
+    
+    print_status "Verifikasi penghapusan:"
+    echo
+    
+    # Check service
+    if service_exists; then
+        echo -e "  ${RED}✗${NC} Systemd service masih ada"
+        all_clean=false
+    else
+        echo -e "  ${GREEN}✓${NC} Systemd service dihapus"
+    fi
+    
+    # Check service file
+    if [ -f "$SERVICE_FILE" ]; then
+        echo -e "  ${RED}✗${NC} File service masih ada"
+        all_clean=false
+    else
+        echo -e "  ${GREEN}✓${NC} File service dihapus"
+    fi
+    
+    # Check project directory
+    if [ -d "$PROJECT_DIR" ]; then
+        echo -e "  ${RED}✗${NC} Project directory masih ada"
+        all_clean=false
+    else
+        echo -e "  ${GREEN}✓${NC} Project directory dihapus"
+    fi
+    
+    # Check lingering
+    if loginctl show-user "$CURRENT_USER" 2>/dev/null | grep -q "Linger=yes"; then
+        echo -e "  ${YELLOW}⚠${NC} User lingering masih aktif"
+    else
+        echo -e "  ${GREEN}✓${NC} User lingering di-disable"
+    fi
+    
+    echo
+    
+    if [ "$all_clean" = true ]; then
+        print_success "Sistem bersih! Semua komponen berhasil dihapus"
+    else
+        print_warning "Beberapa komponen masih tersisa"
+        print_status "Anda dapat menghapus manual jika diperlukan"
+    fi
+    
+    echo
+    print_status "Catatan: ffmpeg tidak dihapus (mungkin digunakan aplikasi lain)"
+    print_status "Untuk uninstall ffmpeg secara manual:"
+    echo "  sudo apt remove ffmpeg        # Ubuntu/Debian"
+    echo "  sudo yum remove ffmpeg        # RHEL/CentOS"
+    echo "  sudo dnf remove ffmpeg        # Fedora"
+    echo "  sudo pacman -R ffmpeg         # Arch Linux"
+    echo
+    print_success "Terima kasih telah menggunakan Bell System Madrasah!"
 }
 
 # Main uninstallation process
@@ -339,7 +272,9 @@ main() {
     show_current_status
     
     # Confirmation
-    print_warning "PERINGATAN: Proses ini akan menghapus sistem bel madrasah!"
+    print_warning "PERINGATAN: Proses ini akan MENGHAPUS PERMANEN sistem bel madrasah!"
+    print_warning "Tidak ada backup yang akan dibuat!"
+    echo
     read -p "Apakah Anda yakin ingin melanjutkan uninstall? [y/N]: " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -347,20 +282,30 @@ main() {
         exit 1
     fi
     
+    # Double confirmation for safety
+    echo
+    print_warning "Konfirmasi terakhir!"
+    read -p "Ketik 'HAPUS' untuk melanjutkan: " confirm
+    if [ "$confirm" != "HAPUS" ]; then
+        print_error "Uninstall dibatalkan"
+        exit 1
+    fi
+    
     echo
     print_status "Memulai proses uninstall..."
-    
-    # Create backup if requested
-    create_backup
+    echo
     
     # Remove service
     remove_service
+    echo
     
     # Remove project directory
     remove_project_dir
+    echo
     
     # Disable lingering
     disable_lingering
+    echo
     
     # Check for remaining files
     check_remaining_files
