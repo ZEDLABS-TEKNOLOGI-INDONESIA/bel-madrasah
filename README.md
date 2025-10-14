@@ -17,19 +17,32 @@
 
 ## 🚀 Quick Install
 
-**One-command installation:**
+### ⚡ **Super Simple (Recommended)**
+
+**Copy-paste satu baris ini:**
 
 ```bash
-# Clone repository
-git clone https://github.com/zulfikriyahya/bel-madrasah.git
-cd bel-madrasah
+curl -fsSL https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/install.sh | bash
+```
 
-# Run installer
+**Atau download dan jalankan:**
+
+```bash
+wget https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/install.sh
 chmod +x install.sh
 ./install.sh
 ```
 
-Installer akan otomatis:
+### 📦 **Alternative: Clone Repository**
+
+```bash
+git clone https://github.com/zulfikriyahya/bel-madrasah.git
+cd bel-madrasah
+chmod +x install.sh
+./install.sh
+```
+
+**Installer akan otomatis:**
 
 - ✅ Install dependencies (Python3, ffmpeg, curl)
 - ✅ Download semua file audio dari repository
@@ -37,9 +50,17 @@ Installer akan otomatis:
 - ✅ Enable auto-start service
 - ✅ Verify installation
 
-**One-command uninstall:**
+### 🗑️ **Quick Uninstall**
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/uninstall.sh | bash
+```
+
+**Atau:**
+
+```bash
+wget https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/uninstall.sh
+chmod +x uninstall.sh
 ./uninstall.sh
 ```
 
