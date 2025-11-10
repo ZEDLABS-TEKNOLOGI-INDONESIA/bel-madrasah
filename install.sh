@@ -209,10 +209,11 @@ JADWAL = {
         ("14:00", "~/bel-madrasah/tone/pelajaran-9.mp3"),
         ("14:40", "~/bel-madrasah/tone/pelajaran-10.mp3"),
         ("15:20", "~/bel-madrasah/tone/pelajaran-selesai.mp3"),
+        ("15:21", "~/bel-madrasah/tone/tanah-airku.mp3"),
         ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
     "Selasa": [
-        ("06:40", "~/bel-madrasah/tone/sholawat-jibril.mp3"),
+        ("06:45", "~/bel-madrasah/tone/itirof.mp3"),
         ("07:00", "~/bel-madrasah/tone/mars-madrasah.mp3"),
         ("07:30", "~/bel-madrasah/tone/pelajaran-1.mp3"),
         ("08:10", "~/bel-madrasah/tone/pelajaran-2.mp3"),
@@ -229,10 +230,11 @@ JADWAL = {
         ("14:00", "~/bel-madrasah/tone/pelajaran-9.mp3"),
         ("14:40", "~/bel-madrasah/tone/pelajaran-10.mp3"),
         ("15:20", "~/bel-madrasah/tone/pelajaran-selesai.mp3"),
+        ("15:21", "~/bel-madrasah/tone/tanah-airku.mp3"),
         ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
     "Rabu": [
-        ("06:40", "~/bel-madrasah/tone/sholawat-badariyah.mp3"),
+        ("06:40", "~/bel-madrasah/tone/sholawat-jibril.mp3"),
         ("07:00", "~/bel-madrasah/tone/mars-madrasah.mp3"),
         ("07:30", "~/bel-madrasah/tone/pelajaran-1.mp3"),
         ("08:10", "~/bel-madrasah/tone/pelajaran-2.mp3"),
@@ -249,10 +251,11 @@ JADWAL = {
         ("14:00", "~/bel-madrasah/tone/pelajaran-9.mp3"),
         ("14:40", "~/bel-madrasah/tone/pelajaran-10.mp3"),
         ("15:20", "~/bel-madrasah/tone/pelajaran-selesai.mp3"),
+        ("15:21", "~/bel-madrasah/tone/tanah-airku.mp3"),
         ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
     "Kamis": [
-        ("06:40", "~/bel-madrasah/tone/sholawat-jibril.mp3"),
+        ("06:40", "~/bel-madrasah/tone/sholawat-badariyah.mp3"),
         ("07:00", "~/bel-madrasah/tone/mars-madrasah.mp3"),
         ("07:15", "~/bel-madrasah/tone/literasi.mp3"),
         ("08:10", "~/bel-madrasah/tone/pelajaran-2.mp3"),
@@ -270,6 +273,7 @@ JADWAL = {
         ("14:00", "~/bel-madrasah/tone/pelajaran-9.mp3"),
         ("14:40", "~/bel-madrasah/tone/pelajaran-10.mp3"),
         ("15:20", "~/bel-madrasah/tone/pelajaran-selesai.mp3"),
+        ("15:21", "~/bel-madrasah/tone/tanah-airku.mp3"),
         ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
     "Jumat": [
@@ -288,7 +292,8 @@ JADWAL = {
         ("13:30", "~/bel-madrasah/tone/pelajaran-8.mp3"),
         ("14:10", "~/bel-madrasah/tone/pelajaran-9.mp3"),
         ("14:50", "~/bel-madrasah/tone/akhir-pekan.mp3"),
-        ("14:51", "~/bel-madrasah/tone/pramuka.mp3"),
+        ("14:51", "~/bel-madrasah/tone/tanah-airku.mp3"),
+        ("14:55", "~/bel-madrasah/tone/pramuka.mp3"),
         ("16:30", "~/bel-madrasah/tone/hymne-madrasah.mp3")
     ],
 }
@@ -385,6 +390,8 @@ download_tone() {
         "rohani.mp3"
         "akhir-pekan.mp3"
         "pramuka.mp3"
+        "itirof.mp3"
+        "tanah-airku.mp3"
     )
     
     # Check if curl exists
