@@ -234,8 +234,9 @@ BASE = "/opt/bel-madrasah/tone"
 
 JADWAL = {
     "Senin": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
-        ("07:00", f"{BASE}/upacara.mp3"),
+        ("06:40", f"{BASE}/sholawat-badariyah.mp3"),
+        ("07:00", f"{BASE}/mars-madrasah.mp3"),
+        ("07:15", f"{BASE}/upacara.mp3"),
         ("08:10", f"{BASE}/pelajaran-2.mp3"),
         ("08:50", f"{BASE}/pelajaran-3.mp3"),
         ("09:30", f"{BASE}/pelajaran-4.mp3"),
@@ -255,7 +256,8 @@ JADWAL = {
         ("16:30", f"{BASE}/hymne-madrasah.mp3"),
     ],
     "Selasa": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
+        ("06:45", f"{BASE}/itirof.mp3"),
+        ("07:00", f"{BASE}/mars-madrasah.mp3"),
         ("07:30", f"{BASE}/pelajaran-1.mp3"),
         ("08:10", f"{BASE}/pelajaran-2.mp3"),
         ("08:50", f"{BASE}/pelajaran-3.mp3"),
@@ -275,7 +277,8 @@ JADWAL = {
         ("16:30", f"{BASE}/hymne-madrasah.mp3"),
     ],
     "Rabu": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
+        ("06:40", f"{BASE}/sholawat-jibril.mp3"),
+        ("07:00", f"{BASE}/mars-madrasah.mp3"),
         ("07:30", f"{BASE}/pelajaran-1.mp3"),
         ("08:10", f"{BASE}/pelajaran-2.mp3"),
         ("08:50", f"{BASE}/pelajaran-3.mp3"),
@@ -295,8 +298,9 @@ JADWAL = {
         ("16:30", f"{BASE}/hymne-madrasah.mp3"),
     ],
     "Kamis": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
-        ("07:00", f"{BASE}/literasi.mp3"),
+        ("06:40", f"{BASE}/sholawat-badariyah.mp3"),
+        ("07:00", f"{BASE}/mars-madrasah.mp3"),
+        ("07:15", f"{BASE}/literasi.mp3"),
         ("08:10", f"{BASE}/pelajaran-2.mp3"),
         ("08:50", f"{BASE}/pelajaran-3.mp3"),
         ("09:30", f"{BASE}/pelajaran-4.mp3"),
@@ -316,21 +320,24 @@ JADWAL = {
         ("16:30", f"{BASE}/hymne-madrasah.mp3"),
     ],
     "Jumat": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
-        ("07:00", f"{BASE}/rohani.mp3"),
-        ("08:10", f"{BASE}/pelajaran-3.mp3"),
-        ("08:50", f"{BASE}/pelajaran-4.mp3"),
-        ("09:30", f"{BASE}/istirahat-1.mp3"),
-        ("09:40", f"{BASE}/kebersihan.mp3"),
+        ("06:40", f"{BASE}/murotal-yasin.mp3"),
+        ("07:00", f"{BASE}/mars-madrasah.mp3"),
+        ("07:15", f"{BASE}/rohani.mp3"),
+        ("07:50", f"{BASE}/pelajaran-2.mp3"),
+        ("08:30", f"{BASE}/pelajaran-3.mp3"),
+        ("09:10", f"{BASE}/pelajaran-4.mp3"),
+        ("09:50", f"{BASE}/istirahat-1.mp3"),
+        ("10:00", f"{BASE}/kebersihan.mp3"),
         ("10:10", f"{BASE}/pelajaran-5.mp3"),
-        ("10:40", f"{BASE}/pelajaran-6.mp3"),
-        ("11:20", f"{BASE}/istirahat-2.mp3"),
+        ("10:50", f"{BASE}/pelajaran-6.mp3"),
+        ("11:30", f"{BASE}/istirahat-2.mp3"),
         ("12:50", f"{BASE}/pelajaran-7.mp3"),
         ("13:30", f"{BASE}/pelajaran-8.mp3"),
-        ("14:10", f"{BASE}/akhir-pekan.mp3"),
-        ("14:11", f"{BASE}/tanah-airku.mp3"),
-        ("14:12", f"{BASE}/pramuka.mp3"),
-        ("16:00", f"{BASE}/hymne-madrasah.mp3"),
+        ("14:10", f"{BASE}/pelajaran-9.mp3"),
+        ("14:50", f"{BASE}/akhir-pekan.mp3"),
+        ("14:51", f"{BASE}/tanah-airku.mp3"),
+        ("14:55", f"{BASE}/pramuka.mp3"),
+        ("16:30", f"{BASE}/hymne-madrasah.mp3"),
     ],
 }
 PYEOF
@@ -382,6 +389,7 @@ download_tone() {
     BASE_URL="https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/tone"
 
     AUDIO_FILES=(
+        "sholawat-badariyah.mp3"
         "mars-madrasah.mp3"
         "upacara.mp3"
         "pelajaran-1.mp3"
@@ -400,10 +408,13 @@ download_tone() {
         "istirahat-2.mp3"
         "kebersihan.mp3"
         "hymne-madrasah.mp3"
+        "sholawat-jibril.mp3"
         "literasi.mp3"
+        "murotal-yasin.mp3"
         "rohani.mp3"
         "akhir-pekan.mp3"
         "pramuka.mp3"
+        "itirof.mp3"
         "tanah-airku.mp3"
     )
 
@@ -436,9 +447,10 @@ download_tone() {
 set_permissions() {
     info "Mengatur izin file..."
     chown -R "$RUN_USER":"$RUN_USER" "$PROJECT_DIR"
-    chmod -R 755 "$PROJECT_DIR"
+    chmod 755 "$PROJECT_DIR"
+    chmod 755 "$PROJECT_DIR/tone"
     chmod 644 "$PROJECT_DIR"/*.py
-    chmod -R 644 "$PROJECT_DIR/tone/"
+    chmod 644 "$PROJECT_DIR/tone/"*.mp3 2>/dev/null || true
     success "Izin file diatur."
 }
 
