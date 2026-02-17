@@ -160,7 +160,7 @@ def play_sound(file_path):
             "-i", full_path,
             "-filter:a", f"volume={VOLUME}",
             "-f", "alsa",
-            "default"
+            "hw:1,0"
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
@@ -333,7 +333,6 @@ JADWAL = {
         ("16:00", f"{BASE}/hymne-madrasah.mp3"),
     ],
 }
-
 PYEOF
 
     success "jadwal.py dibuat."
@@ -383,6 +382,7 @@ download_tone() {
     BASE_URL="https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/tone"
 
     AUDIO_FILES=(
+        "sholawat-badariyah.mp3"
         "mars-madrasah.mp3"
         "upacara.mp3"
         "pelajaran-1.mp3"
@@ -401,10 +401,13 @@ download_tone() {
         "istirahat-2.mp3"
         "kebersihan.mp3"
         "hymne-madrasah.mp3"
+        "sholawat-jibril.mp3"
         "literasi.mp3"
+        "murotal-yasin.mp3"
         "rohani.mp3"
         "akhir-pekan.mp3"
         "pramuka.mp3"
+        "itirof.mp3"
         "tanah-airku.mp3"
     )
 
