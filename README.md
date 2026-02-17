@@ -1,246 +1,353 @@
 # Bell System Madrasah Tsanawiyah Negeri 1 Pandeglang
 
-<div align="center">
-
-![Bell System](https://img.shields.io/badge/Bell%20System-Madrasah-0056b3?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.6+-3776ab?style=flat-square&logo=python&logoColor=white)
 ![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?style=flat-square&logo=linux&logoColor=black)
-![Systemd](https://img.shields.io/badge/Service-Systemd-A4A6A8?style=flat-square&logo=systemd&logoColor=white)
+![Systemd](https://img.shields.io/badge/Service-Systemd-A4A6A8?style=flat-square)
+![Headless](https://img.shields.io/badge/Mode-Headless-0056b3?style=flat-square)
 
-**Sistem manajemen bel sekolah otomatis berbasis Python dan Systemd. Dirancang khusus untuk kebutuhan operasional Madrasah Tsanawiyah Negeri 1 Pandeglang.**
-
-[Installation](#installation) • [Features](#key-features) • [Documentation](#administration--monitoring) • [Troubleshooting](#troubleshooting)
-
-</div>
+Sistem manajemen bel sekolah otomatis berbasis Python dan Systemd. Dirancang untuk berjalan di lingkungan Linux **tanpa monitor (headless)**, menggunakan `ffmpeg` dengan output langsung ke ALSA sehingga tidak memerlukan X display.
 
 ---
 
-## Overview
+## Daftar Isi
 
-Project ini adalah solusi otomasi bel sekolah yang berjalan di lingkungan Linux. Sistem memanfaatkan `systemd` untuk manajemen service yang reliabel dan `python` untuk logika penjadwalan. Sistem ini mendukung pemutaran audio multi-format, manajemen volume otomatis, dan penjadwalan fleksibel yang mencakup kegiatan rutin harian serta acara khusus (Upacara, Literasi, Rohani, Pramuka).
+- [Persyaratan Sistem](#persyaratan-sistem)
+- [Instalasi](#instalasi)
+- [Struktur Proyek](#struktur-proyek)
+- [Jadwal Operasional](#jadwal-operasional)
+- [Pengelolaan Service](#pengelolaan-service)
+- [Konfigurasi](#konfigurasi)
+- [Troubleshooting](#troubleshooting)
 
-## Installation
+---
 
-### Automated Deployment (Recommended)
+## Persyaratan Sistem
 
-Metode ini akan secara otomatis mengunduh dependensi, file audio, dan mengonfigurasi service systemd.
+| Komponen | Persyaratan |
+| :--- | :--- |
+| OS | Linux (Ubuntu / Debian / CentOS / Arch) |
+| Python | 3.6 atau lebih baru |
+| Audio | ffmpeg (auto-install) |
+| ALSA | alsa-utils (auto-install) |
+| Service Manager | Systemd |
+| Akses | sudo / root |
+
+Sistem ini **tidak memerlukan monitor, X server, atau desktop environment** dalam kondisi apapun.
+
+---
+
+## Instalasi
+
+### Instalasi Otomatis
 
 ```bash
 wget https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/install.sh
 chmod +x install.sh
-./install.sh
+sudo ./install.sh
 ```
 
-**Installer melakukan tindakan berikut:**
-1. Instalasi paket sistem (Python3, FFmpeg, Curl).
-2. Mengunduh 25 aset audio dari repositori.
-3. Konfigurasi dan aktivasi service systemd.
-4. Verifikasi integritas instalasi.
+Installer akan melakukan:
 
-### Manual Installation
+1. Verifikasi persyaratan sistem
+2. Instalasi `ffmpeg`, `curl`, dan `alsa-utils`
+3. Pembuatan direktori proyek di `/opt/bel-madrasah`
+4. Pembuatan `main.py` dan `jadwal.py`
+5. Registrasi dan aktivasi system service di `/etc/systemd/system/`
+6. Pengunduhan 27 aset audio dari repositori
+7. Pengaturan izin file
+8. Verifikasi dan menjalankan service
 
-Jika Anda memerlukan kontrol penuh atas proses instalasi:
+> Installer harus dijalankan dengan `sudo`. Installer secara otomatis mendeteksi user yang akan menjalankan service.
+
+### Instalasi Manual
 
 ```bash
 git clone https://github.com/zulfikriyahya/bel-madrasah.git
 cd bel-madrasah
 chmod +x install.sh
-./install.sh
+sudo ./install.sh
 ```
 
-### Uninstallation
-
-Untuk menghapus seluruh sistem dan file konfigurasi:
+### Uninstalasi
 
 ```bash
 wget https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/uninstall.sh
 chmod +x uninstall.sh
-./uninstall.sh
+sudo ./uninstall.sh
 ```
 
-> **Perhatian:** Proses uninstall akan menghapus seluruh direktori project dan konfigurasi tanpa backup.
+> Proses uninstalasi akan menghapus seluruh direktori `/opt/bel-madrasah` dan konfigurasi service tanpa backup.
 
 ---
 
-## Key Features
+## Struktur Proyek
 
-**Core Automation**
-*   **Automated Setup:** Script instalasi dan uninstalasi terintegrasi.
-*   **Systemd Integration:** Auto-start saat boot dan auto-restart saat crash.
-*   **Resource Efficiency:** Penggunaan memori rendah dan manajemen cache audio.
+```
+/opt/bel-madrasah/
+├── main.py            # Logika utama penjadwalan dan pemutaran audio
+├── jadwal.py          # Konfigurasi jadwal harian
+├── audio-list.txt     # Daftar file audio yang terinstall
+└── tone/              # Direktori aset audio
+    ├── sholawat-badariyah.mp3
+    ├── sholawat-jibril.mp3
+    ├── mars-madrasah.mp3
+    ├── hymne-madrasah.mp3
+    ├── indonesia-raya.mp3
+    ├── tanah-airku.mp3
+    ├── upacara.mp3
+    ├── literasi.mp3
+    ├── rohani.mp3
+    ├── pramuka.mp3
+    ├── itirof.mp3
+    ├── murotal-yasin.mp3
+    ├── akhir-pekan.mp3
+    ├── istirahat-1.mp3
+    ├── istirahat-2.mp3
+    ├── kebersihan.mp3
+    ├── pelajaran-selesai.mp3
+    └── pelajaran-[1-10].mp3
+```
 
-**Audio Management**
-*   **Multi-format Support:** Mendukung MP3, WAV, dan format umum lainnya via FFmpeg.
-*   **Smart Volume:** Normalisasi volume otomatis (default: 85%).
-*   **Concurrency Control:** Mencegah tumpang tindih pemutaran audio.
+Service systemd terdaftar di:
 
-**Intelligent Scheduling**
-*   **Dynamic Schedule:** Mendukung jadwal berbeda untuk Senin (Upacara), Jumat (Rohani/Pramuka), dan hari biasa.
-*   **Activity Support:** Audio khusus untuk Literasi, Kebersihan, dan Istirahat.
-*   **Holiday Logic:** Otomatis non-aktif pada akhir pekan (Sabtu-Minggu).
-
----
-
-## Project Structure
-
-```text
-bel-madrasah/
-├── install.sh              # Script instalasi otomatis
-├── uninstall.sh            # Script pembersihan sistem
-├── main.py                 # Core logic aplikasi
-├── jadwal.py               # Konfigurasi jadwal waktu
-├── tone/                   # Direktori aset audio
-│   ├── sholawat-*.mp3      # Audio pembukaan
-│   ├── pelajaran-*.mp3     # Audio pergantian jam
-│   └── [lainnya].mp3       # Audio kegiatan khusus
-├── audio-list.txt          # Manifest file audio
-└── README.md               # Dokumentasi teknis
+```
+/etc/systemd/system/bel-madrasah.service
 ```
 
 ---
 
 ## Jadwal Operasional
 
-<details>
-<summary><strong>Senin (Upacara Bendera)</strong></summary>
+Sistem secara otomatis menonaktifkan pemutaran pada hari Sabtu dan Minggu.
 
-| Waktu | Kegiatan | Audio Aset |
+### Senin — Upacara Bendera
+
+| Waktu | Kegiatan | Audio |
 | :--- | :--- | :--- |
-| 06:40 | Pembukaan | Sholawat Badariyah |
-| 07:00 | Persiapan Upacara | Mars Madrasah |
-| 07:15 | **Upacara Bendera** | Upacara |
-| 08:10 | Pelajaran 2 | Pelajaran 2 |
-| ... | ... | ... |
-| 16:30 | Penutup | Hymne Madrasah |
+| 06:40 | Pembukaan | sholawat-badariyah |
+| 07:00 | Hymne | mars-madrasah |
+| 07:15 | Upacara Bendera | upacara |
+| 08:10 | Pelajaran 2 | pelajaran-2 |
+| 08:50 | Pelajaran 3 | pelajaran-3 |
+| 09:30 | Pelajaran 4 | pelajaran-4 |
+| 10:00 | Lagu Kebangsaan | indonesia-raya |
+| 10:10 | Istirahat 1 | istirahat-1 |
+| 10:20 | Kebersihan | kebersihan |
+| 10:30 | Pelajaran 5 | pelajaran-5 |
+| 11:10 | Pelajaran 6 | pelajaran-6 |
+| 11:50 | Istirahat 2 | istirahat-2 |
+| 12:30 | Kebersihan | kebersihan |
+| 12:40 | Pelajaran 7 | pelajaran-7 |
+| 13:20 | Pelajaran 8 | pelajaran-8 |
+| 14:00 | Pelajaran 9 | pelajaran-9 |
+| 14:40 | Pelajaran 10 | pelajaran-10 |
+| 15:20 | Pelajaran Selesai | pelajaran-selesai |
+| 15:21 | Lagu Penutup | tanah-airku |
+| 16:30 | Penutup | hymne-madrasah |
 
-*(Jadwal lengkap tersimpan di `jadwal.py`)*
-</details>
+### Selasa — Hari Biasa
 
-<details>
-<summary><strong>Selasa - Rabu (Hari Biasa)</strong></summary>
-
-| Waktu | Kegiatan | Audio Aset |
+| Waktu | Kegiatan | Audio |
 | :--- | :--- | :--- |
-| 06:40 | Pembukaan | Sholawat Jibril (Selasa) / Badariyah (Rabu) |
-| 07:00 | Hymne | Mars Madrasah |
-| 07:30 | Pelajaran 1 | Pelajaran 1 |
-| ... | ... | ... |
-| 16:30 | Penutup | Hymne Madrasah |
-</details>
+| 06:45 | Pembukaan | itirof |
+| 07:00 | Hymne | mars-madrasah |
+| 07:30 | Pelajaran 1 | pelajaran-1 |
+| 08:10 — 14:40 | Pelajaran 2 — 10 | pelajaran-[2-10] |
+| 10:10 | Istirahat 1 | istirahat-1 |
+| 10:20 | Kebersihan | kebersihan |
+| 11:50 | Istirahat 2 | istirahat-2 |
+| 12:30 | Kebersihan | kebersihan |
+| 15:20 | Pelajaran Selesai | pelajaran-selesai |
+| 15:21 | Lagu Penutup | tanah-airku |
+| 16:30 | Penutup | hymne-madrasah |
 
-<details>
-<summary><strong>Kamis (Literasi)</strong></summary>
+### Rabu — Hari Biasa
 
-| Waktu | Kegiatan | Audio Aset |
+| Waktu | Kegiatan | Audio |
 | :--- | :--- | :--- |
-| 06:40 | Pembukaan | Sholawat Jibril |
-| 07:15 | **Literasi** | Literasi |
-| 08:10 | Pelajaran 2 | Pelajaran 2 |
-| 10:00 | Lagu Kebangsaan | Indonesia Raya |
-| ... | ... | ... |
-</details>
+| 06:40 | Pembukaan | sholawat-jibril |
+| 07:00 | Hymne | mars-madrasah |
+| 07:30 — 14:40 | Pelajaran 1 — 10 | pelajaran-[1-10] |
+| 10:10 | Istirahat 1 | istirahat-1 |
+| 10:20 | Kebersihan | kebersihan |
+| 11:50 | Istirahat 2 | istirahat-2 |
+| 12:30 | Kebersihan | kebersihan |
+| 15:20 | Pelajaran Selesai | pelajaran-selesai |
+| 15:21 | Lagu Penutup | tanah-airku |
+| 16:30 | Penutup | hymne-madrasah |
 
-<details>
-<summary><strong>Jumat (Rohani & Pramuka)</strong></summary>
+### Kamis — Literasi
 
-| Waktu | Kegiatan | Audio Aset |
+| Waktu | Kegiatan | Audio |
 | :--- | :--- | :--- |
-| 06:40 | Pembukaan | Murotal Yasin |
-| 07:15 | **Rohani** | Rohani |
-| 14:50 | Akhir Pekan | Akhir Pekan |
-| 14:51 | **Pramuka** | Pramuka |
-</details>
+| 06:40 | Pembukaan | sholawat-badariyah |
+| 07:00 | Hymne | mars-madrasah |
+| 07:15 | Literasi | literasi |
+| 08:10 | Pelajaran 2 | pelajaran-2 |
+| 08:50 — 14:40 | Pelajaran 3 — 10 | pelajaran-[3-10] |
+| 10:00 | Lagu Kebangsaan | indonesia-raya |
+| 10:10 | Istirahat 1 | istirahat-1 |
+| 10:20 | Kebersihan | kebersihan |
+| 11:50 | Istirahat 2 | istirahat-2 |
+| 12:30 | Kebersihan | kebersihan |
+| 15:20 | Pelajaran Selesai | pelajaran-selesai |
+| 15:21 | Lagu Penutup | tanah-airku |
+| 16:30 | Penutup | hymne-madrasah |
+
+### Jumat — Rohani & Pramuka
+
+| Waktu | Kegiatan | Audio |
+| :--- | :--- | :--- |
+| 06:40 | Pembukaan | murotal-yasin |
+| 07:00 | Hymne | mars-madrasah |
+| 07:15 | Rohani | rohani |
+| 07:50 — 14:10 | Pelajaran 2 — 9 | pelajaran-[2-9] |
+| 09:50 | Istirahat 1 | istirahat-1 |
+| 10:00 | Kebersihan | kebersihan |
+| 11:30 | Istirahat 2 | istirahat-2 |
+| 14:50 | Akhir Pekan | akhir-pekan |
+| 14:51 | Lagu Penutup | tanah-airku |
+| 14:55 | Pramuka | pramuka |
+| 16:30 | Penutup | hymne-madrasah |
 
 ---
 
-## Administration & Monitoring
+## Pengelolaan Service
 
-### Service Management
-
-Perintah standar untuk mengelola service bel sekolah:
+Service berjalan sebagai **system service** (bukan user service), sehingga otomatis aktif saat boot tanpa memerlukan login.
 
 ```bash
-# Cek status service
-systemctl --user status bel-madrasah
-
-# Memulai/Menghentikan service
-systemctl --user start bel-madrasah
-systemctl --user stop bel-madrasah
-
-# Restart service (diperlukan setelah edit jadwal)
-systemctl --user restart bel-madrasah
+sudo systemctl status  bel-madrasah
+sudo systemctl start   bel-madrasah
+sudo systemctl stop    bel-madrasah
+sudo systemctl restart bel-madrasah
 ```
 
-### Logging & Debugging
-
-Gunakan `journalctl` untuk memantau log aktivitas:
+Memantau log secara real-time:
 
 ```bash
-# Monitor log secara real-time
-journalctl --user -u bel-madrasah -f
-
-# Melihat log hari ini
-journalctl --user -u bel-madrasah --since today
+sudo journalctl -u bel-madrasah -f
 ```
 
-### Configuration
+Melihat log hari ini:
 
-**Mengubah Jadwal:**
-Edit file `jadwal.py` menggunakan text editor:
 ```bash
-nano ~/bel-madrasah/jadwal.py
-# Simpan, lalu restart service
-systemctl --user restart bel-madrasah
-```
-
-**Mengatur Volume:**
-Edit variabel volume pada `main.py`:
-```bash
-nano ~/bel-madrasah/main.py
-# Cari baris: "-volume", "85"
+sudo journalctl -u bel-madrasah --since today
 ```
 
 ---
 
-## System Requirements
+## Konfigurasi
 
-| Komponen | Persyaratan | Status |
-| :--- | :--- | :--- |
-| **OS** | Linux (Ubuntu/Debian/CentOS) | Wajib |
-| **Python** | Versi 3.6 atau lebih baru | Wajib |
-| **Audio** | FFmpeg / FFplay | Auto-Install |
-| **Network** | cURL | Auto-Install |
-| **Manager** | Systemd | Wajib |
+### Mengubah Jadwal
+
+Edit file `jadwal.py`, kemudian restart service:
+
+```bash
+sudo nano /opt/bel-madrasah/jadwal.py
+sudo systemctl restart bel-madrasah
+```
+
+Setiap entri jadwal mengikuti format berikut:
+
+```python
+("HH:MM", f"{BASE}/nama-file.mp3"),
+```
+
+### Mengubah Volume
+
+Edit variabel `VOLUME` di `main.py`. Nilai berupa desimal antara `0.0` hingga `1.0`:
+
+```bash
+sudo nano /opt/bel-madrasah/main.py
+# Cari baris: VOLUME = "0.85"
+sudo systemctl restart bel-madrasah
+```
+
+### Menambah File Audio
+
+Salin file audio ke direktori tone, kemudian tambahkan entri ke `jadwal.py`:
+
+```bash
+sudo cp nama-file.mp3 /opt/bel-madrasah/tone/
+sudo systemctl restart bel-madrasah
+```
 
 ---
 
 ## Troubleshooting
 
-<details>
-<summary><strong>Masalah Umum & Solusi</strong></summary>
-
 ### Audio Tidak Berbunyi
-1. Pastikan file audio ada: `ls -l ~/bel-madrasah/tone/`
-2. Test manual dengan FFplay: `ffplay ~/bel-madrasah/tone/mars-madrasah.mp3`
-3. Cek volume sistem host (ALSA/PulseAudio).
+
+Pastikan ALSA dapat mendeteksi perangkat audio:
+
+```bash
+aplay -l
+```
+
+Uji pemutaran manual langsung via ffmpeg:
+
+```bash
+ffmpeg -hide_banner -loglevel error \
+  -i /opt/bel-madrasah/tone/mars-madrasah.mp3 \
+  -f alsa default
+```
+
+Jika perangkat audio bukan `default`, sesuaikan nama device di `main.py`:
+
+```python
+"-f", "alsa", "hw:0,0"
+```
 
 ### Service Gagal Start
-1. Cek detail error: `journalctl --user -u bel-madrasah -n 50`
-2. Pastikan user memiliki izin *lingering*: `loginctl show-user $USER | grep Linger`
-3. Validasi sintaks Python: `python3 ~/bel-madrasah/main.py` (jalankan manual untuk debug).
 
-### File Audio Hilang/Corrupt
-Jalankan ulang installer untuk mengunduh kembali aset yang hilang:
+Periksa detail error:
+
 ```bash
-./install.sh
+sudo journalctl -u bel-madrasah -n 50
 ```
-</details>
+
+Validasi sintaks Python secara manual:
+
+```bash
+cd /opt/bel-madrasah
+python3 -c "from jadwal import JADWAL; print('OK')"
+```
+
+Jalankan `main.py` langsung untuk melihat output error:
+
+```bash
+sudo python3 /opt/bel-madrasah/main.py
+```
+
+### File Audio Hilang atau Rusak
+
+Jalankan ulang installer untuk mengunduh kembali semua aset:
+
+```bash
+sudo ./install.sh
+```
+
+Atau unduh file tertentu secara manual:
+
+```bash
+BASE_URL="https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/tone"
+sudo curl -L -o /opt/bel-madrasah/tone/nama-file.mp3 "$BASE_URL/nama-file.mp3"
+```
+
+### Waktu Bel Tidak Tepat
+
+Pastikan timezone sistem sudah benar:
+
+```bash
+timedatectl
+sudo timedatectl set-timezone Asia/Jakarta
+```
 
 ---
 
-## License & Attribution
+## Lisensi
 
-**Bell System Madrasah Tsanawiyah Negeri 1 Pandeglang**
+Didistribusikan untuk keperluan pendidikan. Kode sumber terbuka untuk dimodifikasi sesuai kebutuhan instansi.
 
-Developed by **[zulfikriyahya](https://github.com/zulfikriyahya)**.
-Disatribusikan untuk penggunaan pendidikan. Kode sumber terbuka untuk dimodifikasi sesuai kebutuhan instansi.
+Dikembangkan oleh [zulfikriyahya](https://github.com/zulfikriyahya) untuk MTsN 1 Pandeglang.
