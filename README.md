@@ -298,12 +298,7 @@ sudo systemctl restart bel-madrasah
 
 ### Audio Tidak Berbunyi
 
-Pastikan izin file audio dapat dibaca oleh semua user:
-
-```bash
-sudo chmod 755 /opt/bel-madrasah/tone
-sudo chmod 644 /opt/bel-madrasah/tone/*.mp3
-```
+Pada sistem headless (tanpa sesi login aktif), ALSA `default` tidak dapat diakses oleh user biasa karena tidak ada sesi PulseAudio/PipeWire yang berjalan. Solusinya adalah menggunakan hardware device langsung.
 
 Cek daftar perangkat audio yang tersedia:
 
@@ -311,12 +306,32 @@ Cek daftar perangkat audio yang tersedia:
 aplay -l
 ```
 
-Uji pemutaran manual via ffmpeg:
+Pastikan izin file audio dapat dibaca:
 
 ```bash
-ffmpeg -hide_banner -loglevel error \
+sudo chmod 755 /opt/bel-madrasah/tone
+sudo chmod 644 /opt/bel-madrasah/tone/*.mp3
+```
+
+Tambahkan user ke group `audio`, lalu reboot:
+
+```bash
+sudo usermod -aG audio $USER
+sudo reboot
+```
+
+Uji pemutaran manual via ffmpeg menggunakan hardware device langsung:
+
+```bash
+sudo -u $USER ffmpeg -hide_banner -loglevel error \
   -i /opt/bel-madrasah/tone/mars-madrasah.mp3 \
-  -f alsa default
+  -f alsa hw:1,0
+```
+
+Nomor `hw:X,Y` disesuaikan dengan output `aplay -l`. Gunakan perangkat **Analog** (bukan HDMI). Jika berbeda, sesuaikan nilai `hw:X,Y` di `main.py`:
+
+```python
+"-f", "alsa", "hw:1,0"
 ```
 
 ### Service Gagal Start
