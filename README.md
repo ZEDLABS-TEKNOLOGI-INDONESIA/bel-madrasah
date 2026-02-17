@@ -53,7 +53,7 @@ Installer akan melakukan:
 3. Pembuatan direktori proyek di `/opt/bel-madrasah`
 4. Pembuatan `main.py` dan `jadwal.py`
 5. Registrasi dan aktivasi system service di `/etc/systemd/system/`
-6. Pengunduhan 27 aset audio dari repositori
+6. Pengunduhan aset audio dari repositori
 7. Pengaturan izin file
 8. Verifikasi dan menjalankan service
 
@@ -84,12 +84,10 @@ sudo ./uninstall.sh
 
 ```
 /opt/bel-madrasah/
-├── main.py            # Logika utama penjadwalan dan pemutaran audio
-├── jadwal.py          # Konfigurasi jadwal harian
-├── audio-list.txt     # Daftar file audio yang terinstall
-└── tone/              # Direktori aset audio
-    ├── sholawat-badariyah.mp3
-    ├── sholawat-jibril.mp3
+├── main.py                 # Logika utama penjadwalan dan pemutaran audio
+├── jadwal.py               # Konfigurasi jadwal harian
+├── audio-list.txt          # Daftar file audio yang terinstall
+└── tone/                   # Direktori aset audio
     ├── mars-madrasah.mp3
     ├── hymne-madrasah.mp3
     ├── indonesia-raya.mp3
@@ -98,8 +96,6 @@ sudo ./uninstall.sh
     ├── literasi.mp3
     ├── rohani.mp3
     ├── pramuka.mp3
-    ├── itirof.mp3
-    ├── murotal-yasin.mp3
     ├── akhir-pekan.mp3
     ├── istirahat-1.mp3
     ├── istirahat-2.mp3
@@ -124,18 +120,17 @@ Sistem secara otomatis menonaktifkan pemutaran pada hari Sabtu dan Minggu.
 
 | Waktu | Kegiatan | Audio |
 | :--- | :--- | :--- |
-| 06:40 | Pembukaan | sholawat-badariyah |
-| 07:00 | Hymne | mars-madrasah |
-| 07:15 | Upacara Bendera | upacara |
+| 06:50 | Persiapan | mars-madrasah |
+| 07:00 | Upacara Bendera | upacara |
 | 08:10 | Pelajaran 2 | pelajaran-2 |
 | 08:50 | Pelajaran 3 | pelajaran-3 |
 | 09:30 | Pelajaran 4 | pelajaran-4 |
 | 10:00 | Lagu Kebangsaan | indonesia-raya |
-| 10:10 | Istirahat 1 | istirahat-1 |
+| 10:10 | Istirahat / Shalat Dhuha | istirahat-1 |
 | 10:20 | Kebersihan | kebersihan |
 | 10:30 | Pelajaran 5 | pelajaran-5 |
 | 11:10 | Pelajaran 6 | pelajaran-6 |
-| 11:50 | Istirahat 2 | istirahat-2 |
+| 11:50 | Istirahat / Shalat Dhuhur | istirahat-2 |
 | 12:30 | Kebersihan | kebersihan |
 | 12:40 | Pelajaran 7 | pelajaran-7 |
 | 13:20 | Pelajaran 8 | pelajaran-8 |
@@ -149,14 +144,21 @@ Sistem secara otomatis menonaktifkan pemutaran pada hari Sabtu dan Minggu.
 
 | Waktu | Kegiatan | Audio |
 | :--- | :--- | :--- |
-| 06:45 | Pembukaan | itirof |
-| 07:00 | Hymne | mars-madrasah |
+| 06:50 | Persiapan | mars-madrasah |
 | 07:30 | Pelajaran 1 | pelajaran-1 |
-| 08:10 — 14:40 | Pelajaran 2 — 10 | pelajaran-[2-10] |
-| 10:10 | Istirahat 1 | istirahat-1 |
+| 08:10 | Pelajaran 2 | pelajaran-2 |
+| 08:50 | Pelajaran 3 | pelajaran-3 |
+| 09:30 | Pelajaran 4 | pelajaran-4 |
+| 10:10 | Istirahat / Shalat Dhuha | istirahat-1 |
 | 10:20 | Kebersihan | kebersihan |
-| 11:50 | Istirahat 2 | istirahat-2 |
+| 10:30 | Pelajaran 5 | pelajaran-5 |
+| 11:10 | Pelajaran 6 | pelajaran-6 |
+| 11:50 | Istirahat / Shalat Dhuhur | istirahat-2 |
 | 12:30 | Kebersihan | kebersihan |
+| 12:40 | Pelajaran 7 | pelajaran-7 |
+| 13:20 | Pelajaran 8 | pelajaran-8 |
+| 14:00 | Pelajaran 9 | pelajaran-9 |
+| 14:40 | Pelajaran 10 | pelajaran-10 |
 | 15:20 | Pelajaran Selesai | pelajaran-selesai |
 | 15:21 | Lagu Penutup | tanah-airku |
 | 16:30 | Penutup | hymne-madrasah |
@@ -165,13 +167,21 @@ Sistem secara otomatis menonaktifkan pemutaran pada hari Sabtu dan Minggu.
 
 | Waktu | Kegiatan | Audio |
 | :--- | :--- | :--- |
-| 06:40 | Pembukaan | sholawat-jibril |
-| 07:00 | Hymne | mars-madrasah |
-| 07:30 — 14:40 | Pelajaran 1 — 10 | pelajaran-[1-10] |
-| 10:10 | Istirahat 1 | istirahat-1 |
+| 06:50 | Persiapan | mars-madrasah |
+| 07:30 | Pelajaran 1 | pelajaran-1 |
+| 08:10 | Pelajaran 2 | pelajaran-2 |
+| 08:50 | Pelajaran 3 | pelajaran-3 |
+| 09:30 | Pelajaran 4 | pelajaran-4 |
+| 10:10 | Istirahat / Shalat Dhuha | istirahat-1 |
 | 10:20 | Kebersihan | kebersihan |
-| 11:50 | Istirahat 2 | istirahat-2 |
+| 10:30 | Pelajaran 5 | pelajaran-5 |
+| 11:10 | Pelajaran 6 | pelajaran-6 |
+| 11:50 | Istirahat / Shalat Dhuhur | istirahat-2 |
 | 12:30 | Kebersihan | kebersihan |
+| 12:40 | Pelajaran 7 | pelajaran-7 |
+| 13:20 | Pelajaran 8 | pelajaran-8 |
+| 14:00 | Pelajaran 9 | pelajaran-9 |
+| 14:40 | Pelajaran 10 | pelajaran-10 |
 | 15:20 | Pelajaran Selesai | pelajaran-selesai |
 | 15:21 | Lagu Penutup | tanah-airku |
 | 16:30 | Penutup | hymne-madrasah |
@@ -180,16 +190,22 @@ Sistem secara otomatis menonaktifkan pemutaran pada hari Sabtu dan Minggu.
 
 | Waktu | Kegiatan | Audio |
 | :--- | :--- | :--- |
-| 06:40 | Pembukaan | sholawat-badariyah |
-| 07:00 | Hymne | mars-madrasah |
-| 07:15 | Literasi | literasi |
+| 06:50 | Persiapan | mars-madrasah |
+| 07:00 | Literasi | literasi |
 | 08:10 | Pelajaran 2 | pelajaran-2 |
-| 08:50 — 14:40 | Pelajaran 3 — 10 | pelajaran-[3-10] |
+| 08:50 | Pelajaran 3 | pelajaran-3 |
+| 09:30 | Pelajaran 4 | pelajaran-4 |
 | 10:00 | Lagu Kebangsaan | indonesia-raya |
-| 10:10 | Istirahat 1 | istirahat-1 |
+| 10:10 | Istirahat / Shalat Dhuha | istirahat-1 |
 | 10:20 | Kebersihan | kebersihan |
-| 11:50 | Istirahat 2 | istirahat-2 |
+| 10:30 | Pelajaran 5 | pelajaran-5 |
+| 11:10 | Pelajaran 6 | pelajaran-6 |
+| 11:50 | Istirahat / Shalat Dhuhur | istirahat-2 |
 | 12:30 | Kebersihan | kebersihan |
+| 12:40 | Pelajaran 7 | pelajaran-7 |
+| 13:20 | Pelajaran 8 | pelajaran-8 |
+| 14:00 | Pelajaran 9 | pelajaran-9 |
+| 14:40 | Pelajaran 10 | pelajaran-10 |
 | 15:20 | Pelajaran Selesai | pelajaran-selesai |
 | 15:21 | Lagu Penutup | tanah-airku |
 | 16:30 | Penutup | hymne-madrasah |
@@ -198,17 +214,21 @@ Sistem secara otomatis menonaktifkan pemutaran pada hari Sabtu dan Minggu.
 
 | Waktu | Kegiatan | Audio |
 | :--- | :--- | :--- |
-| 06:40 | Pembukaan | murotal-yasin |
-| 07:00 | Hymne | mars-madrasah |
-| 07:15 | Rohani | rohani |
-| 07:50 — 14:10 | Pelajaran 2 — 9 | pelajaran-[2-9] |
-| 09:50 | Istirahat 1 | istirahat-1 |
-| 10:00 | Kebersihan | kebersihan |
-| 11:30 | Istirahat 2 | istirahat-2 |
-| 14:50 | Akhir Pekan | akhir-pekan |
-| 14:51 | Lagu Penutup | tanah-airku |
-| 14:55 | Pramuka | pramuka |
-| 16:30 | Penutup | hymne-madrasah |
+| 06:50 | Persiapan | mars-madrasah |
+| 07:00 | Rohani / Dzikir Jum'at | rohani |
+| 08:10 | Pelajaran 3 | pelajaran-3 |
+| 08:50 | Pelajaran 4 | pelajaran-4 |
+| 09:30 | Istirahat / Shalat Dhuha | istirahat-1 |
+| 09:40 | Kebersihan | kebersihan |
+| 10:10 | Pelajaran 5 | pelajaran-5 |
+| 10:40 | Pelajaran 6 | pelajaran-6 |
+| 11:20 | Ibadah Jum'at | istirahat-2 |
+| 12:50 | Pelajaran 7 | pelajaran-7 |
+| 13:30 | Pelajaran 8 | pelajaran-8 |
+| 14:10 | Akhir Pekan | akhir-pekan |
+| 14:11 | Lagu Penutup | tanah-airku |
+| 14:12 | Pramuka | pramuka |
+| 16:00 | Penutup | hymne-madrasah |
 
 ---
 
@@ -260,7 +280,6 @@ Edit variabel `VOLUME` di `main.py`. Nilai berupa desimal antara `0.0` hingga `1
 
 ```bash
 sudo nano /opt/bel-madrasah/main.py
-# Cari baris: VOLUME = "0.85"
 sudo systemctl restart bel-madrasah
 ```
 
