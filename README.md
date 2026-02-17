@@ -298,24 +298,25 @@ sudo systemctl restart bel-madrasah
 
 ### Audio Tidak Berbunyi
 
-Pastikan ALSA dapat mendeteksi perangkat audio:
+Pastikan izin file audio dapat dibaca oleh semua user:
+
+```bash
+sudo chmod 755 /opt/bel-madrasah/tone
+sudo chmod 644 /opt/bel-madrasah/tone/*.mp3
+```
+
+Cek daftar perangkat audio yang tersedia:
 
 ```bash
 aplay -l
 ```
 
-Uji pemutaran manual langsung via ffmpeg:
+Uji pemutaran manual via ffmpeg:
 
 ```bash
 ffmpeg -hide_banner -loglevel error \
   -i /opt/bel-madrasah/tone/mars-madrasah.mp3 \
   -f alsa default
-```
-
-Jika perangkat audio bukan `default`, sesuaikan nama device di `main.py`:
-
-```python
-"-f", "alsa", "hw:0,0"
 ```
 
 ### Service Gagal Start
