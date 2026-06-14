@@ -12,6 +12,7 @@ REPO_BRANCH="server"
 BUILD_DIR="/tmp/bel-madrasah-build"
 PROJECT_DIR="/opt/bel-madrasah"
 SERVICE_NAME="bel-madrasah"
+SERVICE_USER="bel-madrasah"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 GO_VERSION="1.24.4"
 
@@ -22,6 +23,7 @@ ENABLE_TLS=0
 DOMAIN=""
 EMAIL=""
 IS_UPDATE=0
+ALSA_DEVICE="hw:1,0"
 
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -112,6 +114,33 @@ install_tools() {
     fi
 }
 
+detect_alsa_device() {
+    info "Mendeteksi audio device..."
+    if ! aplay -l 2>/dev/null | grep -q "card"; then
+        warning "Tidak ada audio device ditemukan, menggunakan default."
+        ALSA_DEVICE="default"
+        return
+    fi
+    # Pilih card pertama yang bukan HDMI
+    local card=""
+    while IFS= read -r line; do
+        if echo "$line" | grep -q "^card" && ! echo "$line" | grep -qi "hdmi\|displayport"; then
+            card=$(echo "$line" | grep -o "^card [0-9]*" | awk '{print $2}')
+            break
+        fi
+    done < <(aplay -l 2>/dev/null)
+
+    if [ -n "$card" ]; then
+        ALSA_DEVICE="hw:${card},0"
+        success "Audio device dipilih: ${ALSA_DEVICE}"
+    else
+        # Fallback ke card pertama (termasuk HDMI)
+        card=$(aplay -l 2>/dev/null | grep "^card" | head -1 | grep -o "^card [0-9]*" | awk '{print $2}')
+        ALSA_DEVICE="hw:${card},0"
+        warning "Hanya ditemukan HDMI, menggunakan: ${ALSA_DEVICE}"
+    fi
+}
+
 clone_repo() {
     info "Mengunduh source code..."
     rm -rf "$BUILD_DIR"
@@ -139,6 +168,12 @@ backup_data() {
     [ -d "${PROJECT_DIR}/data" ]  && cp -r "${PROJECT_DIR}/data"  "${backup}/"
     [ -d "${PROJECT_DIR}/tone" ]  && cp -r "${PROJECT_DIR}/tone"  "${backup}/"
     success "Data di-backup ke: ${backup}"
+}
+
+patch_alsa_device() {
+    info "Menyesuaikan ALSA device di main.go..."
+    sed -i "s|\"f\", \"alsa\", \"default\"|\"f\", \"alsa\", \"${ALSA_DEVICE}\"|g" "${BUILD_DIR}/main.go"
+    success "ALSA device diset ke: ${ALSA_DEVICE}"
 }
 
 build_binary() {
@@ -291,6 +326,17 @@ setup_tls() {
     fi
 }
 
+create_service_user() {
+    if ! id "$SERVICE_USER" &>/dev/null; then
+        useradd -r -s /sbin/nologin -G audio "$SERVICE_USER"
+        success "User ${SERVICE_USER} dibuat."
+    else
+        # Pastikan user masuk group audio
+        usermod -aG audio "$SERVICE_USER" 2>/dev/null || true
+        success "User ${SERVICE_USER} sudah ada."
+    fi
+}
+
 create_service() {
     info "Membuat systemd service..."
     local tls_env=""
@@ -306,8 +352,8 @@ Type=simple
 ExecStart=${PROJECT_DIR}/bel-madrasah
 Restart=on-failure
 RestartSec=10
-User=root
-SupplementaryGroups=audio
+User=${SERVICE_USER}
+Group=audio
 ${tls_env}
 StandardOutput=journal
 StandardError=journal
@@ -355,7 +401,7 @@ copy_uninstaller() {
 
 set_permissions() {
     info "Mengatur izin file..."
-    chown -R root:root "$PROJECT_DIR"
+    chown -R "${SERVICE_USER}:audio" "$PROJECT_DIR"
     chmod 755 "$PROJECT_DIR"
     chmod 750 "${PROJECT_DIR}/data"
     chmod 755 "${PROJECT_DIR}/tone" "${PROJECT_DIR}/static" "${PROJECT_DIR}/static/icons"
@@ -368,8 +414,8 @@ set_permissions() {
 
 verify_installation() {
     info "Memverifikasi instalasi..."
-    [ -f "${PROJECT_DIR}/bel-madrasah" ]     && success "Binary ditemukan."       || error "Binary tidak ditemukan."
-    [ -f "${PROJECT_DIR}/static/index.html" ] && success "index.html ditemukan."  || warning "index.html tidak ditemukan."
+    [ -f "${PROJECT_DIR}/bel-madrasah" ]      && success "Binary ditemukan."      || error "Binary tidak ditemukan."
+    [ -f "${PROJECT_DIR}/static/index.html" ] && success "index.html ditemukan." || warning "index.html tidak ditemukan."
     systemctl is-enabled "${SERVICE_NAME}" >/dev/null 2>&1 \
         && success "Service terdaftar di systemd." || error "Service belum diaktifkan."
 }
@@ -402,15 +448,17 @@ show_summary() {
     success "${action} SELESAI"
     echo "========================================="
     echo
-    info "Direktori : ${PROJECT_DIR}"
-    info "Service   : ${SERVICE_NAME}"
+    info "Direktori  : ${PROJECT_DIR}"
+    info "Service    : ${SERVICE_NAME}"
+    info "User       : ${SERVICE_USER}"
+    info "ALSA Device: ${ALSA_DEVICE}"
     if [ "$ENABLE_TLS" -eq 1 ]; then
-        info "Akses     : https://${DOMAIN}"
+        info "Akses      : https://${DOMAIN}"
     elif [ -n "$local_ip" ]; then
-        info "Akses     : http://${local_ip}"
+        info "Akses      : http://${local_ip}"
     fi
     if [ "$IS_UPDATE" -eq 0 ]; then
-        info "Login     : admin / admin123"
+        info "Login      : admin / admin123"
         warning "Segera ganti password setelah login pertama!"
     fi
     echo
@@ -436,14 +484,17 @@ main() {
     echo
     check_requirements
     install_tools
+    detect_alsa_device
     clone_repo
     prepare_dirs
+    patch_alsa_device
     build_binary
     copy_static
     generate_pwa_icons
     prompt_tls
     setup_nginx
     setup_tls
+    create_service_user
     create_service
     copy_audio
     copy_uninstaller

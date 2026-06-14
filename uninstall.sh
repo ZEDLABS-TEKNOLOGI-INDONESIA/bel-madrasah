@@ -9,6 +9,7 @@ NC='\033[0m'
 
 PROJECT_DIR="/opt/bel-madrasah"
 SERVICE_NAME="bel-madrasah"
+SERVICE_USER="bel-madrasah"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 NGINX_CONF="/etc/nginx/sites-available/bel-madrasah"
 NGINX_ENABLED="/etc/nginx/sites-enabled/bel-madrasah"
@@ -62,6 +63,15 @@ fi
 if cmd_exists nginx && nginx -t 2>/dev/null; then
     systemctl reload nginx 2>/dev/null || true
     success "nginx direload."
+fi
+
+# Hapus system user
+if id "$SERVICE_USER" &>/dev/null; then
+    read -rp "Hapus system user '${SERVICE_USER}'? [y/N]: " -n 1; echo
+    [[ $REPLY =~ ^[Yy]$ ]] && {
+        userdel "$SERVICE_USER" 2>/dev/null || true
+        success "User ${SERVICE_USER} dihapus."
+    }
 fi
 
 if [ ! -d "$PROJECT_DIR" ]; then
