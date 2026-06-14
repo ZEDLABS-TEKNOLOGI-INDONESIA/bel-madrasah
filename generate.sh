@@ -20,6 +20,7 @@ EXCLUDE_FILES=(
   ".gitignore"
   "README.md"
   "LICENSE"
+  "konsep.md"
 )
 
 # Ekstensi biner yang dikecualikan
