@@ -1,14 +1,5 @@
 var MODE_LABELS = { reguler: "Reguler", ramadhan: "Ramadhan", pts: "PTS", pas: "PAS" };
 var DAY_ORDER = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
-
-var jadwalMode = "reguler";
-var activeHari = null;
-var editIndex = -1;
-var allTones = [];
-var jadwalData = {};
-var configData = {};
-var deferredPWA = null;
-
 var MON_ID = [
   "",
   "Jan",
@@ -26,11 +17,19 @@ var MON_ID = [
 ];
 var DAY_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
+var jadwalMode = "reguler";
+var activeHari = null;
+var editIndex = -1;
+var allTones = [];
+var jadwalData = {};
+var configData = {};
+var deferredPWA = null;
+
 function $(id) {
   return document.getElementById(id);
 }
 
-/* ─── TOAST ─── */
+/* ── TOAST ── */
 function toast(msg, type) {
   var el = $("toast");
   el.textContent = msg;
@@ -41,7 +40,7 @@ function toast(msg, type) {
   }, 3000);
 }
 
-/* ─── API ─── */
+/* ── API ── */
 async function api(url, method, body) {
   var opts = { method: method || "GET", headers: { "Content-Type": "application/json" } };
   if (body) opts.body = JSON.stringify(body);
@@ -51,7 +50,7 @@ async function api(url, method, body) {
   return data;
 }
 
-/* ─── NAV ─── */
+/* ── NAV ── */
 function switchTab(id) {
   document.querySelectorAll(".page").forEach(function (el) {
     el.classList.remove("active");
@@ -93,7 +92,7 @@ function setupNav() {
   });
 }
 
-/* ─── STATUS ─── */
+/* ── STATUS ── */
 async function loadStatus() {
   try {
     var d = await api("/api/service/status");
@@ -119,7 +118,7 @@ async function toggleService() {
   }
 }
 
-/* ─── CONFIG ─── */
+/* ── CONFIG ── */
 async function loadConfig() {
   try {
     var d = await api("/api/config");
@@ -171,7 +170,7 @@ async function saveConfig() {
   }
 }
 
-/* ─── LIBUR ─── */
+/* ── LIBUR ── */
 function fmtDate(d) {
   var parts = d.split("-");
   return (
@@ -248,7 +247,7 @@ async function deleteLibur(date) {
   }
 }
 
-/* ─── JADWAL ─── */
+/* ── JADWAL ── */
 async function loadJadwal() {
   try {
     var d = await api("/api/jadwal?mode=" + jadwalMode);
@@ -334,14 +333,13 @@ function renderJadwalTable(hari) {
         '<button class="btn btn-danger btn-sm" onclick="deleteEntry(' +
         i +
         ')">Hapus</button>' +
-        "</div></td>" +
-        "</tr>"
+        "</div></td></tr>"
       );
     })
     .join("");
   $("jadwalBody").innerHTML =
     '<div class="table-wrap"><table>' +
-    '<thead><tr><th style="width:32px">#</th><th>Waktu</th><th>Audio</th><th style="width:130px">Aksi</th></tr></thead>' +
+    '<thead><tr><th style="width:32px">#</th><th>Waktu</th><th>Audio</th><th style="width:140px">Aksi</th></tr></thead>' +
     "<tbody>" +
     rows +
     "</tbody></table></div>";
@@ -378,7 +376,7 @@ async function deleteHari() {
   }
 }
 
-/* ─── ENTRY MODAL ─── */
+/* ── ENTRY MODAL ── */
 function openAddEntry() {
   editIndex = -1;
   $("modalTitle").textContent = "Tambah Bel";
@@ -459,7 +457,7 @@ async function deleteEntry(idx) {
   }
 }
 
-/* ─── LOG ─── */
+/* ── LOG ── */
 async function loadLog() {
   var c = $("logBody");
   try {
@@ -505,7 +503,7 @@ async function loadLog() {
   }
 }
 
-/* ─── AUDIO / TONES ─── */
+/* ── AUDIO ── */
 async function loadTones() {
   try {
     var d = await api("/api/tones");
@@ -527,7 +525,7 @@ async function loadTones() {
           '<button class="btn btn-success btn-sm" onclick="previewTone(\'' +
           f +
           "')\">Putar</button>" +
-          '<button class="btn btn-danger btn-sm" onclick="deleteTone(\'' +
+          '<button class="btn btn-danger btn-sm"  onclick="deleteTone(\'' +
           f +
           "')\">Hapus</button>" +
           "</div></div>"
@@ -576,7 +574,7 @@ async function deleteTone(filename) {
   }
 }
 
-/* ─── BACKUP / RESTORE ─── */
+/* ── BACKUP / RESTORE ── */
 function downloadBackup() {
   window.location.href = "/api/backup";
 }
@@ -598,7 +596,7 @@ async function restoreBackup(file) {
   }
 }
 
-/* ─── PASSWORD ─── */
+/* ── PASSWORD ── */
 async function changePassword() {
   var old = $("oldPass").value;
   var nw = $("newPass").value;
@@ -622,7 +620,7 @@ async function changePassword() {
   }
 }
 
-/* ─── OFFLINE ─── */
+/* ── OFFLINE ── */
 function setupOffline() {
   var bar = $("offlineBar");
   function update() {
@@ -633,7 +631,7 @@ function setupOffline() {
   update();
 }
 
-/* ─── PWA ─── */
+/* ── PWA ── */
 function setupPWA() {
   var banner = $("pwaBanner");
   var btn = $("installAppBtn");
@@ -676,7 +674,7 @@ async function promptInstall() {
   deferredPWA = null;
 }
 
-/* ─── EVENTS ─── */
+/* ── EVENTS ── */
 function bindEvents() {
   $("toggleBtn").addEventListener("click", toggleService);
   $("logoutBtn").addEventListener("click", function () {
@@ -737,7 +735,7 @@ function bindEvents() {
   });
 }
 
-/* ─── INIT ─── */
+/* ── INIT ── */
 (async function () {
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {

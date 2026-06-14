@@ -62,11 +62,11 @@ func verifyPassword(hash, p string) bool {
 
 func initAuth() error {
 	if _, err := os.Stat(usersFile); os.IsNotExist(err) {
-		hash, err := hashPassword("admin123")
+		hash, err := hashPassword("P@ssw0rd")
 		if err != nil {
 			return err
 		}
-		u := User{Username: "admin", PasswordHash: hash}
+		u := User{Username: "administrator", PasswordHash: hash}
 		data, err := json.MarshalIndent(u, "", "  ")
 		if err != nil {
 			return err
@@ -74,7 +74,7 @@ func initAuth() error {
 		if err := os.WriteFile(usersFile, data, 0600); err != nil {
 			return err
 		}
-		logMsg("akun admin default dibuat — username: admin | password: admin123")
+		logMsg("akun administrator default dibuat — username: administrator | password: P@ssw0rd")
 		logMsg("segera ganti password melalui halaman pengaturan")
 	}
 	go cleanupSessions()

@@ -108,12 +108,6 @@ install_tools() {
         fi
         success "${tool} tersedia."
     done
-    if ! cmd_exists upx; then
-        install_package upx-ucl 2>/dev/null || install_package upx 2>/dev/null || true
-        cmd_exists upx && success "upx tersedia." || warning "UPX tidak tersedia, binary tidak akan dikompres."
-    else
-        success "upx tersedia."
-    fi
     if ! cmd_exists aplay; then
         install_package alsa-utils
         success "alsa-utils terinstall."
@@ -497,7 +491,7 @@ show_summary() {
         info "Akses      : http://${local_ip}"
     fi
     if [ "$IS_UPDATE" -eq 0 ]; then
-        info "Login      : admin / admin123"
+        info "Login      : administrator / P@ssw0rd"
         warning "Segera ganti password setelah login pertama!"
     fi
     echo
