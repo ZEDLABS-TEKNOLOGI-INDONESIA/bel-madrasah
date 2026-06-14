@@ -85,6 +85,7 @@ install_go() {
 check_requirements() {
     info "Memeriksa persyaratan sistem..."
     require_root
+    export PATH="$PATH:/usr/local/go/bin"
     if ! cmd_exists go; then
         warning "Go tidak ditemukan, menginstall otomatis..."
         install_go
