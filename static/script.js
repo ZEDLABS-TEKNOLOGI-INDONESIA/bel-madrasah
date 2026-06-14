@@ -26,19 +26,27 @@ async function api(url, method = "GET", body = null) {
   return data;
 }
 
-function switchTab(id, btn) {
+function switchTab(id) {
   document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
-  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll(".nav-btn, .bnav-btn").forEach((b) => b.classList.remove("active"));
   document.getElementById("sec-" + id).classList.add("active");
-  btn.classList.add("active");
+  document.querySelectorAll(`[data-tab="${id}"]`).forEach((b) => b.classList.add("active"));
   if (id === "audio") loadTones();
   if (id === "log") loadLog();
   if (id === "libur") loadLibur();
   if (id === "mode") renderModeUI();
 }
 
-function logout() {
-  window.location.href = "/logout";
+function setupNavigation() {
+  document.querySelectorAll("[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+  });
+  document.querySelectorAll(".mtab").forEach((btn) => {
+    btn.addEventListener("click", () => switchJadwalMode(btn.dataset.mode, btn));
+  });
+  document.querySelectorAll(".mode-opt").forEach((el) => {
+    el.addEventListener("click", () => selectMode(el.dataset.mode));
+  });
 }
 
 async function loadStatus() {
@@ -48,14 +56,11 @@ async function loadStatus() {
     dot.className = "dot" + (d.running ? " on" : "");
     document.getElementById("statusText").textContent = d.running ? "Aktif" : "Nonaktif";
     document.getElementById("toggleBtn").textContent = d.running ? "Hentikan" : "Aktifkan";
-
     const mode = d.active_mode || "reguler";
     const badge = document.getElementById("modeBadge");
     badge.textContent = MODE_LABELS[mode] || mode;
     badge.className = "badge badge-mode " + mode;
-
-    const liburBadge = document.getElementById("liburBadge");
-    liburBadge.style.display = d.is_libur ? "" : "none";
+    document.getElementById("liburBadge").style.display = d.is_libur ? "" : "none";
   } catch (_) {}
 }
 
@@ -88,13 +93,11 @@ function renderModeUI() {
     pts: "modeOptPTS",
     pas: "modeOptPAS",
   };
-
   ["reguler", "ramadhan", "pts", "pas"].forEach((k) => {
     const el = document.getElementById(map[k]);
-    const base = k === "reguler" ? "mode-opt" : `mode-opt ${k}`;
-    el.className = base + (m === k ? " active" : "");
+    el.className = k === "reguler" ? "mode-opt" : `mode-opt ${k}`;
+    if (m === k) el.classList.add("active");
   });
-
   document.getElementById("overrideToggle").checked = configData.manual_override;
   document.getElementById("ramadhanStart").value = configData.ramadhan_start || "";
   document.getElementById("ramadhanEnd").value = configData.ramadhan_end || "";
@@ -109,15 +112,10 @@ function selectMode(mode) {
   renderModeUI();
 }
 
-function onOverrideChange() {
-  configData.manual_override = document.getElementById("overrideToggle").checked;
-}
-
 async function saveConfig() {
   const start = document.getElementById("ramadhanStart").value.trim();
   const end = document.getElementById("ramadhanEnd").value.trim();
   const mmdd = /^\d{2}-\d{2}$/;
-
   if (start && !mmdd.test(start)) {
     toast("Format Ramadhan harus MM-DD", "error");
     return;
@@ -126,7 +124,6 @@ async function saveConfig() {
     toast("Format Ramadhan harus MM-DD", "error");
     return;
   }
-
   try {
     await api("/api/config", "POST", {
       mode: configData.mode,
@@ -157,7 +154,6 @@ async function loadLibur() {
       c.innerHTML = '<div class="empty">Belum ada hari libur terdaftar</div>';
       return;
     }
-
     const today = new Date().toISOString().slice(0, 10);
     c.innerHTML = list
       .map((date) => {
@@ -241,7 +237,7 @@ async function loadJadwal() {
     } else {
       currentHari = null;
       document.getElementById("jadwalTitle").textContent = "Pilih hari";
-      document.getElementById("hariInfo").textContent = "";
+      document.getElementById("hariInfo").textContent = "Pilih hari dari tab di atas";
       document.getElementById("jadwalTable").innerHTML =
         '<div class="empty">Pilih hari untuk melihat jadwal bel</div>';
       document.getElementById("jadwalActions").style.display = "none";
@@ -284,18 +280,15 @@ function renderJadwalTable(hari) {
   document.getElementById("jadwalTitle").textContent =
     `${hari} \u2014 ${MODE_LABELS[currentJadwalMode] || currentJadwalMode}`;
   const entries = jadwalData[hari] || [];
-  document.getElementById("hariInfo").textContent = `${entries.length} entri`;
-
+  document.getElementById("hariInfo").textContent = `${entries.length} entri bel`;
   if (!entries.length) {
     document.getElementById("jadwalTable").innerHTML =
       '<div class="empty">Belum ada jadwal bel untuk hari ini</div>';
     return;
   }
-
   let html = `<div class="table-wrap"><table><thead><tr>
     <th style="width:32px">#</th><th>Waktu</th><th>Audio</th><th style="width:120px">Aksi</th>
   </tr></thead><tbody>`;
-
   entries.forEach((e, i) => {
     const name = e.audio.split("/").pop();
     html += `<tr>
@@ -308,7 +301,6 @@ function renderJadwalTable(hari) {
       </div></td>
     </tr>`;
   });
-
   html += "</tbody></table></div>";
   document.getElementById("jadwalTable").innerHTML = html;
 }
@@ -350,7 +342,7 @@ async function deleteHari() {
 
 function openAddEntry() {
   editIndex = -1;
-  document.getElementById("modalTitle").textContent = `Tambah Bel`;
+  document.getElementById("modalTitle").textContent = "Tambah Bel";
   document.getElementById("modalSubtitle").textContent =
     `${currentHari} \u2014 ${MODE_LABELS[currentJadwalMode]}`;
   document.getElementById("entryWaktu").value = "";
@@ -361,7 +353,7 @@ function openAddEntry() {
 function openEditEntry(idx) {
   editIndex = idx;
   const entry = jadwalData[currentHari][idx];
-  document.getElementById("modalTitle").textContent = `Edit Bel`;
+  document.getElementById("modalTitle").textContent = "Edit Bel";
   document.getElementById("modalSubtitle").textContent =
     `${currentHari} \u2014 ${MODE_LABELS[currentJadwalMode]}`;
   document.getElementById("entryWaktu").value = entry.waktu;
@@ -437,11 +429,9 @@ async function loadLog() {
       c.innerHTML = '<div class="empty">Belum ada aktivitas tercatat</div>';
       return;
     }
-
     let html = `<div class="table-wrap"><table><thead><tr>
       <th>Waktu</th><th>Mode</th><th>Hari</th><th>Jam</th><th>Audio</th>
     </tr></thead><tbody>`;
-
     logs.forEach((l) => {
       html += `<tr>
         <td style="white-space:nowrap;color:var(--ink-4);font-size:11.5px">${l.time}</td>
@@ -451,7 +441,6 @@ async function loadLog() {
         <td class="t-audio">${l.audio}</td>
       </tr>`;
     });
-
     html += "</tbody></table></div>";
     c.innerHTML = html;
   } catch (e) {
@@ -469,7 +458,6 @@ async function loadTones() {
       list.innerHTML = '<div class="empty">Belum ada file audio</div>';
       return;
     }
-
     list.innerHTML = allTones
       .map(
         (f) => `
@@ -477,7 +465,7 @@ async function loadTones() {
         <span class="tone-name">${f}</span>
         <div class="btn-row">
           <button class="btn success sm" onclick="previewTone('${f}')">Putar</button>
-          <button class="btn danger sm"  onclick="deleteTone('${f}')">Hapus</button>
+          <button class="btn danger sm" onclick="deleteTone('${f}')">Hapus</button>
         </div>
       </div>`
       )
@@ -502,13 +490,6 @@ async function uploadFile(file) {
   } catch (e) {
     toast(e.message, "error");
   }
-}
-
-function handleDrop(e) {
-  e.preventDefault();
-  document.getElementById("uploadZone").classList.remove("over");
-  const file = e.dataTransfer.files[0];
-  if (file) uploadFile(file);
 }
 
 async function previewTone(filename) {
@@ -585,7 +566,6 @@ function setupPWA() {
   const banner = document.getElementById("pwaBanner");
   const btn = document.getElementById("installAppBtn");
   const info = document.getElementById("installInfo");
-
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredInstall = e;
@@ -595,7 +575,6 @@ function setupPWA() {
     }
     if (banner) setTimeout(() => banner.classList.add("show"), 1800);
   });
-
   window.addEventListener("appinstalled", () => {
     deferredInstall = null;
     if (banner) banner.classList.remove("show");
@@ -608,8 +587,7 @@ function setupPWA() {
 }
 
 function dismissBanner() {
-  const banner = document.getElementById("pwaBanner");
-  if (banner) banner.classList.remove("show");
+  document.getElementById("pwaBanner")?.classList.remove("show");
 }
 
 async function promptInstall() {
@@ -623,18 +601,56 @@ async function promptInstall() {
   deferredInstall = null;
 }
 
-function applyTabFromQuery() {
-  const tab = new URLSearchParams(window.location.search).get("tab");
-  if (!tab) return;
-  const btn = Array.from(document.querySelectorAll(".nav-btn")).find(
-    (b) => b.getAttribute("onclick") && b.getAttribute("onclick").includes(`'${tab}'`)
-  );
-  if (btn) switchTab(tab, btn);
-}
+function setupEventListeners() {
+  document.getElementById("toggleBtn").addEventListener("click", toggleService);
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    window.location.href = "/logout";
+  });
+  document.getElementById("addHariBtn").addEventListener("click", addHari);
+  document.getElementById("newHariInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addHari();
+  });
+  document.getElementById("deleteHariBtn").addEventListener("click", deleteHari);
+  document.getElementById("addEntryBtn").addEventListener("click", openAddEntry);
+  document.getElementById("saveEntryBtn").addEventListener("click", saveEntry);
+  document.getElementById("cancelModalBtn").addEventListener("click", closeModal);
+  document.getElementById("overrideToggle").addEventListener("change", () => {
+    configData.manual_override = document.getElementById("overrideToggle").checked;
+  });
+  document.getElementById("saveConfigBtn").addEventListener("click", saveConfig);
+  document.getElementById("addLiburBtn").addEventListener("click", addLibur);
+  document.getElementById("refreshLogBtn").addEventListener("click", loadLog);
+  document.getElementById("backupBtn").addEventListener("click", downloadBackup);
+  document.getElementById("changePassBtn").addEventListener("click", changePassword);
+  document.getElementById("installAppBtn").addEventListener("click", promptInstall);
+  document.getElementById("dismissBannerBtn").addEventListener("click", dismissBanner);
+  document.getElementById("installBannerBtn").addEventListener("click", promptInstall);
 
-window.addEventListener("click", (e) => {
-  if (e.target === document.getElementById("entryModal")) closeModal();
-});
+  document
+    .getElementById("restoreInput")
+    .addEventListener("change", (e) => restoreBackup(e.target.files[0]));
+  document
+    .getElementById("fileInput")
+    .addEventListener("change", (e) => uploadFile(e.target.files[0]));
+
+  const zone = document.getElementById("uploadZone");
+  zone.addEventListener("click", () => document.getElementById("fileInput").click());
+  zone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    zone.classList.add("over");
+  });
+  zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+  zone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    zone.classList.remove("over");
+    const file = e.dataTransfer.files[0];
+    if (file) uploadFile(file);
+  });
+
+  document.getElementById("entryModal").addEventListener("click", (e) => {
+    if (e.target === document.getElementById("entryModal")) closeModal();
+  });
+}
 
 (async () => {
   if ("serviceWorker" in navigator) {
@@ -642,11 +658,11 @@ window.addEventListener("click", (e) => {
       navigator.serviceWorker.register("/sw.js").catch(() => {})
     );
   }
+  setupNavigation();
+  setupEventListeners();
   setupOffline();
   setupPWA();
-  applyTabFromQuery();
   await Promise.all([loadStatus(), loadJadwal(), loadTones(), loadConfig()]);
   setInterval(loadStatus, 10000);
-  const splash = document.getElementById("splash");
-  if (splash) splash.classList.add("gone");
+  document.getElementById("splash")?.classList.add("gone");
 })();
