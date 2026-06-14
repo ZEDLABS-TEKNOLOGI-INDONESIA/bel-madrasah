@@ -12,7 +12,7 @@ REPO_BRANCH="server"
 BUILD_DIR="/tmp/bel-madrasah-build"
 PROJECT_DIR="/opt/bel-madrasah"
 SERVICE_NAME="bel-madrasah"
-SERVICE_USER="bel-madrasah"
+SERVICE_USER="${SUDO_USER:-$(logname 2>/dev/null || echo root)}"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 GO_VERSION="1.24.4"
 
@@ -24,6 +24,7 @@ DOMAIN=""
 EMAIL=""
 IS_UPDATE=0
 ALSA_DEVICE="hw:1,0"
+AUDIO_FORMAT="alsa"
 
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -170,10 +171,36 @@ backup_data() {
     success "Data di-backup ke: ${backup}"
 }
 
+detect_audio_backend() {
+    info "Mendeteksi audio backend..."
+
+    # Cek PipeWire
+    if cmd_exists pipewire && pactl info 2>/dev/null | grep -qi "pipewire"; then
+        AUDIO_FORMAT="pipewire"
+        ALSA_DEVICE="default"
+        success "Backend: PipeWire"
+        return
+    fi
+
+    # Cek PulseAudio
+    if cmd_exists pulseaudio || cmd_exists pactl; then
+        if pactl info &>/dev/null; then
+            AUDIO_FORMAT="pulse"
+            ALSA_DEVICE="default"
+            success "Backend: PulseAudio"
+            return
+        fi
+    fi
+
+    # Fallback ALSA
+    AUDIO_FORMAT="alsa"
+    success "Backend: ALSA (${ALSA_DEVICE})"
+}
+
 patch_alsa_device() {
-    info "Menyesuaikan ALSA device di main.go..."
-    sed -i "s|\"f\", \"alsa\", \"default\"|\"f\", \"alsa\", \"${ALSA_DEVICE}\"|g" "${BUILD_DIR}/main.go"
-    success "ALSA device diset ke: ${ALSA_DEVICE}"
+    info "Menyesuaikan audio output di main.go (${AUDIO_FORMAT}:${ALSA_DEVICE})..."
+    sed -i "s|\"-f\", \"alsa\", \"default\"|\"-f\", \"${AUDIO_FORMAT}\", \"${ALSA_DEVICE}\"|g" "${BUILD_DIR}/main.go"
+    success "Audio output diset ke: -f ${AUDIO_FORMAT} ${ALSA_DEVICE}"
 }
 
 build_binary() {
@@ -295,8 +322,8 @@ server {
 }
 EOF
     ln -sf "$conf" "$enabled"
-    [ -L /etc/nginx/sites-enabled/default ] && rm -f /etc/nginx/sites-enabled/default
-    nginx -t 2>/dev/null || error "Konfigurasi nginx tidak valid."
+    rm -f /etc/nginx/sites-enabled/default
+    nginx -t 2>&1 || { nginx -t; error "Konfigurasi nginx tidak valid."; }
     systemctl enable --now nginx
     systemctl reload nginx
     success "nginx dikonfigurasi."
@@ -451,7 +478,7 @@ show_summary() {
     info "Direktori  : ${PROJECT_DIR}"
     info "Service    : ${SERVICE_NAME}"
     info "User       : ${SERVICE_USER}"
-    info "ALSA Device: ${ALSA_DEVICE}"
+    info "Audio      : -f ${AUDIO_FORMAT} ${ALSA_DEVICE}"
     if [ "$ENABLE_TLS" -eq 1 ]; then
         info "Akses      : https://${DOMAIN}"
     elif [ -n "$local_ip" ]; then
@@ -485,6 +512,7 @@ main() {
     check_requirements
     install_tools
     detect_alsa_device
+    detect_audio_backend
     clone_repo
     prepare_dirs
     patch_alsa_device
@@ -494,7 +522,6 @@ main() {
     prompt_tls
     setup_nginx
     setup_tls
-    create_service_user
     create_service
     copy_audio
     copy_uninstaller
