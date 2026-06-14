@@ -10,6 +10,7 @@ EXCLUDE_DIRS=(
   ".cache"
   "data"
   "tone"
+  # "static"
 )
 
 # File spesifik yang dikecualikan

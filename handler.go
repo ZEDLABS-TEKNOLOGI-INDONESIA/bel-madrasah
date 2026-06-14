@@ -14,9 +14,12 @@ import (
 
 var validModes = map[string]bool{"reguler": true, "ramadhan": true, "pts": true, "pas": true}
 
+var secureCookie = os.Getenv("BEL_TLS") == "1"
+
 func registerRoutes(mux *http.ServeMux) {
 	registerPWARoutes(mux)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	mux.HandleFunc("/healthz", handleHealth)
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
 	mux.HandleFunc("/", requireAuth(handleIndex))
@@ -37,6 +40,16 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/change-password", requireAuth(handleChangePassword))
 }
 
+func methodNotAllowed(w http.ResponseWriter) {
+	jsonError(w, "method tidak diizinkan", http.StatusMethodNotAllowed)
+}
+
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -46,6 +59,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		http.ServeFile(w, r, filepath.Join(staticDir, "login.html"))
 	case http.MethodPost:
+		ip := clientIP(r)
+		if locked, remaining := isLoginLocked(ip); locked {
+			jsonError(w, fmt.Sprintf("terlalu banyak percobaan gagal, coba lagi dalam %d menit", int(remaining.Minutes())+1), http.StatusTooManyRequests)
+			return
+		}
 		var body struct {
 			Username string `json:"username"`
 			Password string `json:"password"`
@@ -59,10 +77,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, "gagal memuat data user", http.StatusInternalServerError)
 			return
 		}
-		if body.Username != user.Username || hashPassword(body.Password) != user.PasswordHash {
+		if body.Username != user.Username || !verifyPassword(user.PasswordHash, body.Password) {
+			recordLoginFailure(ip)
 			jsonError(w, "username atau password salah", http.StatusUnauthorized)
 			return
 		}
+		resetLoginFailures(ip)
 		token, err := createSession(body.Username)
 		if err != nil {
 			jsonError(w, "gagal membuat sesi", http.StatusInternalServerError)
@@ -73,12 +93,13 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			Value:    token,
 			Path:     "/",
 			HttpOnly: true,
+			Secure:   secureCookie,
 			SameSite: http.SameSiteLaxMode,
 			Expires:  time.Now().Add(sessionTimeout),
 		})
 		jsonOK(w, map[string]string{"message": "login berhasil"})
 	default:
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 	}
 }
 
@@ -90,17 +111,19 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 		sessionsMu.Unlock()
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:    cookieName,
-		Value:   "",
-		Path:    "/",
-		Expires: time.Unix(0, 0),
+		Name:     cookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secureCookie,
+		Expires:  time.Unix(0, 0),
 	})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -116,7 +139,7 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "gagal memuat data user", http.StatusInternalServerError)
 		return
 	}
-	if hashPassword(body.OldPassword) != user.PasswordHash {
+	if !verifyPassword(user.PasswordHash, body.OldPassword) {
 		jsonError(w, "password lama salah", http.StatusUnauthorized)
 		return
 	}
@@ -124,7 +147,12 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "password baru minimal 6 karakter", http.StatusBadRequest)
 		return
 	}
-	user.PasswordHash = hashPassword(body.NewPassword)
+	hash, err := hashPassword(body.NewPassword)
+	if err != nil {
+		jsonError(w, "gagal mengenkripsi password", http.StatusInternalServerError)
+		return
+	}
+	user.PasswordHash = hash
 	if err := saveUser(user); err != nil {
 		jsonError(w, "gagal menyimpan password", http.StatusInternalServerError)
 		return
@@ -172,7 +200,7 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 		logMsg(fmt.Sprintf("config diperbarui: mode=%s override=%v", body.Mode, body.ManualOverride))
 		jsonOK(w, map[string]string{"message": "config berhasil disimpan"})
 	default:
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 	}
 }
 
@@ -235,13 +263,13 @@ func handleLibur(w http.ResponseWriter, r *http.Request) {
 		}
 		jsonOK(w, map[string]string{"message": "berhasil"})
 	default:
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 	}
 }
 
 func handleJadwal(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	mode := r.URL.Query().Get("mode")
@@ -267,7 +295,7 @@ func handleJadwal(w http.ResponseWriter, r *http.Request) {
 
 func handleJadwalHari(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -318,7 +346,7 @@ func handleJadwalHari(w http.ResponseWriter, r *http.Request) {
 
 func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -380,6 +408,10 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleTones(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
 	files, err := listTones()
 	if err != nil {
 		jsonError(w, "gagal membaca direktori tone", http.StatusInternalServerError)
@@ -388,9 +420,17 @@ func handleTones(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{"tones": files})
 }
 
+func safeFilename(name string) (string, bool) {
+	base := filepath.Base(name)
+	if base == "." || base == ".." || strings.ContainsAny(base, "/\\") {
+		return "", false
+	}
+	return base, true
+}
+
 func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
@@ -403,12 +443,16 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	ext := strings.ToLower(filepath.Ext(header.Filename))
+	filename, ok := safeFilename(header.Filename)
+	if !ok {
+		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
+		return
+	}
+	ext := strings.ToLower(filepath.Ext(filename))
 	if ext != ".mp3" && ext != ".wav" && ext != ".ogg" {
 		jsonError(w, "format tidak didukung (mp3, wav, ogg)", http.StatusBadRequest)
 		return
 	}
-	filename := filepath.Base(header.Filename)
 	dst, err := os.Create(filepath.Join(toneDir, filename))
 	if err != nil {
 		jsonError(w, "gagal menyimpan file", http.StatusInternalServerError)
@@ -425,7 +469,7 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 
 func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -435,7 +479,11 @@ func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "request tidak valid", http.StatusBadRequest)
 		return
 	}
-	filename := filepath.Base(body.Filename)
+	filename, ok := safeFilename(body.Filename)
+	if !ok {
+		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
+		return
+	}
 	full := filepath.Join(toneDir, filename)
 	if _, err := os.Stat(full); os.IsNotExist(err) {
 		jsonError(w, "file tidak ditemukan", http.StatusNotFound)
@@ -451,7 +499,7 @@ func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
 
 func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -461,7 +509,11 @@ func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "request tidak valid", http.StatusBadRequest)
 		return
 	}
-	filename := filepath.Base(body.Filename)
+	filename, ok := safeFilename(body.Filename)
+	if !ok {
+		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
+		return
+	}
 	full := filepath.Join(toneDir, filename)
 	if _, err := os.Stat(full); os.IsNotExist(err) {
 		jsonError(w, "file tidak ditemukan", http.StatusNotFound)
@@ -474,7 +526,7 @@ func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 
 func handleLog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	logs, err := readLog()
@@ -487,7 +539,7 @@ func handleLog(w http.ResponseWriter, r *http.Request) {
 
 func handleBackup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	j, err := loadJadwal()
@@ -503,12 +555,12 @@ func handleBackup(w http.ResponseWriter, r *http.Request) {
 	fname := "backup-jadwal-" + time.Now().Format("20060102-150405") + ".json"
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", "attachment; filename="+fname)
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func handleRestore(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	if err := r.ParseMultipartForm(4 << 20); err != nil {
@@ -557,6 +609,10 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleServiceStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
 	schedulerMu.Lock()
 	running := schedulerRunning
 	schedulerMu.Unlock()
@@ -570,7 +626,7 @@ func handleServiceStatus(w http.ResponseWriter, r *http.Request) {
 
 func handleServiceToggle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	schedulerMu.Lock()

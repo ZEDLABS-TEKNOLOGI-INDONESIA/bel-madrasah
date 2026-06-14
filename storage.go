@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ const (
 	logFile     = dataDir + "/activity.log"
 	configFile  = dataDir + "/config.json"
 	maxLogLines = 500
+	logRotateAt = maxLogLines * 2
 )
 
 type Entry struct {
@@ -47,13 +49,14 @@ var (
 	jadwalMu sync.RWMutex
 	configMu sync.RWMutex
 	logMu    sync.Mutex
+	logCount int
 )
 
 func defaultConfig() Config {
 	return Config{
 		Mode:          "reguler",
-		RamadhanStart: "03-01",
-		RamadhanEnd:   "03-31",
+		RamadhanStart: "2000-03-01",
+		RamadhanEnd:   "2000-03-31",
 		LiburDates:    []string{},
 	}
 }
@@ -89,16 +92,14 @@ func resolveMode(c Config) string {
 	if c.ManualOverride {
 		return c.Mode
 	}
-	now := time.Now()
-	today := now.Format("2006-01-02")
-	md := now.Format("01-02")
+	today := time.Now().Format("2006-01-02")
 	if c.PTSStart != "" && c.PTSEnd != "" && today >= c.PTSStart && today <= c.PTSEnd {
 		return "pts"
 	}
 	if c.PASStart != "" && c.PASEnd != "" && today >= c.PASStart && today <= c.PASEnd {
 		return "pas"
 	}
-	if c.RamadhanStart != "" && c.RamadhanEnd != "" && md >= c.RamadhanStart && md <= c.RamadhanEnd {
+	if c.RamadhanStart != "" && c.RamadhanEnd != "" && today >= c.RamadhanStart && today <= c.RamadhanEnd {
 		return "ramadhan"
 	}
 	return "reguler"
@@ -143,15 +144,15 @@ func saveJadwal(j ModeJadwal) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(jadwalFile, data, 0644)
+	return atomicWrite(jadwalFile, data, 0644)
 }
 
-func writeJadwalFile(j ModeJadwal) error {
-	data, err := json.MarshalIndent(j, "", "  ")
-	if err != nil {
+func atomicWrite(path string, data []byte, perm os.FileMode) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, perm); err != nil {
 		return err
 	}
-	return os.WriteFile(jadwalFile, data, 0644)
+	return os.Rename(tmp, path)
 }
 
 func initStorage() error {
@@ -160,16 +161,17 @@ func initStorage() error {
 			return err
 		}
 	}
+	initLogCount()
 	dj := defaultJadwal()
 	data, err := os.ReadFile(jadwalFile)
 	if err != nil {
 		logMsg("jadwal.json tidak ditemukan, membuat default")
-		return writeJadwalFile(dj)
+		return saveJadwal(dj)
 	}
 	var j ModeJadwal
 	if err := json.Unmarshal(data, &j); err != nil || j == nil {
 		logMsg("jadwal.json tidak valid, menulis ulang")
-		return writeJadwalFile(dj)
+		return saveJadwal(dj)
 	}
 	changed := false
 	for _, m := range []string{"reguler", "ramadhan", "pts", "pas"} {
@@ -179,7 +181,7 @@ func initStorage() error {
 		}
 	}
 	if changed {
-		return writeJadwalFile(j)
+		return saveJadwal(j)
 	}
 	return nil
 }
@@ -203,6 +205,58 @@ func listTones() ([]string, error) {
 	return files, nil
 }
 
+func splitLogLines(data []byte) [][]byte {
+	var lines [][]byte
+	start := 0
+	for i, b := range data {
+		if b == '\n' {
+			if line := data[start:i]; len(line) > 0 {
+				lines = append(lines, line)
+			}
+			start = i + 1
+		}
+	}
+	if start < len(data) {
+		if line := data[start:]; len(line) > 0 {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func initLogCount() {
+	logMu.Lock()
+	defer logMu.Unlock()
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		logCount = 0
+		return
+	}
+	lines := splitLogLines(data)
+	logCount = len(lines)
+	if logCount > logRotateAt {
+		rotateLogLocked(lines)
+	}
+}
+
+func rotateLogLocked(lines [][]byte) {
+	if len(lines) <= maxLogLines {
+		logCount = len(lines)
+		return
+	}
+	trimmed := lines[len(lines)-maxLogLines:]
+	var buf bytes.Buffer
+	for _, l := range trimmed {
+		buf.Write(l)
+		buf.WriteByte('\n')
+	}
+	if err := atomicWrite(logFile, buf.Bytes(), 0644); err != nil {
+		logMsg("gagal rotasi log: " + err.Error())
+		return
+	}
+	logCount = maxLogLines
+}
+
 func writeLog(entry ActivityLog) {
 	logMu.Lock()
 	defer logMu.Unlock()
@@ -210,9 +264,17 @@ func writeLog(entry ActivityLog) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
 	line, _ := json.Marshal(entry)
-	f.Write(append(line, '\n'))
+	_, _ = f.Write(append(line, '\n'))
+	_ = f.Close()
+	logCount++
+	if logCount > logRotateAt {
+		data, err := os.ReadFile(logFile)
+		if err != nil {
+			return
+		}
+		rotateLogLocked(splitLogLines(data))
+	}
 }
 
 func readLog() ([]ActivityLog, error) {
@@ -225,24 +287,11 @@ func readLog() ([]ActivityLog, error) {
 		}
 		return nil, err
 	}
+	lines := splitLogLines(data)
 	var logs []ActivityLog
-	start := 0
-	for i, b := range data {
-		if b == '\n' {
-			line := data[start:i]
-			start = i + 1
-			if len(line) == 0 {
-				continue
-			}
-			var l ActivityLog
-			if json.Unmarshal(line, &l) == nil {
-				logs = append(logs, l)
-			}
-		}
-	}
-	if start < len(data) && len(data[start:]) > 0 {
+	for _, line := range lines {
 		var l ActivityLog
-		if json.Unmarshal(data[start:], &l) == nil {
+		if json.Unmarshal(line, &l) == nil {
 			logs = append(logs, l)
 		}
 	}
@@ -421,86 +470,18 @@ func defaultJadwal() ModeJadwal {
 			},
 		},
 		"pts": {
-			"Senin": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Selasa": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Rabu": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Kamis": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Jumat": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "09:31", Audio: b + "/tanah-airku.mp3"},
-			},
+			"Senin":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Selasa": {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Rabu":   {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Kamis":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Jumat":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "09:31", Audio: b + "/tanah-airku.mp3"}},
 		},
 		"pas": {
-			"Senin": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Selasa": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Rabu": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Kamis": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Jumat": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "09:31", Audio: b + "/tanah-airku.mp3"},
-			},
+			"Senin":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Selasa": {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Rabu":   {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Kamis":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Jumat":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "09:31", Audio: b + "/tanah-airku.mp3"}},
 		},
 	}
 }
