@@ -12,18 +12,17 @@ import (
 )
 
 const (
-	ffmpegBin  = "/usr/bin/ffmpeg"
-	audioSink  = "default"
-	audioDriver = "pulse"
-	volume     = "0.85"
-	sleepSec  = 20 * time.Second
 	port      = ":8081"
 	toneDir   = "/opt/bel-madrasah/tone"
 	dataDir   = "/opt/bel-madrasah/data"
 	staticDir = "/opt/bel-madrasah/static"
+	volume    = "0.85"
+	sleepSec  = 20 * time.Second
 )
 
 var (
+	ffmpegPath string
+
 	activeProcs []*exec.Cmd
 	procMu      sync.Mutex
 
@@ -36,14 +35,14 @@ func logMsg(msg string) {
 }
 
 func getHari() string {
-	hariMap := map[time.Weekday]string{
+	m := map[time.Weekday]string{
 		time.Monday:    "Senin",
 		time.Tuesday:   "Selasa",
 		time.Wednesday: "Rabu",
 		time.Thursday:  "Kamis",
 		time.Friday:    "Jumat",
 	}
-	return hariMap[time.Now().Weekday()]
+	return m[time.Now().Weekday()]
 }
 
 func stopAllProcs() {
@@ -60,49 +59,44 @@ func stopAllProcs() {
 	time.Sleep(200 * time.Millisecond)
 }
 
-func cleanupProcs() {
-	procMu.Lock()
-	defer procMu.Unlock()
-	alive := activeProcs[:0]
-	for _, p := range activeProcs {
-		if p.ProcessState == nil {
-			alive = append(alive, p)
-		}
-	}
-	activeProcs = alive
-}
-
 func playSound(filePath string) {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		logMsg(fmt.Sprintf("File tidak ditemukan: %s", filePath))
+		logMsg("file tidak ditemukan: " + filePath)
 		return
 	}
 	stopAllProcs()
-	cmd := exec.Command(
-		ffmpegBin,
+	args := []string{
 		"-hide_banner", "-loglevel", "error",
 		"-i", filePath,
-		"-filter:a", fmt.Sprintf("volume=%s", volume),
-		"-f", audioDriver, audioSink,
-	)
+		"-filter:a", "volume=" + volume,
+		"-f", "pulse", "default",
+	}
+	cmd := exec.Command(ffmpegPath, args...)
 	if err := cmd.Start(); err != nil {
-		logMsg(fmt.Sprintf("Gagal memutar audio: %s", err))
+		logMsg("gagal memutar audio: " + err.Error())
 		return
 	}
 	procMu.Lock()
 	activeProcs = append(activeProcs, cmd)
 	procMu.Unlock()
 	go func() {
-		if err := cmd.Wait(); err != nil {
-			logMsg(fmt.Sprintf("Audio selesai dengan error: %s", err))
+		_ = cmd.Wait()
+		procMu.Lock()
+		alive := activeProcs[:0]
+		for _, p := range activeProcs {
+			if p.ProcessState == nil {
+				alive = append(alive, p)
+			}
 		}
+		activeProcs = alive
+		procMu.Unlock()
 	}()
 }
 
 func runScheduler() {
-	logMsg("Scheduler bel madrasah dimulai.")
-	sudahDiputar := make(map[string]bool)
-	hariSekarang := ""
+	logMsg("scheduler dimulai")
+	played := make(map[string]bool)
+	lastDay := ""
 
 	for {
 		schedulerMu.Lock()
@@ -117,12 +111,11 @@ func runScheduler() {
 		now := time.Now()
 		hari := getHari()
 
-		if hari != hariSekarang {
-			if hariSekarang != "" {
-				sudahDiputar = make(map[string]bool)
-				logMsg("Cache jadwal direset untuk hari baru.")
+		if hari != lastDay {
+			if lastDay != "" {
+				played = make(map[string]bool)
 			}
-			hariSekarang = hari
+			lastDay = hari
 		}
 
 		if hari == "" {
@@ -142,39 +135,37 @@ func runScheduler() {
 		}
 
 		mode := resolveMode(cfg)
-
 		jadwal, err := loadJadwal()
 		if err != nil {
 			time.Sleep(sleepSec)
 			continue
 		}
 
-		modeJadwal, ok := jadwal[mode]
+		mj, ok := jadwal[mode]
 		if !ok {
 			time.Sleep(sleepSec)
 			continue
 		}
 
-		jadwalHari, ok := modeJadwal[hari]
+		entries, ok := mj[hari]
 		if !ok {
 			time.Sleep(sleepSec)
 			continue
 		}
 
-		waktuSekarang := now.Format("15:04")
-		for _, entry := range jadwalHari {
-			key := fmt.Sprintf("%s-%s-%s", mode, hari, entry.Waktu)
-			if waktuSekarang == entry.Waktu && !sudahDiputar[key] {
-				logMsg(fmt.Sprintf("[%s] Memutar: %s [%s]", mode, filepath.Base(entry.Audio), entry.Waktu))
-				playSound(entry.Audio)
-				sudahDiputar[key] = true
-
+		waktu := now.Format("15:04")
+		for _, e := range entries {
+			key := mode + "|" + hari + "|" + e.Waktu
+			if waktu == e.Waktu && !played[key] {
+				logMsg(fmt.Sprintf("[%s] %s [%s]", mode, filepath.Base(e.Audio), e.Waktu))
+				playSound(e.Audio)
+				played[key] = true
 				writeLog(ActivityLog{
 					Time:  now.Format("2006-01-02 15:04:05"),
 					Mode:  mode,
 					Hari:  hari,
-					Waktu: entry.Waktu,
-					Audio: filepath.Base(entry.Audio),
+					Waktu: e.Waktu,
+					Audio: filepath.Base(e.Audio),
 				})
 			}
 		}
@@ -183,23 +174,42 @@ func runScheduler() {
 	}
 }
 
-func main() {
-	if _, err := os.Stat(ffmpegBin); os.IsNotExist(err) {
-		log.Fatalf("ffmpeg tidak ditemukan di %s.", ffmpegBin)
+func resolveFfmpeg() string {
+	candidates := []string{
+		"/usr/bin/ffmpeg",
+		"/usr/local/bin/ffmpeg",
+		"/bin/ffmpeg",
 	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	if p, err := exec.LookPath("ffmpeg"); err == nil {
+		return p
+	}
+	return ""
+}
+
+func main() {
+	ffmpegPath = resolveFfmpeg()
+	if ffmpegPath == "" {
+		log.Fatal("ffmpeg tidak ditemukan di sistem")
+	}
+	logMsg("ffmpeg: " + ffmpegPath)
 
 	for _, d := range []string{toneDir, dataDir, staticDir} {
 		if err := os.MkdirAll(d, 0755); err != nil {
-			log.Fatalf("Gagal membuat direktori %s: %s", d, err)
+			log.Fatalf("gagal membuat direktori %s: %s", d, err)
 		}
 	}
 
 	if err := initStorage(); err != nil {
-		log.Fatalf("Gagal inisialisasi storage: %s", err)
+		log.Fatalf("gagal inisialisasi storage: %s", err)
 	}
 
 	if err := initAuth(); err != nil {
-		log.Fatalf("Gagal inisialisasi auth: %s", err)
+		log.Fatalf("gagal inisialisasi auth: %s", err)
 	}
 
 	go runScheduler()
@@ -207,8 +217,8 @@ func main() {
 	mux := http.NewServeMux()
 	registerRoutes(mux)
 
-	logMsg(fmt.Sprintf("Web server berjalan di port %s", port))
+	logMsg("server berjalan di port " + port)
 	if err := http.ListenAndServe(port, mux); err != nil {
-		log.Fatalf("Server error: %s", err)
+		log.Fatalf("server error: %s", err)
 	}
 }

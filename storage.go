@@ -51,22 +51,16 @@ var (
 
 func defaultConfig() Config {
 	return Config{
-		Mode:           "reguler",
-		ManualOverride: false,
-		RamadhanStart:  "03-01",
-		RamadhanEnd:    "03-31",
-		PTSStart:       "",
-		PTSEnd:         "",
-		PASStart:       "",
-		PASEnd:         "",
-		LiburDates:     []string{},
+		Mode:          "reguler",
+		RamadhanStart: "03-01",
+		RamadhanEnd:   "03-31",
+		LiburDates:    []string{},
 	}
 }
 
 func loadConfig() (Config, error) {
 	configMu.RLock()
 	defer configMu.RUnlock()
-
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return defaultConfig(), nil
@@ -84,7 +78,6 @@ func loadConfig() (Config, error) {
 func saveConfig(c Config) error {
 	configMu.Lock()
 	defer configMu.Unlock()
-
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
@@ -99,21 +92,14 @@ func resolveMode(c Config) string {
 	now := time.Now()
 	today := now.Format("2006-01-02")
 	md := now.Format("01-02")
-
-	if c.PTSStart != "" && c.PTSEnd != "" {
-		if today >= c.PTSStart && today <= c.PTSEnd {
-			return "pts"
-		}
+	if c.PTSStart != "" && c.PTSEnd != "" && today >= c.PTSStart && today <= c.PTSEnd {
+		return "pts"
 	}
-	if c.PASStart != "" && c.PASEnd != "" {
-		if today >= c.PASStart && today <= c.PASEnd {
-			return "pas"
-		}
+	if c.PASStart != "" && c.PASEnd != "" && today >= c.PASStart && today <= c.PASEnd {
+		return "pas"
 	}
-	if c.RamadhanStart != "" && c.RamadhanEnd != "" {
-		if md >= c.RamadhanStart && md <= c.RamadhanEnd {
-			return "ramadhan"
-		}
+	if c.RamadhanStart != "" && c.RamadhanEnd != "" && md >= c.RamadhanStart && md <= c.RamadhanEnd {
+		return "ramadhan"
 	}
 	return "reguler"
 }
@@ -126,6 +112,38 @@ func isLibur(c Config) bool {
 		}
 	}
 	return false
+}
+
+func loadJadwal() (ModeJadwal, error) {
+	jadwalMu.RLock()
+	defer jadwalMu.RUnlock()
+	data, err := os.ReadFile(jadwalFile)
+	if err != nil {
+		return nil, err
+	}
+	var j ModeJadwal
+	if err := json.Unmarshal(data, &j); err != nil {
+		return nil, err
+	}
+	if j == nil {
+		j = make(ModeJadwal)
+	}
+	for _, m := range []string{"reguler", "ramadhan", "pts", "pas"} {
+		if j[m] == nil {
+			j[m] = map[string][]Entry{}
+		}
+	}
+	return j, nil
+}
+
+func saveJadwal(j ModeJadwal) error {
+	jadwalMu.Lock()
+	defer jadwalMu.Unlock()
+	data, err := json.MarshalIndent(j, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(jadwalFile, data, 0644)
 }
 
 func writeJadwalFile(j ModeJadwal) error {
@@ -142,27 +160,21 @@ func initStorage() error {
 			return err
 		}
 	}
-
 	dj := defaultJadwal()
-	allModes := []string{"reguler", "ramadhan", "pts", "pas"}
-
 	data, err := os.ReadFile(jadwalFile)
 	if err != nil {
-		logMsg("jadwal.json tidak ditemukan, membuat default.")
+		logMsg("jadwal.json tidak ditemukan, membuat default")
 		return writeJadwalFile(dj)
 	}
-
 	var j ModeJadwal
 	if err := json.Unmarshal(data, &j); err != nil || j == nil {
-		logMsg("jadwal.json tidak valid, menulis ulang dengan default.")
+		logMsg("jadwal.json tidak valid, menulis ulang")
 		return writeJadwalFile(dj)
 	}
-
 	changed := false
-	for _, mode := range allModes {
-		if j[mode] == nil {
-			logMsg("Mode " + mode + " tidak ditemukan di jadwal.json, menambahkan default.")
-			j[mode] = dj[mode]
+	for _, m := range []string{"reguler", "ramadhan", "pts", "pas"} {
+		if j[m] == nil {
+			j[m] = dj[m]
 			changed = true
 		}
 	}
@@ -172,41 +184,6 @@ func initStorage() error {
 	return nil
 }
 
-func loadJadwal() (ModeJadwal, error) {
-	jadwalMu.RLock()
-	defer jadwalMu.RUnlock()
-
-	data, err := os.ReadFile(jadwalFile)
-	if err != nil {
-		return nil, err
-	}
-
-	var j ModeJadwal
-	if err := json.Unmarshal(data, &j); err != nil {
-		return nil, err
-	}
-	if j == nil {
-		j = make(ModeJadwal)
-	}
-	for _, mode := range []string{"reguler", "ramadhan", "pts", "pas"} {
-		if j[mode] == nil {
-			j[mode] = map[string][]Entry{}
-		}
-	}
-	return j, nil
-}
-
-func saveJadwal(j ModeJadwal) error {
-	jadwalMu.Lock()
-	defer jadwalMu.Unlock()
-
-	data, err := json.MarshalIndent(j, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(jadwalFile, data, 0644)
-}
-
 func listTones() ([]string, error) {
 	entries, err := os.ReadDir(toneDir)
 	if err != nil {
@@ -214,11 +191,12 @@ func listTones() ([]string, error) {
 	}
 	var files []string
 	for _, e := range entries {
-		if !e.IsDir() {
-			ext := filepath.Ext(e.Name())
-			if ext == ".mp3" || ext == ".wav" || ext == ".ogg" {
-				files = append(files, e.Name())
-			}
+		if e.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(e.Name())
+		if ext == ".mp3" || ext == ".wav" || ext == ".ogg" {
+			files = append(files, e.Name())
 		}
 	}
 	sort.Strings(files)
@@ -228,13 +206,11 @@ func listTones() ([]string, error) {
 func writeLog(entry ActivityLog) {
 	logMu.Lock()
 	defer logMu.Unlock()
-
 	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
 	defer f.Close()
-
 	line, _ := json.Marshal(entry)
 	f.Write(append(line, '\n'))
 }
@@ -242,7 +218,6 @@ func writeLog(entry ActivityLog) {
 func readLog() ([]ActivityLog, error) {
 	logMu.Lock()
 	defer logMu.Unlock()
-
 	data, err := os.ReadFile(logFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -250,44 +225,34 @@ func readLog() ([]ActivityLog, error) {
 		}
 		return nil, err
 	}
-
 	var logs []ActivityLog
-	for _, line := range splitLines(data) {
-		if len(line) == 0 {
-			continue
-		}
-		var l ActivityLog
-		if json.Unmarshal(line, &l) == nil {
-			logs = append(logs, l)
-		}
-	}
-
-	if len(logs) > maxLogLines {
-		logs = logs[len(logs)-maxLogLines:]
-	}
-	reverse(logs)
-	return logs, nil
-}
-
-func splitLines(data []byte) [][]byte {
-	var lines [][]byte
 	start := 0
 	for i, b := range data {
 		if b == '\n' {
-			lines = append(lines, data[start:i])
+			line := data[start:i]
 			start = i + 1
+			if len(line) == 0 {
+				continue
+			}
+			var l ActivityLog
+			if json.Unmarshal(line, &l) == nil {
+				logs = append(logs, l)
+			}
 		}
 	}
-	if start < len(data) {
-		lines = append(lines, data[start:])
+	if start < len(data) && len(data[start:]) > 0 {
+		var l ActivityLog
+		if json.Unmarshal(data[start:], &l) == nil {
+			logs = append(logs, l)
+		}
 	}
-	return lines
-}
-
-func reverse(logs []ActivityLog) {
+	if len(logs) > maxLogLines {
+		logs = logs[len(logs)-maxLogLines:]
+	}
 	for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
 		logs[i], logs[j] = logs[j], logs[i]
 	}
+	return logs, nil
 }
 
 func defaultJadwal() ModeJadwal {
