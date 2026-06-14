@@ -6,10 +6,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+REPO_URL="https://github.com/ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah.git"
+REPO_BRANCH="server"
+BUILD_DIR="/tmp/bel-madrasah-build"
 PROJECT_DIR="/opt/bel-madrasah"
 SERVICE_NAME="bel-madrasah"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
-RUN_USER=$(logname 2>/dev/null || echo "${SUDO_USER:-$(whoami)}")
 
 REQUIRED_ICON_SIZES=(72 96 128 144 152 192 384 512)
 REQUIRED_MASKABLE_SIZES=(192 512)
@@ -19,9 +21,7 @@ success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
-cmd_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
+cmd_exists() { command -v "$1" >/dev/null 2>&1; }
 
 check_requirements() {
     info "Memeriksa persyaratan sistem..."
@@ -38,13 +38,17 @@ check_requirements() {
     fi
     success "Go: $(go version)"
 
+    if ! cmd_exists git; then
+        error "git tidak ditemukan."
+        install_package git
+    fi
+    success "git: $(git --version)"
+
     if ! cmd_exists systemctl; then
         error "systemctl tidak ditemukan. Sistem memerlukan systemd."
         exit 1
     fi
     success "systemctl ditemukan."
-
-    success "Persyaratan sistem terpenuhi."
 }
 
 install_package() {
@@ -85,10 +89,6 @@ install_curl() {
         return
     fi
     install_package curl
-    if ! cmd_exists curl; then
-        error "Gagal menginstall curl."
-        exit 1
-    fi
     success "curl berhasil diinstall."
 }
 
@@ -100,6 +100,17 @@ install_alsa() {
     fi
     install_package alsa-utils
     success "ALSA utils berhasil diinstall."
+}
+
+clone_repo() {
+    info "Mengunduh source code dari GitHub..."
+
+    rm -rf "$BUILD_DIR"
+    if ! git clone --depth=1 --branch "$REPO_BRANCH" "$REPO_URL" "$BUILD_DIR"; then
+        error "Gagal clone repository."
+        exit 1
+    fi
+    success "Source code berhasil diunduh ke $BUILD_DIR"
 }
 
 create_project_dir() {
@@ -124,27 +135,83 @@ create_project_dir() {
 build_binary() {
     info "Membangun binary Go..."
 
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
     for f in main.go auth.go handler.go storage.go pwa.go go.mod; do
-        if [ ! -f "$SCRIPT_DIR/$f" ]; then
-            error "$f tidak ditemukan di direktori installer ($SCRIPT_DIR)."
+        if [ ! -f "$BUILD_DIR/$f" ]; then
+            error "$f tidak ditemukan di $BUILD_DIR."
             exit 1
         fi
     done
 
-    if [ -f "$SCRIPT_DIR/jadwal.go" ]; then
-        warning "jadwal.go ditemukan dan akan dihapus (sudah digabung ke storage.go)."
-        rm -f "$SCRIPT_DIR/jadwal.go"
-    fi
-
-    if ! (cd "$SCRIPT_DIR" && go build -o "$PROJECT_DIR/bel-madrasah" .); then
+    if ! (cd "$BUILD_DIR" && go build -o "$PROJECT_DIR/bel-madrasah" .); then
         error "Gagal membangun binary Go."
         exit 1
     fi
 
     chmod +x "$PROJECT_DIR/bel-madrasah"
     success "Binary berhasil dibangun: $PROJECT_DIR/bel-madrasah"
+}
+
+copy_static() {
+    info "Menyalin file static..."
+
+    if [ -d "$BUILD_DIR/static" ]; then
+        cp -r "$BUILD_DIR/static/." "$PROJECT_DIR/static/"
+        success "File static disalin ke $PROJECT_DIR/static/"
+    else
+        warning "Direktori static tidak ditemukan, dilewati."
+    fi
+
+    mkdir -p "$PROJECT_DIR/static/icons"
+}
+
+generate_pwa_icons() {
+    info "Memeriksa ikon PWA..."
+
+    local missing=0
+    for size in "${REQUIRED_ICON_SIZES[@]}"; do
+        [ ! -f "$PROJECT_DIR/static/icons/icon-$size.png" ] && missing=1
+    done
+    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
+        [ ! -f "$PROJECT_DIR/static/icons/icon-maskable-$size.png" ] && missing=1
+    done
+
+    if [ "$missing" -eq 0 ]; then
+        success "Seluruh ikon PWA sudah tersedia."
+        return
+    fi
+
+    local SOURCE_ICON=""
+    for candidate in "$BUILD_DIR/static/icons/source.png" "$BUILD_DIR/icon-source.png"; do
+        if [ -f "$candidate" ]; then
+            SOURCE_ICON="$candidate"
+            break
+        fi
+    done
+
+    if [ -z "$SOURCE_ICON" ]; then
+        warning "Ikon PWA belum lengkap dan tidak ditemukan gambar sumber (source.png)."
+        warning "Salin manual berkas ikon ke $PROJECT_DIR/static/icons/."
+        return
+    fi
+
+    if ! cmd_exists convert; then
+        install_package imagemagick || true
+    fi
+
+    if ! cmd_exists convert; then
+        warning "ImageMagick tidak tersedia. Ikon PWA tidak dibuat otomatis."
+        return
+    fi
+
+    info "Membuat ikon PWA dari $SOURCE_ICON..."
+    for size in "${REQUIRED_ICON_SIZES[@]}"; do
+        convert "$SOURCE_ICON" -resize "${size}x${size}" "$PROJECT_DIR/static/icons/icon-$size.png"
+    done
+    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
+        convert "$SOURCE_ICON" -resize "${size}x${size}" -gravity center -extent "${size}x${size}" \
+            "$PROJECT_DIR/static/icons/icon-maskable-$size.png"
+    done
+    success "Ikon PWA berhasil dibuat."
 }
 
 setup_nginx() {
@@ -215,82 +282,13 @@ EOF
     fi
 }
 
-copy_static() {
-    info "Menyalin file static..."
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-    if [ -d "$SCRIPT_DIR/static" ]; then
-        cp -r "$SCRIPT_DIR/static/." "$PROJECT_DIR/static/"
-        success "File static disalin ke $PROJECT_DIR/static/"
-    else
-        warning "Direktori static tidak ditemukan, dilewati."
-    fi
-
-    mkdir -p "$PROJECT_DIR/static/icons"
-}
-
-generate_pwa_icons() {
-    info "Memeriksa ikon PWA..."
-
-    local missing=0
-    for size in "${REQUIRED_ICON_SIZES[@]}"; do
-        if [ ! -f "$PROJECT_DIR/static/icons/icon-$size.png" ]; then
-            missing=1
-        fi
-    done
-    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
-        if [ ! -f "$PROJECT_DIR/static/icons/icon-maskable-$size.png" ]; then
-            missing=1
-        fi
-    done
-
-    if [ "$missing" -eq 0 ]; then
-        success "Seluruh ikon PWA sudah tersedia."
-        return
-    fi
-
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local SOURCE_ICON=""
-    for candidate in "$SCRIPT_DIR/static/icons/source.png" "$SCRIPT_DIR/icon-source.png"; do
-        if [ -f "$candidate" ]; then
-            SOURCE_ICON="$candidate"
-            break
-        fi
-    done
-
-    if [ -z "$SOURCE_ICON" ]; then
-        warning "Ikon PWA belum lengkap dan tidak ditemukan gambar sumber (icon-source.png)."
-        warning "Aplikasi tetap berjalan normal, namun fitur 'Pasang ke Layar Utama' (PWA)"
-        warning "tidak akan menampilkan ikon dengan benar sampai ikon disediakan."
-        warning "Letakkan logo persegi 512x512 di $SCRIPT_DIR/icon-source.png dan jalankan ulang installer,"
-        warning "atau salin manual berkas ikon ke $PROJECT_DIR/static/icons/."
-        return
-    fi
-
-    if ! cmd_exists convert; then
-        info "ImageMagick belum terinstall, mencoba menginstall untuk membuat ikon..."
-        install_package imagemagick || true
-    fi
-
-    if ! cmd_exists convert; then
-        warning "ImageMagick tidak tersedia. Ikon PWA tidak dibuat otomatis."
-        warning "Salin manual berkas ikon ke $PROJECT_DIR/static/icons/."
-        return
-    fi
-
-    info "Membuat ikon PWA dari $SOURCE_ICON..."
-    for size in "${REQUIRED_ICON_SIZES[@]}"; do
-        convert "$SOURCE_ICON" -resize "${size}x${size}" "$PROJECT_DIR/static/icons/icon-$size.png"
-    done
-    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
-        convert "$SOURCE_ICON" -resize "${size}x${size}" -gravity center -extent "${size}x${size}" \
-            "$PROJECT_DIR/static/icons/icon-maskable-$size.png"
-    done
-    success "Ikon PWA berhasil dibuat di $PROJECT_DIR/static/icons/."
-}
-
 create_systemd_service() {
-    info "Membuat systemd system service..."
+    info "Membuat systemd service..."
+
+    local LOGIN_USER
+    LOGIN_USER=$(logname 2>/dev/null || echo "${SUDO_USER:-}")
+    local USER_UID
+    USER_UID=$(id -u "$LOGIN_USER" 2>/dev/null || echo "1000")
 
     cat > "$SERVICE_FILE" << EOF
 [Unit]
@@ -304,6 +302,7 @@ ExecStart=$PROJECT_DIR/bel-madrasah
 Restart=always
 RestartSec=10
 User=root
+Environment=PULSE_SERVER=unix:/run/user/${USER_UID}/pulse/native
 StandardOutput=journal
 StandardError=journal
 WorkingDirectory=$PROJECT_DIR
@@ -312,7 +311,7 @@ WorkingDirectory=$PROJECT_DIR
 WantedBy=multi-user.target
 EOF
 
-    success "Service file dibuat: $SERVICE_FILE"
+    success "Service file dibuat: $SERVICE_FILE (PULSE_SERVER uid=${USER_UID})"
 }
 
 setup_service() {
@@ -328,77 +327,26 @@ setup_service() {
 }
 
 download_tone() {
-    info "Mengunduh file audio..."
-
-    BASE_URL="https://raw.githubusercontent.com/zulfikriyahya/bel-madrasah/main/tone"
-
-    AUDIO_FILES=(
-        "mars-madrasah.mp3"
-        "upacara.mp3"
-        "pelajaran-1.mp3"
-        "pelajaran-2.mp3"
-        "pelajaran-3.mp3"
-        "pelajaran-4.mp3"
-        "pelajaran-5.mp3"
-        "pelajaran-6.mp3"
-        "pelajaran-7.mp3"
-        "pelajaran-8.mp3"
-        "pelajaran-9.mp3"
-        "pelajaran-10.mp3"
-        "pelajaran-selesai.mp3"
-        "indonesia-raya.mp3"
-        "istirahat-1.mp3"
-        "istirahat-2.mp3"
-        "kebersihan.mp3"
-        "hymne-madrasah.mp3"
-        "literasi.mp3"
-        "rohani.mp3"
-        "akhir-pekan.mp3"
-        "pramuka.mp3"
-        "tanah-airku.mp3"
-    )
+    info "Menyalin file audio..."
 
     mkdir -p "$PROJECT_DIR/tone"
 
-    SUCCESS_COUNT=0
-    FAIL_COUNT=0
-
-    for file in "${AUDIO_FILES[@]}"; do
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        if [ -f "$SCRIPT_DIR/tone/$file" ]; then
-            cp "$SCRIPT_DIR/tone/$file" "$PROJECT_DIR/tone/$file"
-            success "$file (lokal)"
-            ((SUCCESS_COUNT++))
-            continue
+    if [ -d "$BUILD_DIR/tone" ]; then
+        local count=0
+        for f in "$BUILD_DIR/tone/"*.mp3 "$BUILD_DIR/tone/"*.wav "$BUILD_DIR/tone/"*.ogg; do
+            [ -f "$f" ] || continue
+            cp "$f" "$PROJECT_DIR/tone/"
+            success "$(basename "$f")"
+            ((count++))
+        done
+        if [ "$count" -gt 0 ]; then
+            info "Berhasil menyalin $count file audio."
+            return
         fi
-
-        if curl -f -L --silent --show-error -o "$PROJECT_DIR/tone/$file" "$BASE_URL/$file"; then
-            success "$file"
-            ((SUCCESS_COUNT++))
-        else
-            warning "Gagal: $file"
-            ((FAIL_COUNT++))
-        fi
-    done
-
-    echo
-    info "Berhasil: $SUCCESS_COUNT | Gagal: $FAIL_COUNT"
-
-    if [ "$FAIL_COUNT" -gt 0 ]; then
-        warning "Beberapa file gagal diunduh. Unduh manual dari:"
-        warning "https://github.com/zulfikriyahya/bel-madrasah/tree/main/tone"
     fi
-}
 
-detect_audio_device() {
-    info "Mendeteksi perangkat audio ALSA..."
-    if cmd_exists aplay; then
-        echo
-        aplay -l 2>/dev/null || warning "Tidak dapat mendeteksi perangkat audio."
-        echo
-        warning "Pastikan nilai alsaDev di main.go sesuai dengan perangkat audio Anda."
-        warning "Default saat ini: hw:1,0"
-    fi
+    warning "Tidak ada file audio di repository. Unduh manual dari:"
+    warning "https://github.com/ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah/tree/$REPO_BRANCH/tone"
 }
 
 set_permissions() {
@@ -415,20 +363,20 @@ set_permissions() {
     success "Izin file diatur."
 }
 
+cleanup_build() {
+    info "Membersihkan direktori build..."
+    rm -rf "$BUILD_DIR"
+    success "Build directory dihapus."
+}
+
 test_installation() {
     info "Memverifikasi instalasi..."
 
-    if [ ! -f "$PROJECT_DIR/bel-madrasah" ]; then
-        error "Binary tidak ditemukan di $PROJECT_DIR/bel-madrasah."
-        exit 1
-    fi
+    [ ! -f "$PROJECT_DIR/bel-madrasah" ] && error "Binary tidak ditemukan." && exit 1
     success "Binary ditemukan."
 
-    if [ ! -f "$PROJECT_DIR/static/index.html" ]; then
-        warning "index.html tidak ditemukan di $PROJECT_DIR/static/."
-    else
-        success "File static ditemukan."
-    fi
+    [ ! -f "$PROJECT_DIR/static/index.html" ] && warning "index.html tidak ditemukan."
+    [ -f "$PROJECT_DIR/static/index.html" ] && success "File static ditemukan."
 
     if [ ! -f "$PROJECT_DIR/static/manifest.json" ] || [ ! -f "$PROJECT_DIR/static/sw.js" ]; then
         warning "Berkas PWA (manifest.json/sw.js) tidak lengkap."
@@ -436,10 +384,7 @@ test_installation() {
         success "Berkas PWA ditemukan."
     fi
 
-    if ! systemctl is-enabled "$SERVICE_NAME.service" >/dev/null 2>&1; then
-        error "Service belum diaktifkan."
-        exit 1
-    fi
+    systemctl is-enabled "$SERVICE_NAME.service" >/dev/null 2>&1 || { error "Service belum diaktifkan."; exit 1; }
     success "Service terdaftar di systemd."
 }
 
@@ -458,6 +403,7 @@ start_service() {
 }
 
 show_completion() {
+    local LOCAL_IP
     LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 
     echo
@@ -469,15 +415,11 @@ show_completion() {
     info "Binary     : $PROJECT_DIR/bel-madrasah"
     info "Service    : $SERVICE_NAME"
     echo
-    if [ -n "$LOCAL_IP" ]; then
-        info "Akses web  : http://$LOCAL_IP"
-    fi
+    [ -n "$LOCAL_IP" ] && info "Akses web  : http://$LOCAL_IP"
     info "Login      : admin / admin123"
     warning "Segera ganti password setelah login pertama!"
     echo
-    info "Aplikasi mendukung PWA. Buka di Chrome/Edge pada perangkat tujuan,"
-    info "lalu pilih 'Pasang Aplikasi' atau gunakan banner instalasi pada menu Pengaturan"
-    info "untuk menambahkan ke layar utama dan mengaktifkan akses offline."
+    info "Aplikasi mendukung PWA. Buka di Chrome/Edge lalu pilih 'Pasang Aplikasi'."
     echo
     echo "Perintah pengelolaan service:"
     echo "  sudo systemctl status  $SERVICE_NAME"
@@ -491,7 +433,7 @@ show_completion() {
 main() {
     echo "========================================="
     echo "Bell System Madrasah - Installer"
-    echo "MTsN 1 Pandeglang"
+    echo "ZEDLABS Teknologi Indonesia"
     echo "========================================="
     echo
 
@@ -507,7 +449,7 @@ main() {
     install_ffmpeg
     install_curl
     install_alsa
-    detect_audio_device
+    clone_repo
     create_project_dir
     build_binary
     copy_static
@@ -517,6 +459,7 @@ main() {
     setup_service
     download_tone
     set_permissions
+    cleanup_build
     test_installation
     start_service
     show_completion
