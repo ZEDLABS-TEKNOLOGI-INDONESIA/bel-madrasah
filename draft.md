@@ -1881,11 +1881,11 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
           <div class="two-col">
             <div class="field-group">
               <label>Mulai</label>
-              <input type="text" id="ramadhanStart" placeholder="03-01" maxlength="5">
+              <input type="date" id="ramadhanStart">
             </div>
             <div class="field-group">
               <label>Akhir</label>
-              <input type="text" id="ramadhanEnd" placeholder="03-31" maxlength="5">
+              <input type="date" id="ramadhanEnd">
             </div>
           </div>
         </div>
@@ -2826,8 +2826,8 @@ async function saveConfig() {
     await api("/api/config", "POST", {
       mode: configData.mode,
       manual_override: $("overrideToggle").checked,
-      ramadhan_start: start,
-      ramadhan_end: end,
+      ramadhan_start: $("ramadhanStart").value,
+      ramadhan_end: $("ramadhanEnd").value,
       pts_start: $("ptsStart").value,
       pts_end: $("ptsEnd").value,
       pas_start: $("pasStart").value,
@@ -5124,8 +5124,8 @@ var (
 func defaultConfig() Config {
 	return Config{
 		Mode:          "reguler",
-		RamadhanStart: "2000-03-01",
-		RamadhanEnd:   "2000-03-31",
+		RamadhanStart: "",
+		RamadhanEnd:   "",
 		LiburDates:    []string{},
 	}
 }

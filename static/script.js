@@ -151,17 +151,17 @@ function selectMode(mode) {
 }
 
 async function saveConfig() {
-  var start = $("ramadhanStart").value.trim();
-  var end = $("ramadhanEnd").value.trim();
-  var mmdd = /^\d{2}-\d{2}$/;
-  if (start && !mmdd.test(start)) {
-    toast("Format Ramadhan harus MM-DD", "error");
-    return;
-  }
-  if (end && !mmdd.test(end)) {
-    toast("Format Ramadhan harus MM-DD", "error");
-    return;
-  }
+  // var start = $("ramadhanStart").value.trim();
+  // var end = $("ramadhanEnd").value.trim();
+  // var mmdd = /^\d{2}-\d{2}$/;
+  // if (start && !mmdd.test(start)) {
+  //   toast("Format Ramadhan harus MM-DD", "error");
+  //   return;
+  // }
+  // if (end && !mmdd.test(end)) {
+  //   toast("Format Ramadhan harus MM-DD", "error");
+  //   return;
+  // }
   try {
     await api("/api/config", "POST", {
       mode: configData.mode,
