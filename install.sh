@@ -11,6 +11,9 @@ SERVICE_NAME="bel-madrasah"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 RUN_USER=$(logname 2>/dev/null || echo "${SUDO_USER:-$(whoami)}")
 
+REQUIRED_ICON_SIZES=(72 96 128 144 152 192 384 512)
+REQUIRED_MASKABLE_SIZES=(192 512)
+
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
@@ -114,7 +117,7 @@ create_project_dir() {
 
     mkdir -p "$PROJECT_DIR/tone"
     mkdir -p "$PROJECT_DIR/data"
-    mkdir -p "$PROJECT_DIR/static"
+    mkdir -p "$PROJECT_DIR/static/icons"
     success "Direktori proyek: $PROJECT_DIR"
 }
 
@@ -123,15 +126,13 @@ build_binary() {
 
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-    # Validasi file Go yang diperlukan (jadwal.go sudah dihapus/digabung ke storage.go)
-    for f in main.go auth.go handler.go storage.go go.mod; do
+    for f in main.go auth.go handler.go storage.go pwa.go go.mod; do
         if [ ! -f "$SCRIPT_DIR/$f" ]; then
             error "$f tidak ditemukan di direktori installer ($SCRIPT_DIR)."
             exit 1
         fi
     done
 
-    # Hapus jadwal.go jika masih ada (menyebabkan compile error)
     if [ -f "$SCRIPT_DIR/jadwal.go" ]; then
         warning "jadwal.go ditemukan dan akan dihapus (sudah digabung ke storage.go)."
         rm -f "$SCRIPT_DIR/jadwal.go"
@@ -163,6 +164,27 @@ server {
 
     client_max_body_size 32M;
 
+    location /static/ {
+        proxy_pass         http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        expires            7d;
+        add_header         Cache-Control "public, immutable";
+    }
+
+    location /sw.js {
+        proxy_pass         http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        add_header         Cache-Control "no-cache";
+    }
+
     location / {
         proxy_pass         http://127.0.0.1:8081;
         proxy_http_version 1.1;
@@ -176,10 +198,8 @@ server {
 }
 EOF
 
-    # Aktifkan site
     ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
 
-    # Nonaktifkan default nginx jika ada
     if [ -f /etc/nginx/sites-enabled/default ]; then
         rm -f /etc/nginx/sites-enabled/default
         warning "Site default nginx dinonaktifkan."
@@ -205,6 +225,68 @@ copy_static() {
     else
         warning "Direktori static tidak ditemukan, dilewati."
     fi
+
+    mkdir -p "$PROJECT_DIR/static/icons"
+}
+
+generate_pwa_icons() {
+    info "Memeriksa ikon PWA..."
+
+    local missing=0
+    for size in "${REQUIRED_ICON_SIZES[@]}"; do
+        if [ ! -f "$PROJECT_DIR/static/icons/icon-$size.png" ]; then
+            missing=1
+        fi
+    done
+    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
+        if [ ! -f "$PROJECT_DIR/static/icons/icon-maskable-$size.png" ]; then
+            missing=1
+        fi
+    done
+
+    if [ "$missing" -eq 0 ]; then
+        success "Seluruh ikon PWA sudah tersedia."
+        return
+    fi
+
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local SOURCE_ICON=""
+    for candidate in "$SCRIPT_DIR/static/icons/source.png" "$SCRIPT_DIR/icon-source.png"; do
+        if [ -f "$candidate" ]; then
+            SOURCE_ICON="$candidate"
+            break
+        fi
+    done
+
+    if [ -z "$SOURCE_ICON" ]; then
+        warning "Ikon PWA belum lengkap dan tidak ditemukan gambar sumber (icon-source.png)."
+        warning "Aplikasi tetap berjalan normal, namun fitur 'Pasang ke Layar Utama' (PWA)"
+        warning "tidak akan menampilkan ikon dengan benar sampai ikon disediakan."
+        warning "Letakkan logo persegi 512x512 di $SCRIPT_DIR/icon-source.png dan jalankan ulang installer,"
+        warning "atau salin manual berkas ikon ke $PROJECT_DIR/static/icons/."
+        return
+    fi
+
+    if ! cmd_exists convert; then
+        info "ImageMagick belum terinstall, mencoba menginstall untuk membuat ikon..."
+        install_package imagemagick || true
+    fi
+
+    if ! cmd_exists convert; then
+        warning "ImageMagick tidak tersedia. Ikon PWA tidak dibuat otomatis."
+        warning "Salin manual berkas ikon ke $PROJECT_DIR/static/icons/."
+        return
+    fi
+
+    info "Membuat ikon PWA dari $SOURCE_ICON..."
+    for size in "${REQUIRED_ICON_SIZES[@]}"; do
+        convert "$SOURCE_ICON" -resize "${size}x${size}" "$PROJECT_DIR/static/icons/icon-$size.png"
+    done
+    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
+        convert "$SOURCE_ICON" -resize "${size}x${size}" -gravity center -extent "${size}x${size}" \
+            "$PROJECT_DIR/static/icons/icon-maskable-$size.png"
+    done
+    success "Ikon PWA berhasil dibuat di $PROJECT_DIR/static/icons/."
 }
 
 create_systemd_service() {
@@ -282,7 +364,6 @@ download_tone() {
     FAIL_COUNT=0
 
     for file in "${AUDIO_FILES[@]}"; do
-        # Lewati jika sudah ada di direktori lokal
         SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         if [ -f "$SCRIPT_DIR/tone/$file" ]; then
             cp "$SCRIPT_DIR/tone/$file" "$PROJECT_DIR/tone/$file"
@@ -327,8 +408,10 @@ set_permissions() {
     chmod 755 "$PROJECT_DIR/tone"
     chmod 755 "$PROJECT_DIR/data"
     chmod 755 "$PROJECT_DIR/static"
+    chmod 755 "$PROJECT_DIR/static/icons"
     chmod 755 "$PROJECT_DIR/bel-madrasah"
     chmod 644 "$PROJECT_DIR/tone/"*.mp3 2>/dev/null || true
+    chmod 644 "$PROJECT_DIR/static/icons/"*.png 2>/dev/null || true
     success "Izin file diatur."
 }
 
@@ -345,6 +428,12 @@ test_installation() {
         warning "index.html tidak ditemukan di $PROJECT_DIR/static/."
     else
         success "File static ditemukan."
+    fi
+
+    if [ ! -f "$PROJECT_DIR/static/manifest.json" ] || [ ! -f "$PROJECT_DIR/static/sw.js" ]; then
+        warning "Berkas PWA (manifest.json/sw.js) tidak lengkap."
+    else
+        success "Berkas PWA ditemukan."
     fi
 
     if ! systemctl is-enabled "$SERVICE_NAME.service" >/dev/null 2>&1; then
@@ -369,7 +458,6 @@ start_service() {
 }
 
 show_completion() {
-    # Dapatkan IP lokal
     LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 
     echo
@@ -386,6 +474,10 @@ show_completion() {
     fi
     info "Login      : admin / admin123"
     warning "Segera ganti password setelah login pertama!"
+    echo
+    info "Aplikasi mendukung PWA. Buka di Chrome/Edge pada perangkat tujuan,"
+    info "lalu pilih 'Pasang Aplikasi' atau gunakan banner instalasi pada menu Pengaturan"
+    info "untuk menambahkan ke layar utama dan mengaktifkan akses offline."
     echo
     echo "Perintah pengelolaan service:"
     echo "  sudo systemctl status  $SERVICE_NAME"
@@ -419,6 +511,7 @@ main() {
     create_project_dir
     build_binary
     copy_static
+    generate_pwa_icons
     setup_nginx
     create_systemd_service
     setup_service
