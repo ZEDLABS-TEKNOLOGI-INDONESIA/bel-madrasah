@@ -100,13 +100,19 @@ check_requirements() {
 }
 
 install_tools() {
-    for tool in ffmpeg curl upx; do
+    for tool in ffmpeg curl; do
         if ! cmd_exists "$tool"; then
             install_package "$tool"
-            cmd_exists "$tool" || warning "Gagal menginstall ${tool}, dilanjutkan tanpa ${tool}."
+            cmd_exists "$tool" || error "Gagal menginstall ${tool}."
         fi
         success "${tool} tersedia."
     done
+    if ! cmd_exists upx; then
+        install_package upx-ucl 2>/dev/null || install_package upx 2>/dev/null || true
+        cmd_exists upx && success "upx tersedia." || warning "UPX tidak tersedia, binary tidak akan dikompres."
+    else
+        success "upx tersedia."
+    fi
     if ! cmd_exists aplay; then
         install_package alsa-utils
         success "alsa-utils terinstall."
