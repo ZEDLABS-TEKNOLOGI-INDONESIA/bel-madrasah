@@ -65,8 +65,7 @@
     </div>
   </header>
 
-  <div class="layout">
-
+  <div class="app-body">
     <aside class="sidebar">
       <nav class="sidebar-nav">
         <button class="sidenav active" data-tab="jadwal">
@@ -120,293 +119,282 @@
     </aside>
 
     <main class="main-content">
+      <div class="content-inner">
 
-      <section class="page active" id="page-jadwal">
-        <h2 class="page-title">Jadwal Bel</h2>
+        <section class="page active" id="page-jadwal">
+          <h2 class="page-title">Jadwal Bel</h2>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Mode Pembelajaran</div>
+                <div class="card-desc">Pilih mode untuk melihat dan mengelola jadwal</div>
+              </div>
+            </div>
+            <div class="tab-strip" id="modeTabStrip">
+              <button class="mode-tab active" data-mode="reguler">Reguler</button>
+              <button class="mode-tab" data-mode="ramadhan">Ramadhan</button>
+              <button class="mode-tab" data-mode="pts">PTS</button>
+              <button class="mode-tab" data-mode="pas">PAS</button>
+            </div>
+            <div class="add-row">
+              <div class="field-group">
+                <label>Tambah Hari</label>
+                <input type="text" id="newHariInput" placeholder="Contoh: Sabtu">
+              </div>
+              <button class="btn btn-primary" id="addHariBtn">Tambah</button>
+            </div>
+            <div class="hari-strip" id="hariStrip"></div>
+          </div>
+          <div class="card" id="jadwalCard">
+            <div class="card-header">
+              <div>
+                <div class="card-title" id="jadwalTitle">Pilih hari</div>
+                <div class="card-desc" id="jadwalDesc">Pilih hari dari tab di atas</div>
+              </div>
+              <div class="btn-group" id="jadwalActions" style="display:none">
+                <button class="btn btn-ghost btn-sm" id="deleteHariBtn">Hapus Hari</button>
+                <button class="btn btn-primary btn-sm" id="addEntryBtn">Tambah Bel</button>
+              </div>
+            </div>
+            <div id="jadwalBody">
+              <div class="empty-state">Pilih hari untuk melihat jadwal bel</div>
+            </div>
+          </div>
+        </section>
 
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Mode Pembelajaran</div>
-              <div class="card-desc">Pilih mode untuk melihat dan mengelola jadwal</div>
+        <section class="page" id="page-mode">
+          <h2 class="page-title">Mode Bel</h2>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Mode Aktif</div>
+                <div class="card-desc">Pilih mode saat override manual diaktifkan</div>
+              </div>
+            </div>
+            <div class="mode-grid">
+              <div class="mode-card" id="mcard-reguler" data-mode="reguler">
+                <div class="mode-card-dot"></div>
+                <div class="mode-card-name">Reguler</div>
+                <div class="mode-card-hint">Jadwal harian normal</div>
+              </div>
+              <div class="mode-card" id="mcard-ramadhan" data-mode="ramadhan">
+                <div class="mode-card-dot"></div>
+                <div class="mode-card-name">Ramadhan</div>
+                <div class="mode-card-hint">Jadwal bulan Ramadhan</div>
+              </div>
+              <div class="mode-card" id="mcard-pts" data-mode="pts">
+                <div class="mode-card-dot"></div>
+                <div class="mode-card-name">PTS</div>
+                <div class="mode-card-hint">Penilaian Tengah Semester</div>
+              </div>
+              <div class="mode-card" id="mcard-pas" data-mode="pas">
+                <div class="mode-card-dot"></div>
+                <div class="mode-card-name">PAS</div>
+                <div class="mode-card-hint">Penilaian Akhir Semester</div>
+              </div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Override Manual</div>
+                <div class="toggle-hint">Paksa mode di atas, abaikan jadwal otomatis berbasis tanggal</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="overrideToggle">
+                <span class="switch-track"></span>
+              </label>
             </div>
           </div>
-          <div class="tab-strip" id="modeTabStrip">
-            <button class="mode-tab active" data-mode="reguler">Reguler</button>
-            <button class="mode-tab" data-mode="ramadhan">Ramadhan</button>
-            <button class="mode-tab" data-mode="pts">PTS</button>
-            <button class="mode-tab" data-mode="pas">PAS</button>
-          </div>
-          <div class="add-row">
-            <div class="field-group">
-              <label>Tambah Hari</label>
-              <input type="text" id="newHariInput" placeholder="Contoh: Sabtu">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Jadwal Otomatis Ramadhan</div>
+                <div class="card-desc">Jadwal yang berlaku selama bulan Ramadhan</div>
+              </div>
             </div>
-            <button class="btn btn-primary" id="addHariBtn">Tambah</button>
+            <div class="two-col">
+              <div class="field-group">
+                <label>Mulai</label>
+                <input type="date" id="ramadhanStart">
+              </div>
+              <div class="field-group">
+                <label>Akhir</label>
+                <input type="date" id="ramadhanEnd">
+              </div>
+            </div>
           </div>
-          <div class="hari-strip" id="hariStrip"></div>
-        </div>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Jadwal Otomatis PTS</div>
+                <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal tumpang tindih</div>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="field-group">
+                <label>Mulai PTS</label>
+                <input type="date" id="ptsStart">
+              </div>
+              <div class="field-group">
+                <label>Akhir PTS</label>
+                <input type="date" id="ptsEnd">
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Jadwal Otomatis PAS</div>
+                <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal tumpang tindih</div>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="field-group">
+                <label>Mulai PAS</label>
+                <input type="date" id="pasStart">
+              </div>
+              <div class="field-group">
+                <label>Akhir PAS</label>
+                <input type="date" id="pasEnd">
+              </div>
+            </div>
+            <div style="margin-top:20px">
+              <button class="btn btn-primary" id="saveConfigBtn">Simpan Pengaturan</button>
+            </div>
+          </div>
+        </section>
 
-        <div class="card" id="jadwalCard">
-          <div class="card-header">
-            <div>
-              <div class="card-title" id="jadwalTitle">Pilih hari</div>
-              <div class="card-desc" id="jadwalDesc">Pilih hari dari tab di atas</div>
+        <section class="page" id="page-libur">
+          <h2 class="page-title">Hari Libur</h2>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Tambah Hari Libur</div>
+                <div class="card-desc">Bel tidak akan berbunyi pada tanggal yang terdaftar</div>
+              </div>
             </div>
-            <div class="btn-group" id="jadwalActions" style="display:none">
-              <button class="btn btn-ghost btn-sm" id="deleteHariBtn">Hapus Hari</button>
-              <button class="btn btn-primary btn-sm" id="addEntryBtn">Tambah Bel</button>
+            <div class="notice notice-warn">
+              Scheduler akan melewati seluruh entri jadwal pada tanggal yang ditandai sebagai hari libur.
+            </div>
+            <div class="add-row">
+              <div class="field-group">
+                <label>Tanggal</label>
+                <input type="date" id="newLiburDate">
+              </div>
+              <button class="btn btn-primary" id="addLiburBtn">Tambah</button>
             </div>
           </div>
-          <div id="jadwalBody">
-            <div class="empty-state">Pilih hari untuk melihat jadwal bel</div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Daftar Hari Libur</div>
+              <span class="count-badge" id="liburCount">0</span>
+            </div>
+            <div id="liburList">
+              <div class="empty-state">Memuat...</div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="page" id="page-mode">
-        <h2 class="page-title">Mode Bel</h2>
+        <section class="page" id="page-log">
+          <h2 class="page-title">Log Aktivitas</h2>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Riwayat Bel</div>
+                <div class="card-desc">Daftar bel yang telah diputar oleh scheduler</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" id="refreshLogBtn">Perbarui</button>
+            </div>
+            <div id="logBody">
+              <div class="empty-state">Memuat...</div>
+            </div>
+          </div>
+        </section>
 
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Mode Aktif</div>
-              <div class="card-desc">Pilih mode saat override manual diaktifkan</div>
+        <section class="page" id="page-audio">
+          <h2 class="page-title">Manajemen Audio</h2>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Unggah File Audio</div>
+                <div class="card-desc">Format yang didukung: MP3, WAV, OGG — Maks. 32 MB</div>
+              </div>
+            </div>
+            <div class="upload-zone" id="uploadZone">
+              <div class="upload-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+                  <path d="M12 15V3m0 0-4 4m4-4 4 4M4 20h16" />
+                </svg>
+              </div>
+              <p>Klik atau seret file audio ke sini</p>
+              <small>MP3, WAV, OGG — Maks. 32 MB</small>
+            </div>
+            <input type="file" id="fileInput" accept=".mp3,.wav,.ogg">
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Daftar File Audio</div>
+              <span class="count-badge" id="toneCount">0</span>
+            </div>
+            <div id="toneList">
+              <div class="empty-state">Memuat...</div>
             </div>
           </div>
-          <div class="mode-grid">
-            <div class="mode-card" id="mcard-reguler" data-mode="reguler">
-              <div class="mode-card-dot"></div>
-              <div class="mode-card-name">Reguler</div>
-              <div class="mode-card-hint">Jadwal harian normal</div>
-            </div>
-            <div class="mode-card" id="mcard-ramadhan" data-mode="ramadhan">
-              <div class="mode-card-dot"></div>
-              <div class="mode-card-name">Ramadhan</div>
-              <div class="mode-card-hint">Jadwal bulan Ramadhan</div>
-            </div>
-            <div class="mode-card" id="mcard-pts" data-mode="pts">
-              <div class="mode-card-dot"></div>
-              <div class="mode-card-name">PTS</div>
-              <div class="mode-card-hint">Penilaian Tengah Semester</div>
-            </div>
-            <div class="mode-card" id="mcard-pas" data-mode="pas">
-              <div class="mode-card-dot"></div>
-              <div class="mode-card-name">PAS</div>
-              <div class="mode-card-hint">Penilaian Akhir Semester</div>
-            </div>
-          </div>
-          <div class="toggle-row">
-            <div>
-              <div class="toggle-label">Override Manual</div>
-              <div class="toggle-hint">Paksa mode di atas, abaikan jadwal otomatis berbasis tanggal</div>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="overrideToggle">
-              <span class="switch-track"></span>
-            </label>
-          </div>
-        </div>
+        </section>
 
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Jadwal Otomatis Ramadhan</div>
-              <div class="card-desc">Jadwal yang berlaku selama bulan Ramadhan</div>
+        <section class="page" id="page-settings">
+          <h2 class="page-title">Pengaturan</h2>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Pasang Aplikasi</div>
+                <div class="card-desc">Tambahkan ke layar utama untuk akses cepat tanpa browser</div>
+              </div>
             </div>
+            <button class="btn btn-primary" id="installAppBtn" style="display:none">Pasang Aplikasi</button>
+            <p class="card-desc" id="installInfo">Aplikasi sudah terpasang atau tidak didukung di perangkat ini.</p>
           </div>
-          <div class="two-col">
-            <div class="field-group">
-              <label>Mulai</label>
-              <input type="date" id="ramadhanStart">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Backup dan Restore</div>
+                <div class="card-desc">Ekspor atau impor seluruh data jadwal dalam format JSON</div>
+              </div>
             </div>
-            <div class="field-group">
-              <label>Akhir</label>
-              <input type="date" id="ramadhanEnd">
+            <div class="btn-group">
+              <button class="btn btn-success" id="backupBtn">Unduh Backup</button>
+              <label class="btn btn-warn" style="cursor:pointer">
+                Restore dari File
+                <input type="file" accept=".json" id="restoreInput" style="display:none">
+              </label>
             </div>
+            <p class="card-desc" style="margin-top:12px">Mencakup jadwal reguler, Ramadhan, PTS, dan PAS.</p>
           </div>
-        </div>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Ganti Password</div>
+                <div class="card-desc">Minimal 6 karakter</div>
+              </div>
+            </div>
+            <div class="field-group" style="margin-bottom:14px">
+              <label>Password Lama</label>
+              <input type="password" id="oldPass" placeholder="Password saat ini" autocomplete="current-password">
+            </div>
+            <div class="two-col" style="margin-bottom:18px">
+              <div class="field-group">
+                <label>Password Baru</label>
+                <input type="password" id="newPass" placeholder="Min. 6 karakter" autocomplete="new-password">
+              </div>
+              <div class="field-group">
+                <label>Konfirmasi</label>
+                <input type="password" id="confirmPass" placeholder="Ulangi password baru" autocomplete="new-password">
+              </div>
+            </div>
+            <button class="btn btn-primary" id="changePassBtn">Perbarui Password</button>
+          </div>
+        </section>
 
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Jadwal Otomatis PTS</div>
-              <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal tumpang tindih</div>
-            </div>
-          </div>
-          <div class="two-col">
-            <div class="field-group">
-              <label>Mulai PTS</label>
-              <input type="date" id="ptsStart">
-            </div>
-            <div class="field-group">
-              <label>Akhir PTS</label>
-              <input type="date" id="ptsEnd">
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Jadwal Otomatis PAS</div>
-              <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal tumpang tindih</div>
-            </div>
-          </div>
-          <div class="two-col">
-            <div class="field-group">
-              <label>Mulai PAS</label>
-              <input type="date" id="pasStart">
-            </div>
-            <div class="field-group">
-              <label>Akhir PAS</label>
-              <input type="date" id="pasEnd">
-            </div>
-          </div>
-          <div style="margin-top:20px">
-            <button class="btn btn-primary" id="saveConfigBtn">Simpan Pengaturan</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="page" id="page-libur">
-        <h2 class="page-title">Hari Libur</h2>
-
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Tambah Hari Libur</div>
-              <div class="card-desc">Bel tidak akan berbunyi pada tanggal yang terdaftar</div>
-            </div>
-          </div>
-          <div class="notice notice-warn">
-            Scheduler akan melewati seluruh entri jadwal pada tanggal yang ditandai sebagai hari libur.
-          </div>
-          <div class="add-row">
-            <div class="field-group">
-              <label>Tanggal</label>
-              <input type="date" id="newLiburDate">
-            </div>
-            <button class="btn btn-primary" id="addLiburBtn">Tambah</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">Daftar Hari Libur</div>
-            <span class="count-badge" id="liburCount">0</span>
-          </div>
-          <div id="liburList">
-            <div class="empty-state">Memuat...</div>
-          </div>
-        </div>
-      </section>
-
-      <section class="page" id="page-log">
-        <h2 class="page-title">Log Aktivitas</h2>
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Riwayat Bel</div>
-              <div class="card-desc">Daftar bel yang telah diputar oleh scheduler</div>
-            </div>
-            <button class="btn btn-ghost btn-sm" id="refreshLogBtn">Perbarui</button>
-          </div>
-          <div id="logBody">
-            <div class="empty-state">Memuat...</div>
-          </div>
-        </div>
-      </section>
-
-      <section class="page" id="page-audio">
-        <h2 class="page-title">Manajemen Audio</h2>
-
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Unggah File Audio</div>
-              <div class="card-desc">Format yang didukung: MP3, WAV, OGG — Maks. 32 MB</div>
-            </div>
-          </div>
-          <div class="upload-zone" id="uploadZone">
-            <div class="upload-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
-                <path d="M12 15V3m0 0-4 4m4-4 4 4M4 20h16" />
-              </svg>
-            </div>
-            <p>Klik atau seret file audio ke sini</p>
-            <small>MP3, WAV, OGG — Maks. 32 MB</small>
-          </div>
-          <input type="file" id="fileInput" accept=".mp3,.wav,.ogg">
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">Daftar File Audio</div>
-            <span class="count-badge" id="toneCount">0</span>
-          </div>
-          <div id="toneList">
-            <div class="empty-state">Memuat...</div>
-          </div>
-        </div>
-      </section>
-
-      <section class="page" id="page-settings">
-        <h2 class="page-title">Pengaturan</h2>
-
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Pasang Aplikasi</div>
-              <div class="card-desc">Tambahkan ke layar utama untuk akses cepat tanpa browser</div>
-            </div>
-          </div>
-          <button class="btn btn-primary" id="installAppBtn" style="display:none">Pasang Aplikasi</button>
-          <p class="card-desc" id="installInfo">Aplikasi sudah terpasang atau tidak didukung di perangkat ini.</p>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Backup dan Restore</div>
-              <div class="card-desc">Ekspor atau impor seluruh data jadwal dalam format JSON</div>
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-success" id="backupBtn">Unduh Backup</button>
-            <label class="btn btn-warn" style="cursor:pointer">
-              Restore dari File
-              <input type="file" accept=".json" id="restoreInput" style="display:none">
-            </label>
-          </div>
-          <p class="card-desc" style="margin-top:12px">Mencakup jadwal reguler, Ramadhan, PTS, dan PAS.</p>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Ganti Password</div>
-              <div class="card-desc">Minimal 6 karakter</div>
-            </div>
-          </div>
-          <div class="field-group" style="margin-bottom:14px">
-            <label>Password Lama</label>
-            <input type="password" id="oldPass" placeholder="Password saat ini" autocomplete="current-password">
-          </div>
-          <div class="two-col" style="margin-bottom:18px">
-            <div class="field-group">
-              <label>Password Baru</label>
-              <input type="password" id="newPass" placeholder="Min. 6 karakter" autocomplete="new-password">
-            </div>
-            <div class="field-group">
-              <label>Konfirmasi</label>
-              <input type="password" id="confirmPass" placeholder="Ulangi password baru" autocomplete="new-password">
-            </div>
-          </div>
-          <button class="btn btn-primary" id="changePassBtn">Perbarui Password</button>
-        </div>
-      </section>
-
+      </div>
     </main>
   </div>
 
