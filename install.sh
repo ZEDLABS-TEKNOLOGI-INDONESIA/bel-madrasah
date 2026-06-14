@@ -100,10 +100,10 @@ check_requirements() {
 }
 
 install_tools() {
-    for tool in ffmpeg curl; do
+    for tool in ffmpeg curl upx; do
         if ! cmd_exists "$tool"; then
             install_package "$tool"
-            cmd_exists "$tool" || error "Gagal menginstall ${tool}."
+            cmd_exists "$tool" || warning "Gagal menginstall ${tool}, dilanjutkan tanpa ${tool}."
         fi
         success "${tool} tersedia."
     done
@@ -213,6 +213,11 @@ build_binary() {
         cd "$BUILD_DIR"
         go mod tidy
         CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${PROJECT_DIR}/bel-madrasah" .
+        if cmd_exists upx; then
+            upx --best --lzma "${PROJECT_DIR}/bel-madrasah" && success "Binary dikompres dengan UPX."
+        else
+            warning "UPX tidak tersedia, binary tidak dikompres."
+        fi
     ) || error "Gagal build binary."
     chmod +x "${PROJECT_DIR}/bel-madrasah"
     success "Binary: ${PROJECT_DIR}/bel-madrasah"
