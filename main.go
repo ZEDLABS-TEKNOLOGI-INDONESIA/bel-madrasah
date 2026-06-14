@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -35,14 +38,14 @@ func logMsg(msg string) {
 }
 
 func getHari() string {
-	m := map[time.Weekday]string{
+	days := map[time.Weekday]string{
 		time.Monday:    "Senin",
 		time.Tuesday:   "Selasa",
 		time.Wednesday: "Rabu",
 		time.Thursday:  "Kamis",
 		time.Friday:    "Jumat",
 	}
-	return m[time.Now().Weekday()]
+	return days[time.Now().Weekday()]
 }
 
 func stopAllProcs() {
@@ -65,13 +68,12 @@ func playSound(filePath string) {
 		return
 	}
 	stopAllProcs()
-	args := []string{
+	cmd := exec.Command(ffmpegPath,
 		"-hide_banner", "-loglevel", "error",
 		"-i", filePath,
-		"-filter:a", "volume=" + volume,
-		"-f", "pulse", "default",
-	}
-	cmd := exec.Command(ffmpegPath, args...)
+		"-filter:a", "volume="+volume,
+		"-f", "alsa", "default",
+	)
 	if err := cmd.Start(); err != nil {
 		logMsg("gagal memutar audio: " + err.Error())
 		return
@@ -93,66 +95,84 @@ func playSound(filePath string) {
 	}()
 }
 
-func runScheduler() {
+func sleepOrStop(stop <-chan struct{}, d time.Duration) bool {
+	select {
+	case <-stop:
+		return false
+	case <-time.After(d):
+		return true
+	}
+}
+
+func runScheduler(stop <-chan struct{}) {
 	logMsg("scheduler dimulai")
 	played := make(map[string]bool)
 	lastDay := ""
-
 	for {
+		select {
+		case <-stop:
+			logMsg("scheduler dihentikan")
+			return
+		default:
+		}
 		schedulerMu.Lock()
 		running := schedulerRunning
 		schedulerMu.Unlock()
-
 		if !running {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		now := time.Now()
 		hari := getHari()
-
+		if hari == "" {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
 		if hari != lastDay {
 			if lastDay != "" {
 				played = make(map[string]bool)
 			}
 			lastDay = hari
 		}
-
-		if hari == "" {
-			time.Sleep(sleepSec)
-			continue
-		}
-
 		cfg, err := loadConfig()
 		if err != nil {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		if isLibur(cfg) {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		mode := resolveMode(cfg)
 		jadwal, err := loadJadwal()
 		if err != nil {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		mj, ok := jadwal[mode]
 		if !ok {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		entries, ok := mj[hari]
 		if !ok {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		waktu := now.Format("15:04")
 		for _, e := range entries {
 			key := mode + "|" + hari + "|" + e.Waktu
@@ -169,18 +189,14 @@ func runScheduler() {
 				})
 			}
 		}
-
-		time.Sleep(sleepSec)
+		if !sleepOrStop(stop, sleepSec) {
+			return
+		}
 	}
 }
 
 func resolveFfmpeg() string {
-	candidates := []string{
-		"/usr/bin/ffmpeg",
-		"/usr/local/bin/ffmpeg",
-		"/bin/ffmpeg",
-	}
-	for _, p := range candidates {
+	for _, p := range []string{"/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/bin/ffmpeg"} {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
@@ -197,28 +213,50 @@ func main() {
 		log.Fatal("ffmpeg tidak ditemukan di sistem")
 	}
 	logMsg("ffmpeg: " + ffmpegPath)
-
 	for _, d := range []string{toneDir, dataDir, staticDir} {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			log.Fatalf("gagal membuat direktori %s: %s", d, err)
 		}
 	}
-
 	if err := initStorage(); err != nil {
 		log.Fatalf("gagal inisialisasi storage: %s", err)
 	}
-
 	if err := initAuth(); err != nil {
 		log.Fatalf("gagal inisialisasi auth: %s", err)
 	}
-
-	go runScheduler()
-
+	stopScheduler := make(chan struct{})
+	go runScheduler(stopScheduler)
 	mux := http.NewServeMux()
 	registerRoutes(mux)
-
-	logMsg("server berjalan di port " + port)
-	if err := http.ListenAndServe(port, mux); err != nil {
-		log.Fatalf("server error: %s", err)
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           mux,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
+	serverErr := make(chan error, 1)
+	go func() {
+		logMsg("server berjalan di port " + port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+	}()
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case err := <-serverErr:
+		log.Fatalf("server error: %s", err)
+	case sig := <-sigCh:
+		logMsg("menerima sinyal " + sig.String() + ", memulai shutdown")
+	}
+	close(stopScheduler)
+	stopAllProcs()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logMsg("gagal shutdown server: " + err.Error())
+	}
+	logMsg("server dihentikan")
 }

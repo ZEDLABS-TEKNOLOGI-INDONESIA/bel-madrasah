@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -11,497 +12,446 @@ REPO_BRANCH="server"
 BUILD_DIR="/tmp/bel-madrasah-build"
 PROJECT_DIR="/opt/bel-madrasah"
 SERVICE_NAME="bel-madrasah"
-SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+GO_VERSION="1.24.4"
 
 REQUIRED_ICON_SIZES=(72 96 128 144 152 192 384 512)
 REQUIRED_MASKABLE_SIZES=(192 512)
 
+ENABLE_TLS=0
+DOMAIN=""
+EMAIL=""
+IS_UPDATE=0
+
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-error()   { echo -e "${RED}[ERROR]${NC} $1"; }
-
+error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 cmd_exists() { command -v "$1" >/dev/null 2>&1; }
 
-check_requirements() {
-    info "Memeriksa persyaratan sistem..."
+require_root() {
+    [ "$EUID" -eq 0 ] || error "Jalankan sebagai root: sudo $0"
+}
 
-    if [ "$EUID" -ne 0 ]; then
-        error "Installer ini harus dijalankan sebagai root."
-        error "Gunakan: sudo ./install.sh"
-        exit 1
+detect_pkg_manager() {
+    if cmd_exists apt-get; then echo "apt"
+    elif cmd_exists dnf; then echo "dnf"
+    elif cmd_exists yum; then echo "yum"
+    elif cmd_exists pacman; then echo "pacman"
+    else error "Package manager tidak dikenali."
     fi
-
-    if ! cmd_exists go; then
-        warning "Go tidak ditemukan. Menginstall otomatis..."
-        install_go
-    fi
-    success "Go: $(go version)"
-
-    if ! cmd_exists git; then
-        error "git tidak ditemukan."
-        install_package git
-    fi
-    success "git: $(git --version)"
-
-    if ! cmd_exists systemctl; then
-        error "systemctl tidak ditemukan. Sistem memerlukan systemd."
-        exit 1
-    fi
-    success "systemctl ditemukan."
 }
 
 install_package() {
     local pkg="$1"
-    info "Menginstall $pkg..."
-    if cmd_exists apt; then
-        apt update -qq && apt install -y "$pkg"
-    elif cmd_exists dnf; then
-        dnf install -y "$pkg"
-    elif cmd_exists yum; then
-        yum install -y "$pkg"
-    elif cmd_exists pacman; then
-        pacman -S --noconfirm "$pkg"
-    else
-        error "Package manager tidak dikenali. Install $pkg secara manual."
-        exit 1
-    fi
+    local pm
+    pm=$(detect_pkg_manager)
+    info "Menginstall ${pkg}..."
+    case "$pm" in
+        apt)    apt-get update -qq && apt-get install -y "$pkg" ;;
+        dnf)    dnf install -y "$pkg" ;;
+        yum)    yum install -y "$pkg" ;;
+        pacman) pacman -S --noconfirm "$pkg" ;;
+    esac
 }
 
 install_go() {
-    local GO_VERSION="1.24.4"
-    local GO_ARCH=""
-
-    local CPU_ARCH=$(uname -m)
-    case "${CPU_ARCH}" in
-        x86_64)       GO_ARCH="amd64" ;;
-        aarch64)      GO_ARCH="arm64" ;;
-        armv7l|armv6l) GO_ARCH="armv6l" ;;
-        *)
-            error "Arsitektur tidak didukung: ${CPU_ARCH}"
-            exit 1
-            ;;
+    local arch
+    case "$(uname -m)" in
+        x86_64)        arch="amd64" ;;
+        aarch64)       arch="arm64" ;;
+        armv7l|armv6l) arch="armv6l" ;;
+        riscv64)       arch="riscv64" ;;
+        *) error "Arsitektur tidak didukung: $(uname -m)" ;;
     esac
+    local tar_file="go${GO_VERSION}.linux-${arch}.tar.gz"
+    local url="https://go.dev/dl/${tar_file}"
+    info "Mengunduh Go ${GO_VERSION} (${arch})..."
+    curl -fL --progress-bar -o "/tmp/${tar_file}" "$url" || error "Gagal mengunduh Go."
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf "/tmp/${tar_file}"
+    rm -f "/tmp/${tar_file}"
+    export PATH="$PATH:/usr/local/go/bin"
+    mkdir -p /etc/profile.d
+    echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
+    chmod 644 /etc/profile.d/go.sh
+    cmd_exists go || error "Gagal menginstall Go."
+    success "Go $(go version)"
+}
 
-    local GO_TAR="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
-    local GO_URL="https://go.dev/dl/${GO_TAR}"
-
-    info "Mengunduh Go ${GO_VERSION} untuk ${GO_ARCH}..."
-    curl -fL --progress-bar -o "/tmp/${GO_TAR}" "${GO_URL}"
-    if [ $? -ne 0 ]; then
-        error "Gagal mengunduh Go."
-        exit 1
-    fi
-
-    info "Menginstall Go ke /usr/local/go..."
-    sudo rm -rf /usr/local/go
-    sudo tar -C /usr/local -xzf "/tmp/${GO_TAR}"
-    rm -f "/tmp/${GO_TAR}"
-
-    export PATH=$PATH:/usr/local/go/bin
-
+check_requirements() {
+    info "Memeriksa persyaratan sistem..."
+    require_root
     if ! cmd_exists go; then
-        error "Gagal menginstall Go."
-        exit 1
+        warning "Go tidak ditemukan, menginstall otomatis..."
+        install_go
+    else
+        success "Go: $(go version)"
     fi
-    success "Go berhasil diinstall: $(go version)"
+    if ! cmd_exists git; then
+        install_package git
+    fi
+    success "git: $(git --version)"
+    cmd_exists systemctl || error "systemd tidak ditemukan."
+    success "systemd tersedia."
 }
 
-install_ffmpeg() {
-    info "Memeriksa ffmpeg..."
-    if cmd_exists ffmpeg; then
-        success "ffmpeg sudah terinstall."
-        return
+install_tools() {
+    for tool in ffmpeg curl; do
+        if ! cmd_exists "$tool"; then
+            install_package "$tool"
+            cmd_exists "$tool" || error "Gagal menginstall ${tool}."
+        fi
+        success "${tool} tersedia."
+    done
+    if ! cmd_exists aplay; then
+        install_package alsa-utils
+        success "alsa-utils terinstall."
+    else
+        success "alsa-utils tersedia."
     fi
-    install_package ffmpeg
-    if ! cmd_exists ffmpeg; then
-        error "Gagal menginstall ffmpeg."
-        exit 1
-    fi
-    success "ffmpeg berhasil diinstall."
-}
-
-install_curl() {
-    info "Memeriksa curl..."
-    if cmd_exists curl; then
-        success "curl sudah terinstall."
-        return
-    fi
-    install_package curl
-    success "curl berhasil diinstall."
-}
-
-install_alsa() {
-    info "Memeriksa ALSA utils..."
-    if cmd_exists aplay; then
-        success "ALSA utils sudah terinstall."
-        return
-    fi
-    install_package alsa-utils
-    success "ALSA utils berhasil diinstall."
 }
 
 clone_repo() {
-    info "Mengunduh source code dari GitHub..."
-
+    info "Mengunduh source code..."
     rm -rf "$BUILD_DIR"
-    if ! git clone --depth=1 --branch "$REPO_BRANCH" "$REPO_URL" "$BUILD_DIR"; then
-        error "Gagal clone repository."
-        exit 1
-    fi
-    success "Source code berhasil diunduh ke $BUILD_DIR"
+    git clone --depth=1 --branch "$REPO_BRANCH" "$REPO_URL" "$BUILD_DIR" \
+        || error "Gagal clone repository."
+    success "Source code diunduh ke ${BUILD_DIR}."
 }
 
-create_project_dir() {
+prepare_dirs() {
     info "Menyiapkan direktori proyek..."
-
     if [ -d "$PROJECT_DIR" ]; then
-        warning "Direktori $PROJECT_DIR sudah ada."
-        read -rp "Lanjutkan dan timpa file yang ada? [y/N]: " -n 1
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            error "Instalasi dibatalkan."
-            exit 1
-        fi
+        IS_UPDATE=1
+        warning "Instalasi sebelumnya ditemukan, melakukan update..."
+        backup_data
     fi
+    mkdir -p "${PROJECT_DIR}/tone" "${PROJECT_DIR}/data" "${PROJECT_DIR}/static/icons"
+    success "Direktori siap: ${PROJECT_DIR}"
+}
 
-    mkdir -p "$PROJECT_DIR/tone"
-    mkdir -p "$PROJECT_DIR/data"
-    mkdir -p "$PROJECT_DIR/static/icons"
-    success "Direktori proyek: $PROJECT_DIR"
+backup_data() {
+    local ts
+    ts=$(date +%Y%m%d-%H%M%S)
+    local backup="/tmp/bel-madrasah-backup-${ts}"
+    mkdir -p "$backup"
+    [ -d "${PROJECT_DIR}/data" ]  && cp -r "${PROJECT_DIR}/data"  "${backup}/"
+    [ -d "${PROJECT_DIR}/tone" ]  && cp -r "${PROJECT_DIR}/tone"  "${backup}/"
+    success "Data di-backup ke: ${backup}"
 }
 
 build_binary() {
-    info "Membangun binary Go..."
-
-    for f in main.go auth.go handler.go storage.go pwa.go go.mod; do
-        if [ ! -f "$BUILD_DIR/$f" ]; then
-            error "$f tidak ditemukan di $BUILD_DIR."
-            exit 1
-        fi
+    info "Membangun binary..."
+    local required_files=("main.go" "auth.go" "handler.go" "storage.go" "pwa.go" "go.mod")
+    for f in "${required_files[@]}"; do
+        [ -f "${BUILD_DIR}/${f}" ] || error "${f} tidak ditemukan di ${BUILD_DIR}."
     done
-
-    if ! (cd "$BUILD_DIR" && go build -o "$PROJECT_DIR/bel-madrasah" .); then
-        error "Gagal membangun binary Go."
-        exit 1
-    fi
-
-    chmod +x "$PROJECT_DIR/bel-madrasah"
-    success "Binary berhasil dibangun: $PROJECT_DIR/bel-madrasah"
+    (
+        cd "$BUILD_DIR"
+        go mod tidy
+        CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${PROJECT_DIR}/bel-madrasah" .
+    ) || error "Gagal build binary."
+    chmod +x "${PROJECT_DIR}/bel-madrasah"
+    success "Binary: ${PROJECT_DIR}/bel-madrasah"
 }
 
 copy_static() {
     info "Menyalin file static..."
-
-    if [ -d "$BUILD_DIR/static" ]; then
-        cp -r "$BUILD_DIR/static/." "$PROJECT_DIR/static/"
-        success "File static disalin ke $PROJECT_DIR/static/"
+    if [ -d "${BUILD_DIR}/static" ]; then
+        cp -r "${BUILD_DIR}/static/." "${PROJECT_DIR}/static/"
+        success "Static files disalin."
     else
-        warning "Direktori static tidak ditemukan, dilewati."
+        warning "Direktori static tidak ditemukan."
     fi
-
-    mkdir -p "$PROJECT_DIR/static/icons"
+    mkdir -p "${PROJECT_DIR}/static/icons"
 }
 
 generate_pwa_icons() {
     info "Memeriksa ikon PWA..."
-
     local missing=0
-    for size in "${REQUIRED_ICON_SIZES[@]}"; do
-        [ ! -f "$PROJECT_DIR/static/icons/icon-$size.png" ] && missing=1
+    for s in "${REQUIRED_ICON_SIZES[@]}"; do
+        [ ! -f "${PROJECT_DIR}/static/icons/icon-${s}.png" ] && missing=1 && break
     done
-    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
-        [ ! -f "$PROJECT_DIR/static/icons/icon-maskable-$size.png" ] && missing=1
+    for s in "${REQUIRED_MASKABLE_SIZES[@]}"; do
+        [ ! -f "${PROJECT_DIR}/static/icons/icon-maskable-${s}.png" ] && missing=1 && break
     done
-
-    if [ "$missing" -eq 0 ]; then
-        success "Seluruh ikon PWA sudah tersedia."
+    [ "$missing" -eq 0 ] && success "Ikon PWA lengkap." && return
+    local src=""
+    for c in "${BUILD_DIR}/static/icons/source.png" "${BUILD_DIR}/icon-source.png"; do
+        [ -f "$c" ] && src="$c" && break
+    done
+    if [ -z "$src" ]; then
+        warning "Ikon sumber tidak ditemukan, lewati pembuatan ikon PWA."
         return
     fi
-
-    local SOURCE_ICON=""
-    for candidate in "$BUILD_DIR/static/icons/source.png" "$BUILD_DIR/icon-source.png"; do
-        if [ -f "$candidate" ]; then
-            SOURCE_ICON="$candidate"
-            break
-        fi
-    done
-
-    if [ -z "$SOURCE_ICON" ]; then
-        warning "Ikon PWA belum lengkap dan tidak ditemukan gambar sumber (source.png)."
-        warning "Salin manual berkas ikon ke $PROJECT_DIR/static/icons/."
-        return
-    fi
-
     if ! cmd_exists convert; then
         install_package imagemagick || true
     fi
-
     if ! cmd_exists convert; then
-        warning "ImageMagick tidak tersedia. Ikon PWA tidak dibuat otomatis."
+        warning "ImageMagick tidak tersedia, ikon PWA tidak dibuat."
         return
     fi
+    info "Membuat ikon PWA dari ${src}..."
+    for s in "${REQUIRED_ICON_SIZES[@]}"; do
+        convert "$src" -resize "${s}x${s}" "${PROJECT_DIR}/static/icons/icon-${s}.png"
+    done
+    for s in "${REQUIRED_MASKABLE_SIZES[@]}"; do
+        convert "$src" -resize "${s}x${s}" -gravity center -extent "${s}x${s}" \
+            "${PROJECT_DIR}/static/icons/icon-maskable-${s}.png"
+    done
+    success "Ikon PWA dibuat."
+}
 
-    info "Membuat ikon PWA dari $SOURCE_ICON..."
-    for size in "${REQUIRED_ICON_SIZES[@]}"; do
-        convert "$SOURCE_ICON" -resize "${size}x${size}" "$PROJECT_DIR/static/icons/icon-$size.png"
-    done
-    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
-        convert "$SOURCE_ICON" -resize "${size}x${size}" -gravity center -extent "${size}x${size}" \
-            "$PROJECT_DIR/static/icons/icon-maskable-$size.png"
-    done
-    success "Ikon PWA berhasil dibuat."
+prompt_tls() {
+    echo
+    read -rp "Aktifkan HTTPS dengan certbot? [y/N]: " -n 1; echo
+    [[ ! $REPLY =~ ^[Yy]$ ]] && return
+    read -rp "Domain (contoh: bel.sekolah.sch.id): " DOMAIN
+    DOMAIN="${DOMAIN// /}"
+    [ -z "$DOMAIN" ] && warning "Domain kosong, HTTPS dilewati." && return
+    read -rp "Email untuk Let's Encrypt (boleh kosong): " EMAIL
+    EMAIL="${EMAIL// /}"
+    warning "Pastikan DNS ${DOMAIN} sudah mengarah ke server ini."
+    ENABLE_TLS=1
 }
 
 setup_nginx() {
-    info "Mengkonfigurasi nginx reverse proxy..."
-
-    if ! cmd_exists nginx; then
-        install_package nginx
-    fi
-
-    local NGINX_CONF="/etc/nginx/sites-available/bel-madrasah"
-    local NGINX_ENABLED="/etc/nginx/sites-enabled/bel-madrasah"
-
-    cat > "$NGINX_CONF" << 'EOF'
+    info "Mengkonfigurasi nginx..."
+    cmd_exists nginx || install_package nginx
+    local server_name="_"
+    [ -n "$DOMAIN" ] && server_name="$DOMAIN"
+    local conf="/etc/nginx/sites-available/bel-madrasah"
+    local enabled="/etc/nginx/sites-enabled/bel-madrasah"
+    cat > "$conf" <<EOF
 server {
     listen 80;
-    server_name _;
-
+    server_name ${server_name};
     client_max_body_size 32M;
-
     location /static/ {
         proxy_pass         http://127.0.0.1:8081;
         proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
         expires            7d;
         add_header         Cache-Control "public, immutable";
     }
-
     location /sw.js {
         proxy_pass         http://127.0.0.1:8081;
         proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
         add_header         Cache-Control "no-cache";
     }
-
     location / {
         proxy_pass         http://127.0.0.1:8081;
         proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
         proxy_read_timeout 120s;
         proxy_send_timeout 120s;
     }
 }
 EOF
+    ln -sf "$conf" "$enabled"
+    [ -L /etc/nginx/sites-enabled/default ] && rm -f /etc/nginx/sites-enabled/default
+    nginx -t 2>/dev/null || error "Konfigurasi nginx tidak valid."
+    systemctl enable --now nginx
+    systemctl reload nginx
+    success "nginx dikonfigurasi."
+}
 
-    ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
-
-    if [ -f /etc/nginx/sites-enabled/default ]; then
-        rm -f /etc/nginx/sites-enabled/default
-        warning "Site default nginx dinonaktifkan."
+setup_tls() {
+    [ "$ENABLE_TLS" -ne 1 ] && return
+    info "Mengaktifkan HTTPS untuk ${DOMAIN}..."
+    if ! cmd_exists certbot; then
+        local pm
+        pm=$(detect_pkg_manager)
+        case "$pm" in
+            apt) apt-get install -y certbot python3-certbot-nginx ;;
+            dnf|yum) "${pm}" install -y certbot python3-certbot-nginx ;;
+            *) warning "Install certbot manual lalu jalankan: certbot --nginx -d ${DOMAIN}"; ENABLE_TLS=0; return ;;
+        esac
     fi
-
-    if nginx -t 2>/dev/null; then
-        systemctl enable nginx
-        systemctl reload nginx
-        success "nginx dikonfigurasi dan direload."
+    cmd_exists certbot || { warning "certbot tidak tersedia, HTTPS dilewati."; ENABLE_TLS=0; return; }
+    local args=(--nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect)
+    [ -n "$EMAIL" ] && args+=(-m "$EMAIL") || args+=(--register-unsafely-without-email)
+    if certbot "${args[@]}"; then
+        success "HTTPS aktif: https://${DOMAIN}"
+        systemctl enable --now certbot.timer 2>/dev/null || true
     else
-        error "Konfigurasi nginx tidak valid. Cek manual: nginx -t"
-        exit 1
+        warning "Gagal mengaktifkan HTTPS, aplikasi tetap berjalan via HTTP."
+        ENABLE_TLS=0
     fi
 }
 
-create_systemd_service() {
+create_service() {
     info "Membuat systemd service..."
-
-    local LOGIN_USER
-    LOGIN_USER=$(logname 2>/dev/null || echo "${SUDO_USER:-}")
-    local USER_UID
-    USER_UID=$(id -u "$LOGIN_USER" 2>/dev/null || echo "1000")
-
-    cat > "$SERVICE_FILE" << EOF
+    local tls_env=""
+    [ "$ENABLE_TLS" -eq 1 ] && tls_env="Environment=BEL_TLS=1"
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Bel Madrasah Otomatis
-After=sound.target
+After=sound.target network.target
 Wants=sound.target
 
 [Service]
 Type=simple
-ExecStart=$PROJECT_DIR/bel-madrasah
-Restart=always
+ExecStart=${PROJECT_DIR}/bel-madrasah
+Restart=on-failure
 RestartSec=10
 User=root
-Environment=PULSE_SERVER=unix:/run/user/${USER_UID}/pulse/native
+SupplementaryGroups=audio
+${tls_env}
 StandardOutput=journal
 StandardError=journal
-WorkingDirectory=$PROJECT_DIR
+WorkingDirectory=${PROJECT_DIR}
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=${PROJECT_DIR}/data ${PROJECT_DIR}/tone
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    success "Service file dibuat: $SERVICE_FILE (PULSE_SERVER uid=${USER_UID})"
-}
-
-setup_service() {
-    info "Mengkonfigurasi systemd service..."
-
     systemctl daemon-reload
-
-    if ! systemctl enable "$SERVICE_NAME.service"; then
-        error "Gagal mengaktifkan service."
-        exit 1
-    fi
-    success "Service diaktifkan (auto-start saat boot)."
+    systemctl enable "$SERVICE_NAME"
+    success "Service terdaftar dan diaktifkan."
 }
 
-download_tone() {
+copy_audio() {
     info "Menyalin file audio..."
-
-    mkdir -p "$PROJECT_DIR/tone"
-
-    if [ -d "$BUILD_DIR/tone" ]; then
-        local count=0
-        for f in "$BUILD_DIR/tone/"*.mp3 "$BUILD_DIR/tone/"*.wav "$BUILD_DIR/tone/"*.ogg; do
+    mkdir -p "${PROJECT_DIR}/tone"
+    local count=0
+    if [ -d "${BUILD_DIR}/tone" ]; then
+        for f in "${BUILD_DIR}/tone/"*.mp3 "${BUILD_DIR}/tone/"*.wav "${BUILD_DIR}/tone/"*.ogg; do
             [ -f "$f" ] || continue
-            cp "$f" "$PROJECT_DIR/tone/"
+            cp "$f" "${PROJECT_DIR}/tone/"
             success "$(basename "$f")"
-            ((count++))
+            ((count++)) || true
         done
-        if [ "$count" -gt 0 ]; then
-            info "Berhasil menyalin $count file audio."
-            return
-        fi
     fi
+    if [ "$count" -eq 0 ]; then
+        warning "Tidak ada file audio. Unduh manual dari:"
+        warning "https://github.com/ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah/tree/${REPO_BRANCH}/tone"
+    else
+        info "${count} file audio disalin."
+    fi
+}
 
-    warning "Tidak ada file audio di repository. Unduh manual dari:"
-    warning "https://github.com/ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah/tree/$REPO_BRANCH/tone"
+copy_uninstaller() {
+    if [ -f "${BUILD_DIR}/uninstall.sh" ]; then
+        cp "${BUILD_DIR}/uninstall.sh" "${PROJECT_DIR}/uninstall.sh"
+        chmod +x "${PROJECT_DIR}/uninstall.sh"
+        success "Uninstaller disalin."
+    fi
 }
 
 set_permissions() {
     info "Mengatur izin file..."
     chown -R root:root "$PROJECT_DIR"
     chmod 755 "$PROJECT_DIR"
-    chmod 755 "$PROJECT_DIR/tone"
-    chmod 755 "$PROJECT_DIR/data"
-    chmod 755 "$PROJECT_DIR/static"
-    chmod 755 "$PROJECT_DIR/static/icons"
-    chmod 755 "$PROJECT_DIR/bel-madrasah"
-    chmod 644 "$PROJECT_DIR/tone/"*.mp3 2>/dev/null || true
-    chmod 644 "$PROJECT_DIR/static/icons/"*.png 2>/dev/null || true
+    chmod 750 "${PROJECT_DIR}/data"
+    chmod 755 "${PROJECT_DIR}/tone" "${PROJECT_DIR}/static" "${PROJECT_DIR}/static/icons"
+    chmod 755 "${PROJECT_DIR}/bel-madrasah"
+    find "${PROJECT_DIR}/tone" -type f \( -name "*.mp3" -o -name "*.wav" -o -name "*.ogg" \) -exec chmod 644 {} +
+    find "${PROJECT_DIR}/static" -type f -exec chmod 644 {} +
+    [ -f "${PROJECT_DIR}/uninstall.sh" ] && chmod 755 "${PROJECT_DIR}/uninstall.sh"
     success "Izin file diatur."
 }
 
-cleanup_build() {
-    info "Membersihkan direktori build..."
-    rm -rf "$BUILD_DIR"
-    success "Build directory dihapus."
-}
-
-test_installation() {
+verify_installation() {
     info "Memverifikasi instalasi..."
-
-    [ ! -f "$PROJECT_DIR/bel-madrasah" ] && error "Binary tidak ditemukan." && exit 1
-    success "Binary ditemukan."
-
-    [ ! -f "$PROJECT_DIR/static/index.html" ] && warning "index.html tidak ditemukan."
-    [ -f "$PROJECT_DIR/static/index.html" ] && success "File static ditemukan."
-
-    if [ ! -f "$PROJECT_DIR/static/manifest.json" ] || [ ! -f "$PROJECT_DIR/static/sw.js" ]; then
-        warning "Berkas PWA (manifest.json/sw.js) tidak lengkap."
-    else
-        success "Berkas PWA ditemukan."
-    fi
-
-    systemctl is-enabled "$SERVICE_NAME.service" >/dev/null 2>&1 || { error "Service belum diaktifkan."; exit 1; }
-    success "Service terdaftar di systemd."
+    [ -f "${PROJECT_DIR}/bel-madrasah" ]     && success "Binary ditemukan."       || error "Binary tidak ditemukan."
+    [ -f "${PROJECT_DIR}/static/index.html" ] && success "index.html ditemukan."  || warning "index.html tidak ditemukan."
+    systemctl is-enabled "${SERVICE_NAME}" >/dev/null 2>&1 \
+        && success "Service terdaftar di systemd." || error "Service belum diaktifkan."
 }
 
 start_service() {
     info "Menjalankan service..."
-
-    if ! systemctl start "$SERVICE_NAME.service"; then
-        error "Gagal menjalankan service."
-        error "Cek log: journalctl -u $SERVICE_NAME -n 50"
-        exit 1
+    if [ "$IS_UPDATE" -eq 1 ] && systemctl is-active --quiet "$SERVICE_NAME"; then
+        systemctl restart "$SERVICE_NAME"
+    else
+        systemctl start "$SERVICE_NAME"
     fi
-
     sleep 2
-    success "Service berjalan."
-    systemctl status "$SERVICE_NAME.service" --no-pager -l
+    systemctl is-active --quiet "$SERVICE_NAME" && success "Service berjalan." || {
+        error "Service gagal berjalan. Cek log: journalctl -u ${SERVICE_NAME} -n 50"
+    }
 }
 
-show_completion() {
-    local LOCAL_IP
-    LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+cleanup() {
+    rm -rf "$BUILD_DIR"
+    success "Build directory dihapus."
+}
 
+show_summary() {
+    local local_ip
+    local_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    local action="INSTALASI"
+    [ "$IS_UPDATE" -eq 1 ] && action="UPDATE"
     echo
     echo "========================================="
-    success "INSTALASI SELESAI"
+    success "${action} SELESAI"
     echo "========================================="
     echo
-    info "Direktori  : $PROJECT_DIR"
-    info "Binary     : $PROJECT_DIR/bel-madrasah"
-    info "Service    : $SERVICE_NAME"
+    info "Direktori : ${PROJECT_DIR}"
+    info "Service   : ${SERVICE_NAME}"
+    if [ "$ENABLE_TLS" -eq 1 ]; then
+        info "Akses     : https://${DOMAIN}"
+    elif [ -n "$local_ip" ]; then
+        info "Akses     : http://${local_ip}"
+    fi
+    if [ "$IS_UPDATE" -eq 0 ]; then
+        info "Login     : admin / admin123"
+        warning "Segera ganti password setelah login pertama!"
+    fi
     echo
-    [ -n "$LOCAL_IP" ] && info "Akses web  : http://$LOCAL_IP"
-    info "Login      : admin / admin123"
-    warning "Segera ganti password setelah login pertama!"
+    echo "Perintah pengelolaan:"
+    echo "  sudo systemctl status  ${SERVICE_NAME}"
+    echo "  sudo systemctl stop    ${SERVICE_NAME}"
+    echo "  sudo systemctl start   ${SERVICE_NAME}"
+    echo "  sudo systemctl restart ${SERVICE_NAME}"
+    echo "  sudo journalctl -u ${SERVICE_NAME} -f"
     echo
-    info "Aplikasi mendukung PWA. Buka di Chrome/Edge lalu pilih 'Pasang Aplikasi'."
-    echo
-    echo "Perintah pengelolaan service:"
-    echo "  sudo systemctl status  $SERVICE_NAME"
-    echo "  sudo systemctl stop    $SERVICE_NAME"
-    echo "  sudo systemctl start   $SERVICE_NAME"
-    echo "  sudo systemctl restart $SERVICE_NAME"
-    echo "  sudo journalctl -u $SERVICE_NAME -f"
+    [ -f "${PROJECT_DIR}/uninstall.sh" ] && echo "Untuk menghapus: sudo ${PROJECT_DIR}/uninstall.sh"
     echo
 }
 
 main() {
     echo "========================================="
-    echo "Bell System Madrasah - Installer"
-    echo "ZEDLABS Teknologi Indonesia"
+    echo " Bel Madrasah - Installer"
+    echo " ZEDLABS Teknologi Indonesia"
     echo "========================================="
     echo
-
-    read -rp "Lanjutkan instalasi? [y/N]: " -n 1
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        error "Instalasi dibatalkan."
-        exit 1
-    fi
-
+    read -rp "Lanjutkan instalasi? [y/N]: " -n 1; echo
+    [[ $REPLY =~ ^[Yy]$ ]] || { info "Instalasi dibatalkan."; exit 0; }
     echo
     check_requirements
-    install_ffmpeg
-    install_curl
-    install_alsa
+    install_tools
     clone_repo
-    create_project_dir
+    prepare_dirs
     build_binary
     copy_static
     generate_pwa_icons
+    prompt_tls
     setup_nginx
-    create_systemd_service
-    setup_service
-    download_tone
+    setup_tls
+    create_service
+    copy_audio
+    copy_uninstaller
     set_permissions
-    cleanup_build
-    test_installation
+    verify_installation
     start_service
-    show_completion
+    cleanup
+    show_summary
 }
 
 main "$@"

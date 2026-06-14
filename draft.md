@@ -6,20 +6,27 @@ package main
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
-	usersFile      = dataDir + "/users.json"
-	sessionTimeout = 8 * time.Hour
-	cookieName     = "bel_session"
+	usersFile       = dataDir + "/users.json"
+	sessionTimeout  = 8 * time.Hour
+	cookieName      = "bel_session"
+	maxLoginFails   = 5
+	loginLockout    = 15 * time.Minute
+	bcryptCost      = bcrypt.DefaultCost
+	sessionCleanInt = 30 * time.Minute
 )
 
 type User struct {
@@ -32,19 +39,38 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
+type loginAttempt struct {
+	count     int
+	lockUntil time.Time
+}
+
 var (
 	sessions   = make(map[string]*Session)
 	sessionsMu sync.RWMutex
+
+	loginAttempts   = make(map[string]*loginAttempt)
+	loginAttemptsMu sync.Mutex
 )
 
-func hashPassword(p string) string {
-	h := sha256.Sum256([]byte(p))
-	return hex.EncodeToString(h[:])
+func hashPassword(p string) (string, error) {
+	h, err := bcrypt.GenerateFromPassword([]byte(p), bcryptCost)
+	if err != nil {
+		return "", err
+	}
+	return string(h), nil
+}
+
+func verifyPassword(hash, p string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(p)) == nil
 }
 
 func initAuth() error {
 	if _, err := os.Stat(usersFile); os.IsNotExist(err) {
-		u := User{Username: "admin", PasswordHash: hashPassword("admin123")}
+		hash, err := hashPassword("admin123")
+		if err != nil {
+			return err
+		}
+		u := User{Username: "admin", PasswordHash: hash}
 		data, err := json.MarshalIndent(u, "", "  ")
 		if err != nil {
 			return err
@@ -55,7 +81,30 @@ func initAuth() error {
 		logMsg("akun admin default dibuat — username: admin | password: admin123")
 		logMsg("segera ganti password melalui halaman pengaturan")
 	}
+	go cleanupSessions()
 	return nil
+}
+
+func cleanupSessions() {
+	ticker := time.NewTicker(sessionCleanInt)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		sessionsMu.Lock()
+		for token, s := range sessions {
+			if now.After(s.ExpiresAt) {
+				delete(sessions, token)
+			}
+		}
+		sessionsMu.Unlock()
+		loginAttemptsMu.Lock()
+		for ip, a := range loginAttempts {
+			if now.After(a.lockUntil) && a.count < maxLoginFails {
+				delete(loginAttempts, ip)
+			}
+		}
+		loginAttemptsMu.Unlock()
+	}
 }
 
 func loadUser() (*User, error) {
@@ -111,11 +160,60 @@ func getSession(r *http.Request) *Session {
 	return s
 }
 
+func clientIP(r *http.Request) string {
+	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+		parts := strings.Split(xf, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+func isLoginLocked(ip string) (bool, time.Duration) {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	a, ok := loginAttempts[ip]
+	if !ok {
+		return false, 0
+	}
+	if a.count >= maxLoginFails && time.Now().Before(a.lockUntil) {
+		return true, time.Until(a.lockUntil)
+	}
+	return false, 0
+}
+
+func recordLoginFailure(ip string) {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	a, ok := loginAttempts[ip]
+	if !ok {
+		a = &loginAttempt{}
+		loginAttempts[ip] = a
+	}
+	a.count++
+	if a.count >= maxLoginFails {
+		a.lockUntil = time.Now().Add(loginLockout)
+	}
+}
+
+func resetLoginFailures(ip string) {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	delete(loginAttempts, ip)
+}
+
+func isJSONRequest(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/json") ||
+		strings.Contains(r.Header.Get("Content-Type"), "application/json")
+}
+
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if getSession(r) == nil {
-			if r.Header.Get("Accept") == "application/json" ||
-				r.Header.Get("Content-Type") == "application/json" {
+			if isJSONRequest(r) {
 				jsonError(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -144,7 +242,17 @@ func jsonOK(w http.ResponseWriter, v any) {
 ```go
 module bel-madrasah
 
-go 1.24.4
+go 1.21
+
+require golang.org/x/crypto v0.33.0
+
+```
+---
+
+## go.sum
+```text
+golang.org/x/crypto v0.33.0 h1:IOBPskki6Lysi0lo9qQvbxiQ+FvsCC/YWOecCHAixus=
+golang.org/x/crypto v0.33.0/go.mod h1:bVdXmD7IV/4GdElGPozy6U7lWdRXA4qyRVGJV57uQ5M=
 
 ```
 ---
@@ -167,9 +275,12 @@ import (
 
 var validModes = map[string]bool{"reguler": true, "ramadhan": true, "pts": true, "pas": true}
 
+var secureCookie = os.Getenv("BEL_TLS") == "1"
+
 func registerRoutes(mux *http.ServeMux) {
 	registerPWARoutes(mux)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	mux.HandleFunc("/healthz", handleHealth)
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
 	mux.HandleFunc("/", requireAuth(handleIndex))
@@ -190,6 +301,16 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/change-password", requireAuth(handleChangePassword))
 }
 
+func methodNotAllowed(w http.ResponseWriter) {
+	jsonError(w, "method tidak diizinkan", http.StatusMethodNotAllowed)
+}
+
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -199,6 +320,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		http.ServeFile(w, r, filepath.Join(staticDir, "login.html"))
 	case http.MethodPost:
+		ip := clientIP(r)
+		if locked, remaining := isLoginLocked(ip); locked {
+			jsonError(w, fmt.Sprintf("terlalu banyak percobaan gagal, coba lagi dalam %d menit", int(remaining.Minutes())+1), http.StatusTooManyRequests)
+			return
+		}
 		var body struct {
 			Username string `json:"username"`
 			Password string `json:"password"`
@@ -212,10 +338,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, "gagal memuat data user", http.StatusInternalServerError)
 			return
 		}
-		if body.Username != user.Username || hashPassword(body.Password) != user.PasswordHash {
+		if body.Username != user.Username || !verifyPassword(user.PasswordHash, body.Password) {
+			recordLoginFailure(ip)
 			jsonError(w, "username atau password salah", http.StatusUnauthorized)
 			return
 		}
+		resetLoginFailures(ip)
 		token, err := createSession(body.Username)
 		if err != nil {
 			jsonError(w, "gagal membuat sesi", http.StatusInternalServerError)
@@ -226,12 +354,13 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			Value:    token,
 			Path:     "/",
 			HttpOnly: true,
+			Secure:   secureCookie,
 			SameSite: http.SameSiteLaxMode,
 			Expires:  time.Now().Add(sessionTimeout),
 		})
 		jsonOK(w, map[string]string{"message": "login berhasil"})
 	default:
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 	}
 }
 
@@ -243,17 +372,19 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 		sessionsMu.Unlock()
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:    cookieName,
-		Value:   "",
-		Path:    "/",
-		Expires: time.Unix(0, 0),
+		Name:     cookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secureCookie,
+		Expires:  time.Unix(0, 0),
 	})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -269,7 +400,7 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "gagal memuat data user", http.StatusInternalServerError)
 		return
 	}
-	if hashPassword(body.OldPassword) != user.PasswordHash {
+	if !verifyPassword(user.PasswordHash, body.OldPassword) {
 		jsonError(w, "password lama salah", http.StatusUnauthorized)
 		return
 	}
@@ -277,7 +408,12 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "password baru minimal 6 karakter", http.StatusBadRequest)
 		return
 	}
-	user.PasswordHash = hashPassword(body.NewPassword)
+	hash, err := hashPassword(body.NewPassword)
+	if err != nil {
+		jsonError(w, "gagal mengenkripsi password", http.StatusInternalServerError)
+		return
+	}
+	user.PasswordHash = hash
 	if err := saveUser(user); err != nil {
 		jsonError(w, "gagal menyimpan password", http.StatusInternalServerError)
 		return
@@ -325,7 +461,7 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 		logMsg(fmt.Sprintf("config diperbarui: mode=%s override=%v", body.Mode, body.ManualOverride))
 		jsonOK(w, map[string]string{"message": "config berhasil disimpan"})
 	default:
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 	}
 }
 
@@ -388,13 +524,13 @@ func handleLibur(w http.ResponseWriter, r *http.Request) {
 		}
 		jsonOK(w, map[string]string{"message": "berhasil"})
 	default:
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 	}
 }
 
 func handleJadwal(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	mode := r.URL.Query().Get("mode")
@@ -420,7 +556,7 @@ func handleJadwal(w http.ResponseWriter, r *http.Request) {
 
 func handleJadwalHari(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -471,7 +607,7 @@ func handleJadwalHari(w http.ResponseWriter, r *http.Request) {
 
 func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -533,6 +669,10 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleTones(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
 	files, err := listTones()
 	if err != nil {
 		jsonError(w, "gagal membaca direktori tone", http.StatusInternalServerError)
@@ -541,9 +681,17 @@ func handleTones(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{"tones": files})
 }
 
+func safeFilename(name string) (string, bool) {
+	base := filepath.Base(name)
+	if base == "." || base == ".." || strings.ContainsAny(base, "/\\") {
+		return "", false
+	}
+	return base, true
+}
+
 func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
@@ -556,12 +704,16 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	ext := strings.ToLower(filepath.Ext(header.Filename))
+	filename, ok := safeFilename(header.Filename)
+	if !ok {
+		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
+		return
+	}
+	ext := strings.ToLower(filepath.Ext(filename))
 	if ext != ".mp3" && ext != ".wav" && ext != ".ogg" {
 		jsonError(w, "format tidak didukung (mp3, wav, ogg)", http.StatusBadRequest)
 		return
 	}
-	filename := filepath.Base(header.Filename)
 	dst, err := os.Create(filepath.Join(toneDir, filename))
 	if err != nil {
 		jsonError(w, "gagal menyimpan file", http.StatusInternalServerError)
@@ -578,7 +730,7 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 
 func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -588,7 +740,11 @@ func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "request tidak valid", http.StatusBadRequest)
 		return
 	}
-	filename := filepath.Base(body.Filename)
+	filename, ok := safeFilename(body.Filename)
+	if !ok {
+		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
+		return
+	}
 	full := filepath.Join(toneDir, filename)
 	if _, err := os.Stat(full); os.IsNotExist(err) {
 		jsonError(w, "file tidak ditemukan", http.StatusNotFound)
@@ -604,7 +760,7 @@ func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
 
 func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	var body struct {
@@ -614,7 +770,11 @@ func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "request tidak valid", http.StatusBadRequest)
 		return
 	}
-	filename := filepath.Base(body.Filename)
+	filename, ok := safeFilename(body.Filename)
+	if !ok {
+		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
+		return
+	}
 	full := filepath.Join(toneDir, filename)
 	if _, err := os.Stat(full); os.IsNotExist(err) {
 		jsonError(w, "file tidak ditemukan", http.StatusNotFound)
@@ -627,7 +787,7 @@ func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 
 func handleLog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	logs, err := readLog()
@@ -640,7 +800,7 @@ func handleLog(w http.ResponseWriter, r *http.Request) {
 
 func handleBackup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	j, err := loadJadwal()
@@ -656,12 +816,12 @@ func handleBackup(w http.ResponseWriter, r *http.Request) {
 	fname := "backup-jadwal-" + time.Now().Format("20060102-150405") + ".json"
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", "attachment; filename="+fname)
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func handleRestore(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	if err := r.ParseMultipartForm(4 << 20); err != nil {
@@ -710,6 +870,10 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleServiceStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
 	schedulerMu.Lock()
 	running := schedulerRunning
 	schedulerMu.Unlock()
@@ -723,7 +887,7 @@ func handleServiceStatus(w http.ResponseWriter, r *http.Request) {
 
 func handleServiceToggle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		methodNotAllowed(w)
 		return
 	}
 	schedulerMu.Lock()
@@ -744,6 +908,7 @@ func handleServiceToggle(w http.ResponseWriter, r *http.Request) {
 ## install.sh
 ```bash
 #!/bin/bash
+set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -756,497 +921,446 @@ REPO_BRANCH="server"
 BUILD_DIR="/tmp/bel-madrasah-build"
 PROJECT_DIR="/opt/bel-madrasah"
 SERVICE_NAME="bel-madrasah"
-SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+GO_VERSION="1.24.4"
 
 REQUIRED_ICON_SIZES=(72 96 128 144 152 192 384 512)
 REQUIRED_MASKABLE_SIZES=(192 512)
 
+ENABLE_TLS=0
+DOMAIN=""
+EMAIL=""
+IS_UPDATE=0
+
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-error()   { echo -e "${RED}[ERROR]${NC} $1"; }
-
+error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 cmd_exists() { command -v "$1" >/dev/null 2>&1; }
 
-check_requirements() {
-    info "Memeriksa persyaratan sistem..."
+require_root() {
+    [ "$EUID" -eq 0 ] || error "Jalankan sebagai root: sudo $0"
+}
 
-    if [ "$EUID" -ne 0 ]; then
-        error "Installer ini harus dijalankan sebagai root."
-        error "Gunakan: sudo ./install.sh"
-        exit 1
+detect_pkg_manager() {
+    if cmd_exists apt-get; then echo "apt"
+    elif cmd_exists dnf; then echo "dnf"
+    elif cmd_exists yum; then echo "yum"
+    elif cmd_exists pacman; then echo "pacman"
+    else error "Package manager tidak dikenali."
     fi
-
-    if ! cmd_exists go; then
-        warning "Go tidak ditemukan. Menginstall otomatis..."
-        install_go
-    fi
-    success "Go: $(go version)"
-
-    if ! cmd_exists git; then
-        error "git tidak ditemukan."
-        install_package git
-    fi
-    success "git: $(git --version)"
-
-    if ! cmd_exists systemctl; then
-        error "systemctl tidak ditemukan. Sistem memerlukan systemd."
-        exit 1
-    fi
-    success "systemctl ditemukan."
 }
 
 install_package() {
     local pkg="$1"
-    info "Menginstall $pkg..."
-    if cmd_exists apt; then
-        apt update -qq && apt install -y "$pkg"
-    elif cmd_exists dnf; then
-        dnf install -y "$pkg"
-    elif cmd_exists yum; then
-        yum install -y "$pkg"
-    elif cmd_exists pacman; then
-        pacman -S --noconfirm "$pkg"
-    else
-        error "Package manager tidak dikenali. Install $pkg secara manual."
-        exit 1
-    fi
+    local pm
+    pm=$(detect_pkg_manager)
+    info "Menginstall ${pkg}..."
+    case "$pm" in
+        apt)    apt-get update -qq && apt-get install -y "$pkg" ;;
+        dnf)    dnf install -y "$pkg" ;;
+        yum)    yum install -y "$pkg" ;;
+        pacman) pacman -S --noconfirm "$pkg" ;;
+    esac
 }
 
 install_go() {
-    local GO_VERSION="1.24.4"
-    local GO_ARCH=""
-
-    local CPU_ARCH=$(uname -m)
-    case "${CPU_ARCH}" in
-        x86_64)       GO_ARCH="amd64" ;;
-        aarch64)      GO_ARCH="arm64" ;;
-        armv7l|armv6l) GO_ARCH="armv6l" ;;
-        *)
-            error "Arsitektur tidak didukung: ${CPU_ARCH}"
-            exit 1
-            ;;
+    local arch
+    case "$(uname -m)" in
+        x86_64)        arch="amd64" ;;
+        aarch64)       arch="arm64" ;;
+        armv7l|armv6l) arch="armv6l" ;;
+        riscv64)       arch="riscv64" ;;
+        *) error "Arsitektur tidak didukung: $(uname -m)" ;;
     esac
+    local tar_file="go${GO_VERSION}.linux-${arch}.tar.gz"
+    local url="https://go.dev/dl/${tar_file}"
+    info "Mengunduh Go ${GO_VERSION} (${arch})..."
+    curl -fL --progress-bar -o "/tmp/${tar_file}" "$url" || error "Gagal mengunduh Go."
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf "/tmp/${tar_file}"
+    rm -f "/tmp/${tar_file}"
+    export PATH="$PATH:/usr/local/go/bin"
+    mkdir -p /etc/profile.d
+    echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
+    chmod 644 /etc/profile.d/go.sh
+    cmd_exists go || error "Gagal menginstall Go."
+    success "Go $(go version)"
+}
 
-    local GO_TAR="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
-    local GO_URL="https://go.dev/dl/${GO_TAR}"
-
-    info "Mengunduh Go ${GO_VERSION} untuk ${GO_ARCH}..."
-    curl -fL --progress-bar -o "/tmp/${GO_TAR}" "${GO_URL}"
-    if [ $? -ne 0 ]; then
-        error "Gagal mengunduh Go."
-        exit 1
-    fi
-
-    info "Menginstall Go ke /usr/local/go..."
-    sudo rm -rf /usr/local/go
-    sudo tar -C /usr/local -xzf "/tmp/${GO_TAR}"
-    rm -f "/tmp/${GO_TAR}"
-
-    export PATH=$PATH:/usr/local/go/bin
-
+check_requirements() {
+    info "Memeriksa persyaratan sistem..."
+    require_root
     if ! cmd_exists go; then
-        error "Gagal menginstall Go."
-        exit 1
+        warning "Go tidak ditemukan, menginstall otomatis..."
+        install_go
+    else
+        success "Go: $(go version)"
     fi
-    success "Go berhasil diinstall: $(go version)"
+    if ! cmd_exists git; then
+        install_package git
+    fi
+    success "git: $(git --version)"
+    cmd_exists systemctl || error "systemd tidak ditemukan."
+    success "systemd tersedia."
 }
 
-install_ffmpeg() {
-    info "Memeriksa ffmpeg..."
-    if cmd_exists ffmpeg; then
-        success "ffmpeg sudah terinstall."
-        return
+install_tools() {
+    for tool in ffmpeg curl; do
+        if ! cmd_exists "$tool"; then
+            install_package "$tool"
+            cmd_exists "$tool" || error "Gagal menginstall ${tool}."
+        fi
+        success "${tool} tersedia."
+    done
+    if ! cmd_exists aplay; then
+        install_package alsa-utils
+        success "alsa-utils terinstall."
+    else
+        success "alsa-utils tersedia."
     fi
-    install_package ffmpeg
-    if ! cmd_exists ffmpeg; then
-        error "Gagal menginstall ffmpeg."
-        exit 1
-    fi
-    success "ffmpeg berhasil diinstall."
-}
-
-install_curl() {
-    info "Memeriksa curl..."
-    if cmd_exists curl; then
-        success "curl sudah terinstall."
-        return
-    fi
-    install_package curl
-    success "curl berhasil diinstall."
-}
-
-install_alsa() {
-    info "Memeriksa ALSA utils..."
-    if cmd_exists aplay; then
-        success "ALSA utils sudah terinstall."
-        return
-    fi
-    install_package alsa-utils
-    success "ALSA utils berhasil diinstall."
 }
 
 clone_repo() {
-    info "Mengunduh source code dari GitHub..."
-
+    info "Mengunduh source code..."
     rm -rf "$BUILD_DIR"
-    if ! git clone --depth=1 --branch "$REPO_BRANCH" "$REPO_URL" "$BUILD_DIR"; then
-        error "Gagal clone repository."
-        exit 1
-    fi
-    success "Source code berhasil diunduh ke $BUILD_DIR"
+    git clone --depth=1 --branch "$REPO_BRANCH" "$REPO_URL" "$BUILD_DIR" \
+        || error "Gagal clone repository."
+    success "Source code diunduh ke ${BUILD_DIR}."
 }
 
-create_project_dir() {
+prepare_dirs() {
     info "Menyiapkan direktori proyek..."
-
     if [ -d "$PROJECT_DIR" ]; then
-        warning "Direktori $PROJECT_DIR sudah ada."
-        read -rp "Lanjutkan dan timpa file yang ada? [y/N]: " -n 1
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            error "Instalasi dibatalkan."
-            exit 1
-        fi
+        IS_UPDATE=1
+        warning "Instalasi sebelumnya ditemukan, melakukan update..."
+        backup_data
     fi
+    mkdir -p "${PROJECT_DIR}/tone" "${PROJECT_DIR}/data" "${PROJECT_DIR}/static/icons"
+    success "Direktori siap: ${PROJECT_DIR}"
+}
 
-    mkdir -p "$PROJECT_DIR/tone"
-    mkdir -p "$PROJECT_DIR/data"
-    mkdir -p "$PROJECT_DIR/static/icons"
-    success "Direktori proyek: $PROJECT_DIR"
+backup_data() {
+    local ts
+    ts=$(date +%Y%m%d-%H%M%S)
+    local backup="/tmp/bel-madrasah-backup-${ts}"
+    mkdir -p "$backup"
+    [ -d "${PROJECT_DIR}/data" ]  && cp -r "${PROJECT_DIR}/data"  "${backup}/"
+    [ -d "${PROJECT_DIR}/tone" ]  && cp -r "${PROJECT_DIR}/tone"  "${backup}/"
+    success "Data di-backup ke: ${backup}"
 }
 
 build_binary() {
-    info "Membangun binary Go..."
-
-    for f in main.go auth.go handler.go storage.go pwa.go go.mod; do
-        if [ ! -f "$BUILD_DIR/$f" ]; then
-            error "$f tidak ditemukan di $BUILD_DIR."
-            exit 1
-        fi
+    info "Membangun binary..."
+    local required_files=("main.go" "auth.go" "handler.go" "storage.go" "pwa.go" "go.mod")
+    for f in "${required_files[@]}"; do
+        [ -f "${BUILD_DIR}/${f}" ] || error "${f} tidak ditemukan di ${BUILD_DIR}."
     done
-
-    if ! (cd "$BUILD_DIR" && go build -o "$PROJECT_DIR/bel-madrasah" .); then
-        error "Gagal membangun binary Go."
-        exit 1
-    fi
-
-    chmod +x "$PROJECT_DIR/bel-madrasah"
-    success "Binary berhasil dibangun: $PROJECT_DIR/bel-madrasah"
+    (
+        cd "$BUILD_DIR"
+        go mod tidy
+        CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${PROJECT_DIR}/bel-madrasah" .
+    ) || error "Gagal build binary."
+    chmod +x "${PROJECT_DIR}/bel-madrasah"
+    success "Binary: ${PROJECT_DIR}/bel-madrasah"
 }
 
 copy_static() {
     info "Menyalin file static..."
-
-    if [ -d "$BUILD_DIR/static" ]; then
-        cp -r "$BUILD_DIR/static/." "$PROJECT_DIR/static/"
-        success "File static disalin ke $PROJECT_DIR/static/"
+    if [ -d "${BUILD_DIR}/static" ]; then
+        cp -r "${BUILD_DIR}/static/." "${PROJECT_DIR}/static/"
+        success "Static files disalin."
     else
-        warning "Direktori static tidak ditemukan, dilewati."
+        warning "Direktori static tidak ditemukan."
     fi
-
-    mkdir -p "$PROJECT_DIR/static/icons"
+    mkdir -p "${PROJECT_DIR}/static/icons"
 }
 
 generate_pwa_icons() {
     info "Memeriksa ikon PWA..."
-
     local missing=0
-    for size in "${REQUIRED_ICON_SIZES[@]}"; do
-        [ ! -f "$PROJECT_DIR/static/icons/icon-$size.png" ] && missing=1
+    for s in "${REQUIRED_ICON_SIZES[@]}"; do
+        [ ! -f "${PROJECT_DIR}/static/icons/icon-${s}.png" ] && missing=1 && break
     done
-    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
-        [ ! -f "$PROJECT_DIR/static/icons/icon-maskable-$size.png" ] && missing=1
+    for s in "${REQUIRED_MASKABLE_SIZES[@]}"; do
+        [ ! -f "${PROJECT_DIR}/static/icons/icon-maskable-${s}.png" ] && missing=1 && break
     done
-
-    if [ "$missing" -eq 0 ]; then
-        success "Seluruh ikon PWA sudah tersedia."
+    [ "$missing" -eq 0 ] && success "Ikon PWA lengkap." && return
+    local src=""
+    for c in "${BUILD_DIR}/static/icons/source.png" "${BUILD_DIR}/icon-source.png"; do
+        [ -f "$c" ] && src="$c" && break
+    done
+    if [ -z "$src" ]; then
+        warning "Ikon sumber tidak ditemukan, lewati pembuatan ikon PWA."
         return
     fi
-
-    local SOURCE_ICON=""
-    for candidate in "$BUILD_DIR/static/icons/source.png" "$BUILD_DIR/icon-source.png"; do
-        if [ -f "$candidate" ]; then
-            SOURCE_ICON="$candidate"
-            break
-        fi
-    done
-
-    if [ -z "$SOURCE_ICON" ]; then
-        warning "Ikon PWA belum lengkap dan tidak ditemukan gambar sumber (source.png)."
-        warning "Salin manual berkas ikon ke $PROJECT_DIR/static/icons/."
-        return
-    fi
-
     if ! cmd_exists convert; then
         install_package imagemagick || true
     fi
-
     if ! cmd_exists convert; then
-        warning "ImageMagick tidak tersedia. Ikon PWA tidak dibuat otomatis."
+        warning "ImageMagick tidak tersedia, ikon PWA tidak dibuat."
         return
     fi
+    info "Membuat ikon PWA dari ${src}..."
+    for s in "${REQUIRED_ICON_SIZES[@]}"; do
+        convert "$src" -resize "${s}x${s}" "${PROJECT_DIR}/static/icons/icon-${s}.png"
+    done
+    for s in "${REQUIRED_MASKABLE_SIZES[@]}"; do
+        convert "$src" -resize "${s}x${s}" -gravity center -extent "${s}x${s}" \
+            "${PROJECT_DIR}/static/icons/icon-maskable-${s}.png"
+    done
+    success "Ikon PWA dibuat."
+}
 
-    info "Membuat ikon PWA dari $SOURCE_ICON..."
-    for size in "${REQUIRED_ICON_SIZES[@]}"; do
-        convert "$SOURCE_ICON" -resize "${size}x${size}" "$PROJECT_DIR/static/icons/icon-$size.png"
-    done
-    for size in "${REQUIRED_MASKABLE_SIZES[@]}"; do
-        convert "$SOURCE_ICON" -resize "${size}x${size}" -gravity center -extent "${size}x${size}" \
-            "$PROJECT_DIR/static/icons/icon-maskable-$size.png"
-    done
-    success "Ikon PWA berhasil dibuat."
+prompt_tls() {
+    echo
+    read -rp "Aktifkan HTTPS dengan certbot? [y/N]: " -n 1; echo
+    [[ ! $REPLY =~ ^[Yy]$ ]] && return
+    read -rp "Domain (contoh: bel.sekolah.sch.id): " DOMAIN
+    DOMAIN="${DOMAIN// /}"
+    [ -z "$DOMAIN" ] && warning "Domain kosong, HTTPS dilewati." && return
+    read -rp "Email untuk Let's Encrypt (boleh kosong): " EMAIL
+    EMAIL="${EMAIL// /}"
+    warning "Pastikan DNS ${DOMAIN} sudah mengarah ke server ini."
+    ENABLE_TLS=1
 }
 
 setup_nginx() {
-    info "Mengkonfigurasi nginx reverse proxy..."
-
-    if ! cmd_exists nginx; then
-        install_package nginx
-    fi
-
-    local NGINX_CONF="/etc/nginx/sites-available/bel-madrasah"
-    local NGINX_ENABLED="/etc/nginx/sites-enabled/bel-madrasah"
-
-    cat > "$NGINX_CONF" << 'EOF'
+    info "Mengkonfigurasi nginx..."
+    cmd_exists nginx || install_package nginx
+    local server_name="_"
+    [ -n "$DOMAIN" ] && server_name="$DOMAIN"
+    local conf="/etc/nginx/sites-available/bel-madrasah"
+    local enabled="/etc/nginx/sites-enabled/bel-madrasah"
+    cat > "$conf" <<EOF
 server {
     listen 80;
-    server_name _;
-
+    server_name ${server_name};
     client_max_body_size 32M;
-
     location /static/ {
         proxy_pass         http://127.0.0.1:8081;
         proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
         expires            7d;
         add_header         Cache-Control "public, immutable";
     }
-
     location /sw.js {
         proxy_pass         http://127.0.0.1:8081;
         proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
         add_header         Cache-Control "no-cache";
     }
-
     location / {
         proxy_pass         http://127.0.0.1:8081;
         proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
         proxy_read_timeout 120s;
         proxy_send_timeout 120s;
     }
 }
 EOF
+    ln -sf "$conf" "$enabled"
+    [ -L /etc/nginx/sites-enabled/default ] && rm -f /etc/nginx/sites-enabled/default
+    nginx -t 2>/dev/null || error "Konfigurasi nginx tidak valid."
+    systemctl enable --now nginx
+    systemctl reload nginx
+    success "nginx dikonfigurasi."
+}
 
-    ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
-
-    if [ -f /etc/nginx/sites-enabled/default ]; then
-        rm -f /etc/nginx/sites-enabled/default
-        warning "Site default nginx dinonaktifkan."
+setup_tls() {
+    [ "$ENABLE_TLS" -ne 1 ] && return
+    info "Mengaktifkan HTTPS untuk ${DOMAIN}..."
+    if ! cmd_exists certbot; then
+        local pm
+        pm=$(detect_pkg_manager)
+        case "$pm" in
+            apt) apt-get install -y certbot python3-certbot-nginx ;;
+            dnf|yum) "${pm}" install -y certbot python3-certbot-nginx ;;
+            *) warning "Install certbot manual lalu jalankan: certbot --nginx -d ${DOMAIN}"; ENABLE_TLS=0; return ;;
+        esac
     fi
-
-    if nginx -t 2>/dev/null; then
-        systemctl enable nginx
-        systemctl reload nginx
-        success "nginx dikonfigurasi dan direload."
+    cmd_exists certbot || { warning "certbot tidak tersedia, HTTPS dilewati."; ENABLE_TLS=0; return; }
+    local args=(--nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect)
+    [ -n "$EMAIL" ] && args+=(-m "$EMAIL") || args+=(--register-unsafely-without-email)
+    if certbot "${args[@]}"; then
+        success "HTTPS aktif: https://${DOMAIN}"
+        systemctl enable --now certbot.timer 2>/dev/null || true
     else
-        error "Konfigurasi nginx tidak valid. Cek manual: nginx -t"
-        exit 1
+        warning "Gagal mengaktifkan HTTPS, aplikasi tetap berjalan via HTTP."
+        ENABLE_TLS=0
     fi
 }
 
-create_systemd_service() {
+create_service() {
     info "Membuat systemd service..."
-
-    local LOGIN_USER
-    LOGIN_USER=$(logname 2>/dev/null || echo "${SUDO_USER:-}")
-    local USER_UID
-    USER_UID=$(id -u "$LOGIN_USER" 2>/dev/null || echo "1000")
-
-    cat > "$SERVICE_FILE" << EOF
+    local tls_env=""
+    [ "$ENABLE_TLS" -eq 1 ] && tls_env="Environment=BEL_TLS=1"
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Bel Madrasah Otomatis
-After=sound.target
+After=sound.target network.target
 Wants=sound.target
 
 [Service]
 Type=simple
-ExecStart=$PROJECT_DIR/bel-madrasah
-Restart=always
+ExecStart=${PROJECT_DIR}/bel-madrasah
+Restart=on-failure
 RestartSec=10
 User=root
-Environment=PULSE_SERVER=unix:/run/user/${USER_UID}/pulse/native
+SupplementaryGroups=audio
+${tls_env}
 StandardOutput=journal
 StandardError=journal
-WorkingDirectory=$PROJECT_DIR
+WorkingDirectory=${PROJECT_DIR}
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=${PROJECT_DIR}/data ${PROJECT_DIR}/tone
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    success "Service file dibuat: $SERVICE_FILE (PULSE_SERVER uid=${USER_UID})"
-}
-
-setup_service() {
-    info "Mengkonfigurasi systemd service..."
-
     systemctl daemon-reload
-
-    if ! systemctl enable "$SERVICE_NAME.service"; then
-        error "Gagal mengaktifkan service."
-        exit 1
-    fi
-    success "Service diaktifkan (auto-start saat boot)."
+    systemctl enable "$SERVICE_NAME"
+    success "Service terdaftar dan diaktifkan."
 }
 
-download_tone() {
+copy_audio() {
     info "Menyalin file audio..."
-
-    mkdir -p "$PROJECT_DIR/tone"
-
-    if [ -d "$BUILD_DIR/tone" ]; then
-        local count=0
-        for f in "$BUILD_DIR/tone/"*.mp3 "$BUILD_DIR/tone/"*.wav "$BUILD_DIR/tone/"*.ogg; do
+    mkdir -p "${PROJECT_DIR}/tone"
+    local count=0
+    if [ -d "${BUILD_DIR}/tone" ]; then
+        for f in "${BUILD_DIR}/tone/"*.mp3 "${BUILD_DIR}/tone/"*.wav "${BUILD_DIR}/tone/"*.ogg; do
             [ -f "$f" ] || continue
-            cp "$f" "$PROJECT_DIR/tone/"
+            cp "$f" "${PROJECT_DIR}/tone/"
             success "$(basename "$f")"
-            ((count++))
+            ((count++)) || true
         done
-        if [ "$count" -gt 0 ]; then
-            info "Berhasil menyalin $count file audio."
-            return
-        fi
     fi
+    if [ "$count" -eq 0 ]; then
+        warning "Tidak ada file audio. Unduh manual dari:"
+        warning "https://github.com/ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah/tree/${REPO_BRANCH}/tone"
+    else
+        info "${count} file audio disalin."
+    fi
+}
 
-    warning "Tidak ada file audio di repository. Unduh manual dari:"
-    warning "https://github.com/ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah/tree/$REPO_BRANCH/tone"
+copy_uninstaller() {
+    if [ -f "${BUILD_DIR}/uninstall.sh" ]; then
+        cp "${BUILD_DIR}/uninstall.sh" "${PROJECT_DIR}/uninstall.sh"
+        chmod +x "${PROJECT_DIR}/uninstall.sh"
+        success "Uninstaller disalin."
+    fi
 }
 
 set_permissions() {
     info "Mengatur izin file..."
     chown -R root:root "$PROJECT_DIR"
     chmod 755 "$PROJECT_DIR"
-    chmod 755 "$PROJECT_DIR/tone"
-    chmod 755 "$PROJECT_DIR/data"
-    chmod 755 "$PROJECT_DIR/static"
-    chmod 755 "$PROJECT_DIR/static/icons"
-    chmod 755 "$PROJECT_DIR/bel-madrasah"
-    chmod 644 "$PROJECT_DIR/tone/"*.mp3 2>/dev/null || true
-    chmod 644 "$PROJECT_DIR/static/icons/"*.png 2>/dev/null || true
+    chmod 750 "${PROJECT_DIR}/data"
+    chmod 755 "${PROJECT_DIR}/tone" "${PROJECT_DIR}/static" "${PROJECT_DIR}/static/icons"
+    chmod 755 "${PROJECT_DIR}/bel-madrasah"
+    find "${PROJECT_DIR}/tone" -type f \( -name "*.mp3" -o -name "*.wav" -o -name "*.ogg" \) -exec chmod 644 {} +
+    find "${PROJECT_DIR}/static" -type f -exec chmod 644 {} +
+    [ -f "${PROJECT_DIR}/uninstall.sh" ] && chmod 755 "${PROJECT_DIR}/uninstall.sh"
     success "Izin file diatur."
 }
 
-cleanup_build() {
-    info "Membersihkan direktori build..."
-    rm -rf "$BUILD_DIR"
-    success "Build directory dihapus."
-}
-
-test_installation() {
+verify_installation() {
     info "Memverifikasi instalasi..."
-
-    [ ! -f "$PROJECT_DIR/bel-madrasah" ] && error "Binary tidak ditemukan." && exit 1
-    success "Binary ditemukan."
-
-    [ ! -f "$PROJECT_DIR/static/index.html" ] && warning "index.html tidak ditemukan."
-    [ -f "$PROJECT_DIR/static/index.html" ] && success "File static ditemukan."
-
-    if [ ! -f "$PROJECT_DIR/static/manifest.json" ] || [ ! -f "$PROJECT_DIR/static/sw.js" ]; then
-        warning "Berkas PWA (manifest.json/sw.js) tidak lengkap."
-    else
-        success "Berkas PWA ditemukan."
-    fi
-
-    systemctl is-enabled "$SERVICE_NAME.service" >/dev/null 2>&1 || { error "Service belum diaktifkan."; exit 1; }
-    success "Service terdaftar di systemd."
+    [ -f "${PROJECT_DIR}/bel-madrasah" ]     && success "Binary ditemukan."       || error "Binary tidak ditemukan."
+    [ -f "${PROJECT_DIR}/static/index.html" ] && success "index.html ditemukan."  || warning "index.html tidak ditemukan."
+    systemctl is-enabled "${SERVICE_NAME}" >/dev/null 2>&1 \
+        && success "Service terdaftar di systemd." || error "Service belum diaktifkan."
 }
 
 start_service() {
     info "Menjalankan service..."
-
-    if ! systemctl start "$SERVICE_NAME.service"; then
-        error "Gagal menjalankan service."
-        error "Cek log: journalctl -u $SERVICE_NAME -n 50"
-        exit 1
+    if [ "$IS_UPDATE" -eq 1 ] && systemctl is-active --quiet "$SERVICE_NAME"; then
+        systemctl restart "$SERVICE_NAME"
+    else
+        systemctl start "$SERVICE_NAME"
     fi
-
     sleep 2
-    success "Service berjalan."
-    systemctl status "$SERVICE_NAME.service" --no-pager -l
+    systemctl is-active --quiet "$SERVICE_NAME" && success "Service berjalan." || {
+        error "Service gagal berjalan. Cek log: journalctl -u ${SERVICE_NAME} -n 50"
+    }
 }
 
-show_completion() {
-    local LOCAL_IP
-    LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+cleanup() {
+    rm -rf "$BUILD_DIR"
+    success "Build directory dihapus."
+}
 
+show_summary() {
+    local local_ip
+    local_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    local action="INSTALASI"
+    [ "$IS_UPDATE" -eq 1 ] && action="UPDATE"
     echo
     echo "========================================="
-    success "INSTALASI SELESAI"
+    success "${action} SELESAI"
     echo "========================================="
     echo
-    info "Direktori  : $PROJECT_DIR"
-    info "Binary     : $PROJECT_DIR/bel-madrasah"
-    info "Service    : $SERVICE_NAME"
+    info "Direktori : ${PROJECT_DIR}"
+    info "Service   : ${SERVICE_NAME}"
+    if [ "$ENABLE_TLS" -eq 1 ]; then
+        info "Akses     : https://${DOMAIN}"
+    elif [ -n "$local_ip" ]; then
+        info "Akses     : http://${local_ip}"
+    fi
+    if [ "$IS_UPDATE" -eq 0 ]; then
+        info "Login     : admin / admin123"
+        warning "Segera ganti password setelah login pertama!"
+    fi
     echo
-    [ -n "$LOCAL_IP" ] && info "Akses web  : http://$LOCAL_IP"
-    info "Login      : admin / admin123"
-    warning "Segera ganti password setelah login pertama!"
+    echo "Perintah pengelolaan:"
+    echo "  sudo systemctl status  ${SERVICE_NAME}"
+    echo "  sudo systemctl stop    ${SERVICE_NAME}"
+    echo "  sudo systemctl start   ${SERVICE_NAME}"
+    echo "  sudo systemctl restart ${SERVICE_NAME}"
+    echo "  sudo journalctl -u ${SERVICE_NAME} -f"
     echo
-    info "Aplikasi mendukung PWA. Buka di Chrome/Edge lalu pilih 'Pasang Aplikasi'."
-    echo
-    echo "Perintah pengelolaan service:"
-    echo "  sudo systemctl status  $SERVICE_NAME"
-    echo "  sudo systemctl stop    $SERVICE_NAME"
-    echo "  sudo systemctl start   $SERVICE_NAME"
-    echo "  sudo systemctl restart $SERVICE_NAME"
-    echo "  sudo journalctl -u $SERVICE_NAME -f"
+    [ -f "${PROJECT_DIR}/uninstall.sh" ] && echo "Untuk menghapus: sudo ${PROJECT_DIR}/uninstall.sh"
     echo
 }
 
 main() {
     echo "========================================="
-    echo "Bell System Madrasah - Installer"
-    echo "ZEDLABS Teknologi Indonesia"
+    echo " Bel Madrasah - Installer"
+    echo " ZEDLABS Teknologi Indonesia"
     echo "========================================="
     echo
-
-    read -rp "Lanjutkan instalasi? [y/N]: " -n 1
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        error "Instalasi dibatalkan."
-        exit 1
-    fi
-
+    read -rp "Lanjutkan instalasi? [y/N]: " -n 1; echo
+    [[ $REPLY =~ ^[Yy]$ ]] || { info "Instalasi dibatalkan."; exit 0; }
     echo
     check_requirements
-    install_ffmpeg
-    install_curl
-    install_alsa
+    install_tools
     clone_repo
-    create_project_dir
+    prepare_dirs
     build_binary
     copy_static
     generate_pwa_icons
+    prompt_tls
     setup_nginx
-    create_systemd_service
-    setup_service
-    download_tone
+    setup_tls
+    create_service
+    copy_audio
+    copy_uninstaller
     set_permissions
-    cleanup_build
-    test_installation
+    verify_installation
     start_service
-    show_completion
+    cleanup
+    show_summary
 }
 
 main "$@"
@@ -1259,13 +1373,16 @@ main "$@"
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -1293,14 +1410,14 @@ func logMsg(msg string) {
 }
 
 func getHari() string {
-	m := map[time.Weekday]string{
+	days := map[time.Weekday]string{
 		time.Monday:    "Senin",
 		time.Tuesday:   "Selasa",
 		time.Wednesday: "Rabu",
 		time.Thursday:  "Kamis",
 		time.Friday:    "Jumat",
 	}
-	return m[time.Now().Weekday()]
+	return days[time.Now().Weekday()]
 }
 
 func stopAllProcs() {
@@ -1323,13 +1440,12 @@ func playSound(filePath string) {
 		return
 	}
 	stopAllProcs()
-	args := []string{
+	cmd := exec.Command(ffmpegPath,
 		"-hide_banner", "-loglevel", "error",
 		"-i", filePath,
-		"-filter:a", "volume=" + volume,
-		"-f", "pulse", "default",
-	}
-	cmd := exec.Command(ffmpegPath, args...)
+		"-filter:a", "volume="+volume,
+		"-f", "alsa", "default",
+	)
 	if err := cmd.Start(); err != nil {
 		logMsg("gagal memutar audio: " + err.Error())
 		return
@@ -1351,66 +1467,84 @@ func playSound(filePath string) {
 	}()
 }
 
-func runScheduler() {
+func sleepOrStop(stop <-chan struct{}, d time.Duration) bool {
+	select {
+	case <-stop:
+		return false
+	case <-time.After(d):
+		return true
+	}
+}
+
+func runScheduler(stop <-chan struct{}) {
 	logMsg("scheduler dimulai")
 	played := make(map[string]bool)
 	lastDay := ""
-
 	for {
+		select {
+		case <-stop:
+			logMsg("scheduler dihentikan")
+			return
+		default:
+		}
 		schedulerMu.Lock()
 		running := schedulerRunning
 		schedulerMu.Unlock()
-
 		if !running {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		now := time.Now()
 		hari := getHari()
-
+		if hari == "" {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
 		if hari != lastDay {
 			if lastDay != "" {
 				played = make(map[string]bool)
 			}
 			lastDay = hari
 		}
-
-		if hari == "" {
-			time.Sleep(sleepSec)
-			continue
-		}
-
 		cfg, err := loadConfig()
 		if err != nil {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		if isLibur(cfg) {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		mode := resolveMode(cfg)
 		jadwal, err := loadJadwal()
 		if err != nil {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		mj, ok := jadwal[mode]
 		if !ok {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		entries, ok := mj[hari]
 		if !ok {
-			time.Sleep(sleepSec)
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
 			continue
 		}
-
 		waktu := now.Format("15:04")
 		for _, e := range entries {
 			key := mode + "|" + hari + "|" + e.Waktu
@@ -1427,18 +1561,14 @@ func runScheduler() {
 				})
 			}
 		}
-
-		time.Sleep(sleepSec)
+		if !sleepOrStop(stop, sleepSec) {
+			return
+		}
 	}
 }
 
 func resolveFfmpeg() string {
-	candidates := []string{
-		"/usr/bin/ffmpeg",
-		"/usr/local/bin/ffmpeg",
-		"/bin/ffmpeg",
-	}
-	for _, p := range candidates {
+	for _, p := range []string{"/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/bin/ffmpeg"} {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
@@ -1455,30 +1585,52 @@ func main() {
 		log.Fatal("ffmpeg tidak ditemukan di sistem")
 	}
 	logMsg("ffmpeg: " + ffmpegPath)
-
 	for _, d := range []string{toneDir, dataDir, staticDir} {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			log.Fatalf("gagal membuat direktori %s: %s", d, err)
 		}
 	}
-
 	if err := initStorage(); err != nil {
 		log.Fatalf("gagal inisialisasi storage: %s", err)
 	}
-
 	if err := initAuth(); err != nil {
 		log.Fatalf("gagal inisialisasi auth: %s", err)
 	}
-
-	go runScheduler()
-
+	stopScheduler := make(chan struct{})
+	go runScheduler(stopScheduler)
 	mux := http.NewServeMux()
 	registerRoutes(mux)
-
-	logMsg("server berjalan di port " + port)
-	if err := http.ListenAndServe(port, mux); err != nil {
-		log.Fatalf("server error: %s", err)
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           mux,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
+	serverErr := make(chan error, 1)
+	go func() {
+		logMsg("server berjalan di port " + port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+	}()
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case err := <-serverErr:
+		log.Fatalf("server error: %s", err)
+	case sig := <-sigCh:
+		logMsg("menerima sinyal " + sig.String() + ", memulai shutdown")
+	}
+	close(stopScheduler)
+	stopAllProcs()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logMsg("gagal shutdown server: " + err.Error())
+	}
+	logMsg("server dihentikan")
 }
 
 ```
@@ -4486,6 +4638,7 @@ self.addEventListener("fetch", (event) => {
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -4499,6 +4652,7 @@ const (
 	logFile     = dataDir + "/activity.log"
 	configFile  = dataDir + "/config.json"
 	maxLogLines = 500
+	logRotateAt = maxLogLines * 2
 )
 
 type Entry struct {
@@ -4532,13 +4686,14 @@ var (
 	jadwalMu sync.RWMutex
 	configMu sync.RWMutex
 	logMu    sync.Mutex
+	logCount int
 )
 
 func defaultConfig() Config {
 	return Config{
 		Mode:          "reguler",
-		RamadhanStart: "03-01",
-		RamadhanEnd:   "03-31",
+		RamadhanStart: "2000-03-01",
+		RamadhanEnd:   "2000-03-31",
 		LiburDates:    []string{},
 	}
 }
@@ -4574,16 +4729,14 @@ func resolveMode(c Config) string {
 	if c.ManualOverride {
 		return c.Mode
 	}
-	now := time.Now()
-	today := now.Format("2006-01-02")
-	md := now.Format("01-02")
+	today := time.Now().Format("2006-01-02")
 	if c.PTSStart != "" && c.PTSEnd != "" && today >= c.PTSStart && today <= c.PTSEnd {
 		return "pts"
 	}
 	if c.PASStart != "" && c.PASEnd != "" && today >= c.PASStart && today <= c.PASEnd {
 		return "pas"
 	}
-	if c.RamadhanStart != "" && c.RamadhanEnd != "" && md >= c.RamadhanStart && md <= c.RamadhanEnd {
+	if c.RamadhanStart != "" && c.RamadhanEnd != "" && today >= c.RamadhanStart && today <= c.RamadhanEnd {
 		return "ramadhan"
 	}
 	return "reguler"
@@ -4628,15 +4781,15 @@ func saveJadwal(j ModeJadwal) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(jadwalFile, data, 0644)
+	return atomicWrite(jadwalFile, data, 0644)
 }
 
-func writeJadwalFile(j ModeJadwal) error {
-	data, err := json.MarshalIndent(j, "", "  ")
-	if err != nil {
+func atomicWrite(path string, data []byte, perm os.FileMode) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, perm); err != nil {
 		return err
 	}
-	return os.WriteFile(jadwalFile, data, 0644)
+	return os.Rename(tmp, path)
 }
 
 func initStorage() error {
@@ -4645,16 +4798,17 @@ func initStorage() error {
 			return err
 		}
 	}
+	initLogCount()
 	dj := defaultJadwal()
 	data, err := os.ReadFile(jadwalFile)
 	if err != nil {
 		logMsg("jadwal.json tidak ditemukan, membuat default")
-		return writeJadwalFile(dj)
+		return saveJadwal(dj)
 	}
 	var j ModeJadwal
 	if err := json.Unmarshal(data, &j); err != nil || j == nil {
 		logMsg("jadwal.json tidak valid, menulis ulang")
-		return writeJadwalFile(dj)
+		return saveJadwal(dj)
 	}
 	changed := false
 	for _, m := range []string{"reguler", "ramadhan", "pts", "pas"} {
@@ -4664,7 +4818,7 @@ func initStorage() error {
 		}
 	}
 	if changed {
-		return writeJadwalFile(j)
+		return saveJadwal(j)
 	}
 	return nil
 }
@@ -4688,6 +4842,58 @@ func listTones() ([]string, error) {
 	return files, nil
 }
 
+func splitLogLines(data []byte) [][]byte {
+	var lines [][]byte
+	start := 0
+	for i, b := range data {
+		if b == '\n' {
+			if line := data[start:i]; len(line) > 0 {
+				lines = append(lines, line)
+			}
+			start = i + 1
+		}
+	}
+	if start < len(data) {
+		if line := data[start:]; len(line) > 0 {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func initLogCount() {
+	logMu.Lock()
+	defer logMu.Unlock()
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		logCount = 0
+		return
+	}
+	lines := splitLogLines(data)
+	logCount = len(lines)
+	if logCount > logRotateAt {
+		rotateLogLocked(lines)
+	}
+}
+
+func rotateLogLocked(lines [][]byte) {
+	if len(lines) <= maxLogLines {
+		logCount = len(lines)
+		return
+	}
+	trimmed := lines[len(lines)-maxLogLines:]
+	var buf bytes.Buffer
+	for _, l := range trimmed {
+		buf.Write(l)
+		buf.WriteByte('\n')
+	}
+	if err := atomicWrite(logFile, buf.Bytes(), 0644); err != nil {
+		logMsg("gagal rotasi log: " + err.Error())
+		return
+	}
+	logCount = maxLogLines
+}
+
 func writeLog(entry ActivityLog) {
 	logMu.Lock()
 	defer logMu.Unlock()
@@ -4695,9 +4901,17 @@ func writeLog(entry ActivityLog) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
 	line, _ := json.Marshal(entry)
-	f.Write(append(line, '\n'))
+	_, _ = f.Write(append(line, '\n'))
+	_ = f.Close()
+	logCount++
+	if logCount > logRotateAt {
+		data, err := os.ReadFile(logFile)
+		if err != nil {
+			return
+		}
+		rotateLogLocked(splitLogLines(data))
+	}
 }
 
 func readLog() ([]ActivityLog, error) {
@@ -4710,24 +4924,11 @@ func readLog() ([]ActivityLog, error) {
 		}
 		return nil, err
 	}
+	lines := splitLogLines(data)
 	var logs []ActivityLog
-	start := 0
-	for i, b := range data {
-		if b == '\n' {
-			line := data[start:i]
-			start = i + 1
-			if len(line) == 0 {
-				continue
-			}
-			var l ActivityLog
-			if json.Unmarshal(line, &l) == nil {
-				logs = append(logs, l)
-			}
-		}
-	}
-	if start < len(data) && len(data[start:]) > 0 {
+	for _, line := range lines {
 		var l ActivityLog
-		if json.Unmarshal(data[start:], &l) == nil {
+		if json.Unmarshal(line, &l) == nil {
 			logs = append(logs, l)
 		}
 	}
@@ -4906,89 +5107,124 @@ func defaultJadwal() ModeJadwal {
 			},
 		},
 		"pts": {
-			"Senin": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Selasa": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Rabu": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Kamis": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Jumat": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "09:31", Audio: b + "/tanah-airku.mp3"},
-			},
+			"Senin":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Selasa": {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Rabu":   {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Kamis":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Jumat":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "09:31", Audio: b + "/tanah-airku.mp3"}},
 		},
 		"pas": {
-			"Senin": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Selasa": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Rabu": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Kamis": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-			},
-			"Jumat": {
-				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-				{Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"},
-				{Waktu: "09:31", Audio: b + "/tanah-airku.mp3"},
-			},
+			"Senin":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Selasa": {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Rabu":   {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Kamis":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
+			"Jumat":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "09:31", Audio: b + "/tanah-airku.mp3"}},
 		},
 	}
 }
+
+```
+---
+
+## uninstall.sh
+```bash
+#!/bin/bash
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+PROJECT_DIR="/opt/bel-madrasah"
+SERVICE_NAME="bel-madrasah"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+NGINX_CONF="/etc/nginx/sites-available/bel-madrasah"
+NGINX_ENABLED="/etc/nginx/sites-enabled/bel-madrasah"
+
+info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
+success() { echo -e "${GREEN}[OK]${NC} $1"; }
+warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+cmd_exists() { command -v "$1" >/dev/null 2>&1; }
+
+[ "$EUID" -eq 0 ] || error "Jalankan sebagai root: sudo $0"
+
+echo "========================================="
+echo " Bel Madrasah - Uninstaller"
+echo " ZEDLABS Teknologi Indonesia"
+echo "========================================="
+echo
+
+read -rp "Lanjutkan penghapusan? [y/N]: " -n 1; echo
+[[ $REPLY =~ ^[Yy]$ ]] || { info "Penghapusan dibatalkan."; exit 0; }
+
+if systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE_NAME}.service"; then
+    systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null && {
+        systemctl stop "${SERVICE_NAME}"
+        success "Service dihentikan."
+    }
+    systemctl is-enabled --quiet "${SERVICE_NAME}" 2>/dev/null && {
+        systemctl disable "${SERVICE_NAME}"
+        success "Service dinonaktifkan dari autostart."
+    }
+else
+    warning "Service ${SERVICE_NAME} tidak terdaftar di systemd."
+fi
+
+if [ -f "$SERVICE_FILE" ]; then
+    rm -f "$SERVICE_FILE"
+    systemctl daemon-reload
+    success "Unit file systemd dihapus."
+fi
+
+[ -L "$NGINX_ENABLED" ] || [ -f "$NGINX_ENABLED" ] && {
+    rm -f "$NGINX_ENABLED"
+    success "Site nginx dinonaktifkan."
+}
+
+if [ -f "$NGINX_CONF" ]; then
+    read -rp "Hapus konfigurasi nginx? [y/N]: " -n 1; echo
+    [[ $REPLY =~ ^[Yy]$ ]] && { rm -f "$NGINX_CONF"; success "Konfigurasi nginx dihapus."; }
+fi
+
+if cmd_exists nginx && nginx -t 2>/dev/null; then
+    systemctl reload nginx 2>/dev/null || true
+    success "nginx direload."
+fi
+
+if [ ! -d "$PROJECT_DIR" ]; then
+    success "Direktori ${PROJECT_DIR} sudah tidak ada."
+    echo; success "PENGHAPUSAN SELESAI"; exit 0
+fi
+
+echo
+warning "Direktori: ${PROJECT_DIR}"
+warning "Berisi binary, jadwal, log, audio, dan data login."
+echo
+read -rp "Hapus SELURUH direktori termasuk data? [y/N]: " -n 1; echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    rm -rf "$PROJECT_DIR"
+    success "Direktori ${PROJECT_DIR} dihapus sepenuhnya."
+else
+    read -rp "Hapus hanya binary dan static (data & audio tetap)? [y/N]: " -n 1; echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm -f "${PROJECT_DIR}/bel-madrasah"
+        rm -rf "${PROJECT_DIR}/static"
+        success "Binary dan file static dihapus."
+        info "Data tersimpan di:"
+        info "  ${PROJECT_DIR}/data"
+        info "  ${PROJECT_DIR}/tone"
+    else
+        info "Tidak ada file yang dihapus."
+    fi
+fi
+
+echo
+echo "========================================="
+success "PENGHAPUSAN SELESAI"
+echo "========================================="
 
 ```
 ---
