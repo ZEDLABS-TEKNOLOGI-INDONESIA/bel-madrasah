@@ -33,8 +33,8 @@ check_requirements() {
     fi
 
     if ! cmd_exists go; then
-        error "Go tidak ditemukan. Install dari https://go.dev/dl/"
-        exit 1
+        warning "Go tidak ditemukan. Menginstall otomatis..."
+        install_go
     fi
     success "Go: $(go version)"
 
@@ -68,7 +68,34 @@ install_package() {
     fi
 }
 
-install_ffmpeg() {
+install_go() {
+    local GO_VERSION="1.24.4"
+    local GO_ARCH="amd64"
+    local GO_TAR="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+    local GO_URL="https://go.dev/dl/${GO_TAR}"
+
+    info "Mengunduh Go ${GO_VERSION}..."
+    curl -fL --progress-bar -o "/tmp/${GO_TAR}" "${GO_URL}"
+    if [ $? -ne 0 ]; then
+        error "Gagal mengunduh Go."
+        exit 1
+    fi
+
+    info "Menginstall Go ke /usr/local/go..."
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf "/tmp/${GO_TAR}"
+    rm -f "/tmp/${GO_TAR}"
+
+    export PATH=$PATH:/usr/local/go/bin
+
+    if ! cmd_exists go; then
+        error "Gagal menginstall Go."
+        exit 1
+    fi
+    success "Go berhasil diinstall: $(go version)"
+}
+
+
     info "Memeriksa ffmpeg..."
     if cmd_exists ffmpeg; then
         success "ffmpeg sudah terinstall."
