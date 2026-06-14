@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bel Madrasah - MTsN 1 Pandeglang</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh
+    }
+
+    header {
+      background: #1a56db;
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px #0003
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700
+    }
+
+    header small {
+      font-size: .75rem;
+      opacity: .8;
+      display: block
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .85rem
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #f87171
+    }
+
+    .dot.on {
+      background: #34d399
+    }
+
+    .toggle-btn {
+      background: #fff2;
+      border: 1px solid #fff4;
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .82rem;
+      transition: background .2s
+    }
+
+    .toggle-btn:hover {
+      background: #fff3
+    }
+
+    nav {
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      gap: 0;
+      overflow-x: auto
+    }
+
+    nav button {
+      padding: 12px 20px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: .9rem;
+      color: #64748b;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      transition: all .2s
+    }
+
+    nav button.active {
+      color: #1a56db;
+      border-bottom-color: #1a56db;
+      font-weight: 600
+    }
+
+    nav button:hover:not(.active) {
+      background: #f8fafc;
+      color: #1a56db
+    }
+
+    main {
+      max-width: 960px;
+      margin: 24px auto;
+      padding: 0 16px
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px #0001;
+      padding: 20px;
+      margin-bottom: 20px
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1a202c;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .section {
+      display: none
+    }
+
+    .section.active {
+      display: block
+    }
+
+    /* Jadwal */
+    .hari-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px
+    }
+
+    .hari-tab {
+      padding: 7px 16px;
+      border-radius: 20px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      cursor: pointer;
+      font-size: .85rem;
+      color: #475569;
+      transition: all .15s
+    }
+
+    .hari-tab.active {
+      background: #1a56db;
+      color: #fff;
+      border-color: #1a56db
+    }
+
+    .hari-tab:hover:not(.active) {
+      background: #e0eaff;
+      border-color: #93c5fd
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem
+    }
+
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      background: #f8fafc;
+      color: #64748b;
+      font-weight: 600;
+      border-bottom: 2px solid #e2e8f0
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle
+    }
+
+    tr:last-child td {
+      border-bottom: none
+    }
+
+    tr:hover td {
+      background: #fafbff
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 13px;
+      border-radius: 7px;
+      border: none;
+      cursor: pointer;
+      font-size: .82rem;
+      font-weight: 500;
+      transition: all .15s
+    }
+
+    .btn-primary {
+      background: #1a56db;
+      color: #fff
+    }
+
+    .btn-primary:hover {
+      background: #1e40af
+    }
+
+    .btn-danger {
+      background: #fee2e2;
+      color: #dc2626
+    }
+
+    .btn-danger:hover {
+      background: #fecaca
+    }
+
+    .btn-success {
+      background: #dcfce7;
+      color: #16a34a
+    }
+
+    .btn-success:hover {
+      background: #bbf7d0
+    }
+
+    .btn-ghost {
+      background: #f1f5f9;
+      color: #475569
+    }
+
+    .btn-ghost:hover {
+      background: #e2e8f0
+    }
+
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: .78rem
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 6px
+    }
+
+    .add-hari {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap
+    }
+
+    .add-hari input {
+      flex: 1;
+      min-width: 140px;
+      padding: 8px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 7px;
+      font-size: .88rem;
+      outline: none
+    }
+
+    .add-hari input:focus {
+      border-color: #1a56db
+    }
+
+    /* Modal */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0006;
+      z-index: 100;
+      align-items: center;
+      justify-content: center
+    }
+
+    .overlay.open {
+      display: flex
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 14px;
+      padding: 24px;
+      width: min(420px, 92vw);
+      box-shadow: 0 8px 32px #0003
+    }
+
+    .modal h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 18px
+    }
+
+    .form-group {
+      margin-bottom: 14px
+    }
+
+    label {
+      display: block;
+      font-size: .83rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 5px
+    }
+
+    input[type=time],
+    select,
+    input[type=text],
+    input[type=password] {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 7px;
+      font-size: .9rem;
+      outline: none;
+      transition: border .15s
+    }
+
+    input[type=time]:focus,
+    select:focus,
+    input[type=text]:focus,
+    input[type=password]:focus {
+      border-color: #1a56db
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 18px
+    }
+
+    /* Tones */
+    .tone-grid {
+      display: grid;
+      gap: 10px
+    }
+
+    .tone-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 9px;
+      background: #fafafa;
+      transition: background .15s
+    }
+
+    .tone-item:hover {
+      background: #f0f6ff
+    }
+
+    .tone-name {
+      font-size: .88rem;
+      font-weight: 500;
+      color: #1a202c;
+      word-break: break-all
+    }
+
+    .tone-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0
+    }
+
+    .upload-area {
+      border: 2px dashed #93c5fd;
+      border-radius: 10px;
+      padding: 28px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      margin-bottom: 16px
+    }
+
+    .upload-area:hover,
+    .upload-area.drag {
+      background: #eff6ff;
+      border-color: #3b82f6
+    }
+
+    .upload-area p {
+      color: #64748b;
+      font-size: .88rem;
+      margin-top: 6px
+    }
+
+    #fileInput {
+      display: none
+    }
+
+    /* Settings */
+    .setting-item {
+      margin-bottom: 16px
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1a202c;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 9px;
+      font-size: .88rem;
+      z-index: 200;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all .25s;
+      pointer-events: none
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0)
+    }
+
+    .toast.error {
+      background: #dc2626
+    }
+
+    .toast.success {
+      background: #16a34a
+    }
+
+    /* empty state */
+    .empty {
+      text-align: center;
+      padding: 32px;
+      color: #94a3b8;
+      font-size: .9rem
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div>
+      <h1>Bel Madrasah Otomatis</h1>
+      <small>MTsN 1 Pandeglang</small>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="status-badge">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">Memuat...</span>
+      </div>
+      <button class="toggle-btn" id="toggleBtn" onclick="toggleService()">--</button>
+      <button class="toggle-btn" onclick="logout()">Keluar</button>
+    </div>
+  </header>
+
+  <nav>
+    <button class="active" onclick="switchTab('jadwal',this)">Jadwal</button>
+    <button onclick="switchTab('tones',this)">Audio</button>
+    <button onclick="switchTab('settings',this)">Pengaturan</button>
+  </nav>
+
+  <main>
+
+    <!-- JADWAL -->
+    <div class="section active" id="sec-jadwal">
+      <div class="card">
+        <h2>Kelola Hari</h2>
+        <div class="add-hari">
+          <input type="text" id="newHariInput" placeholder="Nama hari baru (mis: Sabtu)">
+          <button class="btn btn-primary" onclick="addHari()">+ Tambah Hari</button>
+        </div>
+        <div class="hari-tabs" id="hariTabs"></div>
+      </div>
+      <div class="card">
+        <h2 id="jadwalTitle">Pilih hari di atas</h2>
+        <div
+          style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <span id="hariInfo" style="font-size:.83rem;color:#64748b"></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-danger btn-sm" id="deleteHariBtn" onclick="deleteHari()" style="display:none">Hapus
+              Hari Ini</button>
+            <button class="btn btn-primary btn-sm" id="addEntryBtn" onclick="openAddEntry()" style="display:none">+
+              Tambah Bel</button>
+          </div>
+        </div>
+        <div id="jadwalTable">
+          <div class="empty">Pilih hari untuk melihat jadwal</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TONES -->
+    <div class="section" id="sec-tones">
+      <div class="card">
+        <h2>Upload Audio</h2>
+        <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()"
+          ondragover="e=event;e.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')"
+          ondrop="handleDrop(event)">
+          <svg width="36" height="36" fill="none" stroke="#93c5fd" stroke-width="1.5" viewBox="0 0 24 24">
+            <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
+          </svg>
+          <p>Klik atau seret file audio ke sini<br><small>Format: mp3, wav, ogg — Maks 32MB</small></p>
+        </div>
+        <input type="file" id="fileInput" accept=".mp3,.wav,.ogg" onchange="uploadFile(this.files[0])">
+      </div>
+      <div class="card">
+        <h2>Daftar Audio <span id="toneCount" style="font-weight:400;font-size:.85rem;color:#64748b"></span></h2>
+        <div class="tone-grid" id="toneList">
+          <div class="empty">Memuat...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="section" id="sec-settings">
+      <div class="card">
+        <h2>Ganti Password</h2>
+        <div class="setting-item">
+          <label>Password Lama</label>
+          <input type="password" id="oldPass" placeholder="••••••••">
+        </div>
+        <div class="setting-item">
+          <label>Password Baru</label>
+          <input type="password" id="newPass" placeholder="Minimal 6 karakter">
+        </div>
+        <div class="setting-item">
+          <label>Konfirmasi Password Baru</label>
+          <input type="password" id="confirmPass" placeholder="Ulangi password baru">
+        </div>
+        <button class="btn btn-primary" onclick="changePassword()">Simpan Password</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modal Entry -->
+  <div class="overlay" id="entryModal">
+    <div class="modal">
+      <h3 id="modalTitle">Tambah Bel</h3>
+      <div class="form-group">
+        <label>Waktu</label>
+        <input type="time" id="entryWaktu">
+      </div>
+      <div class="form-group">
+        <label>File Audio</label>
+        <select id="entryAudio"></select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">Batal</button>
+        <button class="btn btn-primary" id="modalSaveBtn" onclick="saveEntry()">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let currentHari = null;
+    let editIndex = -1;
+    let allTones = [];
+    let jadwalData = {};
+
+    // ── UTILS ──
+    function toast(msg, type = 'success') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `toast show ${type}`;
+      setTimeout(() => el.className = 'toast', 2800);
+    }
+
+    async function api(url, method = 'GET', body = null) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(url, opts);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Terjadi kesalahan');
+      return data;
+    }
+
+    function switchTab(id, btn) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById('sec-' + id).classList.add('active');
+      btn.classList.add('active');
+      if (id === 'tones') loadTones();
+    }
+
+    function logout() {
+      window.location.href = '/logout';
+    }
+
+    // ── SERVICE ──
+    async function loadStatus() {
+      try {
+        const d = await api('/api/service/status');
+        const dot = document.getElementById('statusDot');
+        const txt = document.getElementById('statusText');
+        const btn = document.getElementById('toggleBtn');
+        dot.className = 'dot' + (d.running ? ' on' : '');
+        txt.textContent = d.running ? 'Aktif' : 'Nonaktif';
+        btn.textContent = d.running ? 'Hentikan' : 'Aktifkan';
+      } catch (e) { }
+    }
+
+    async function toggleService() {
+      try {
+        const d = await api('/api/service/toggle', 'POST');
+        toast(d.message);
+        loadStatus();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ── JADWAL ──
+    async function loadJadwal() {
+      try {
+        const d = await api('/api/jadwal');
+        jadwalData = d.jadwal || {};
+        renderHariTabs(Object.keys(jadwalData));
+        if (currentHari && jadwalData[currentHari]) {
+          renderJadwalTable(currentHari);
+        } else {
+          currentHari = null;
+          document.getElementById('jadwalTitle').textContent = 'Pilih hari di atas';
+          document.getElementById('jadwalTable').innerHTML = '<div class="empty">Pilih hari untuk melihat jadwal</div>';
+          document.getElementById('addEntryBtn').style.display = 'none';
+          document.getElementById('deleteHariBtn').style.display = 'none';
+        }
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function renderHariTabs(days) {
+      const container = document.getElementById('hariTabs');
+      container.innerHTML = '';
+      if (!days.length) {
+        container.innerHTML = '<span style="color:#94a3b8;font-size:.85rem">Belum ada hari. Tambahkan di atas.</span>';
+        return;
+      }
+      days.forEach(h => {
+        const btn = document.createElement('button');
+        btn.className = 'hari-tab' + (h === currentHari ? ' active' : '');
+        btn.textContent = h;
+        btn.onclick = () => selectHari(h);
+        container.appendChild(btn);
+      });
+    }
+
+    function selectHari(hari) {
+      currentHari = hari;
+      document.querySelectorAll('.hari-tab').forEach(b => b.classList.toggle('active', b.textContent === hari));
+      renderJadwalTable(hari);
+      document.getElementById('addEntryBtn').style.display = '';
+      document.getElementById('deleteHariBtn').style.display = '';
+    }
+
+    function renderJadwalTable(hari) {
+      document.getElementById('jadwalTitle').textContent = 'Jadwal ' + hari;
+      const entries = jadwalData[hari] || [];
+      document.getElementById('hariInfo').textContent = entries.length + ' entri';
+      if (!entries.length) {
+        document.getElementById('jadwalTable').innerHTML = '<div class="empty">Belum ada jadwal untuk hari ini</div>';
+        return;
+      }
+      let html = '<table><thead><tr><th>#</th><th>Waktu</th><th>File Audio</th><th>Aksi</th></tr></thead><tbody>';
+      entries.forEach((e, i) => {
+        const fname = e.audio.split('/').pop();
+        html += `<tr>
+      <td style="color:#94a3b8">${i + 1}</td>
+      <td><strong>${e.waktu}</strong></td>
+      <td>${fname}</td>
+      <td><div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openEditEntry(${i})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEntry(${i})">Hapus</button>
+      </div></td>
+    </tr>`;
+      });
+      html += '</tbody></table>';
+      document.getElementById('jadwalTable').innerHTML = html;
+    }
+
+    async function addHari() {
+      const input = document.getElementById('newHariInput');
+      const hari = input.value.trim();
+      if (!hari) { toast('Nama hari tidak boleh kosong', 'error'); return; }
+      try {
+        await api('/api/jadwal/hari', 'POST', { action: 'add', hari });
+        toast('Hari ' + hari + ' ditambahkan');
+        input.value = '';
+        await loadJadwal();
+        selectHari(hari);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function deleteHari() {
+      if (!currentHari) return;
+      if (!confirm(`Hapus hari ${currentHari} beserta seluruh jadwalnya?`)) return;
+      try {
+        await api('/api/jadwal/hari', 'POST', { action: 'delete', hari: currentHari });
+        toast('Hari ' + currentHari + ' dihapus');
+        currentHari = null;
+        await loadJadwal();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function openAddEntry() {
+      editIndex = -1;
+      document.getElementById('modalTitle').textContent = 'Tambah Bel - ' + currentHari;
+      document.getElementById('entryWaktu').value = '';
+      populateAudioSelect('');
+      document.getElementById('entryModal').classList.add('open');
+    }
+
+    function openEditEntry(idx) {
+      editIndex = idx;
+      const entry = jadwalData[currentHari][idx];
+      document.getElementById('modalTitle').textContent = 'Edit Bel - ' + currentHari;
+      document.getElementById('entryWaktu').value = entry.waktu;
+      populateAudioSelect(entry.audio);
+      document.getElementById('entryModal').classList.add('open');
+    }
+
+    function populateAudioSelect(current) {
+      const sel = document.getElementById('entryAudio');
+      sel.innerHTML = allTones.map(t => {
+        const fullPath = '/opt/bel-madrasah/tone/' + t;
+        return `<option value="${fullPath}" ${current === fullPath ? 'selected' : ''}>${t}</option>`;
+      }).join('');
+    }
+
+    function closeModal() {
+      document.getElementById('entryModal').classList.remove('open');
+    }
+
+    async function saveEntry() {
+      const waktu = document.getElementById('entryWaktu').value;
+      const audio = document.getElementById('entryAudio').value;
+      if (!waktu) { toast('Waktu harus diisi', 'error'); return; }
+      if (!audio) { toast('Pilih file audio', 'error'); return; }
+      const action = editIndex === -1 ? 'add' : 'edit';
+      try {
+        await api('/api/jadwal/entry', 'POST', { action, hari: currentHari, index: editIndex, entry: { waktu, audio } });
+        toast(action === 'add' ? 'Bel ditambahkan' : 'Bel diperbarui');
+        closeModal();
+        await loadJadwal();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function deleteEntry(idx) {
+      if (!confirm('Hapus entri ini?')) return;
+      try {
+        await api('/api/jadwal/entry', 'POST', { action: 'delete', hari: currentHari, index: idx, entry: {} });
+        toast('Entri dihapus');
+        await loadJadwal();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ── TONES ──
+    async function loadTones() {
+      try {
+        const d = await api('/api/tones');
+        allTones = d.tones || [];
+        const count = document.getElementById('toneCount');
+        count.textContent = `(${allTones.length} file)`;
+        const list = document.getElementById('toneList');
+        if (!allTones.length) {
+          list.innerHTML = '<div class="empty">Belum ada file audio</div>';
+          return;
+        }
+        list.innerHTML = allTones.map(f => `
+      <div class="tone-item">
+        <span class="tone-name">${f}</span>
+        <div class="tone-actions">
+          <button class="btn btn-success btn-sm" onclick="previewTone('${f}')">▶ Test</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteTone('${f}')">Hapus</button>
+        </div>
+      </div>`).join('');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function uploadFile(file) {
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        toast('Mengupload ' + file.name + '...');
+        const res = await fetch('/api/tones/upload', { method: 'POST', body: fd });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error);
+        toast(d.message);
+        document.getElementById('fileInput').value = '';
+        loadTones();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('uploadArea').classList.remove('drag');
+      const file = e.dataTransfer.files[0];
+      if (file) uploadFile(file);
+    }
+
+    async function previewTone(filename) {
+      try {
+        await api('/api/tones/preview', 'POST', { filename });
+        toast('Memutar ' + filename);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function deleteTone(filename) {
+      if (!confirm(`Hapus file ${filename}?`)) return;
+      try {
+        await api('/api/tones/delete', 'POST', { filename });
+        toast(filename + ' dihapus');
+        loadTones();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ── SETTINGS ──
+    async function changePassword() {
+      const old = document.getElementById('oldPass').value;
+      const nw = document.getElementById('newPass').value;
+      const cf = document.getElementById('confirmPass').value;
+      if (nw !== cf) { toast('Konfirmasi password tidak cocok', 'error'); return; }
+      if (nw.length < 6) { toast('Password baru minimal 6 karakter', 'error'); return; }
+      try {
+        const d = await api('/api/change-password', 'POST', { old_password: old, new_password: nw });
+        toast(d.message);
+        ['oldPass', 'newPass', 'confirmPass'].forEach(id => document.getElementById(id).value = '');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ── INIT ──
+    window.addEventListener('click', e => {
+      if (e.target === document.getElementById('entryModal')) closeModal();
+    });
+
+    (async () => {
+      await Promise.all([loadStatus(), loadJadwal(), loadTones()]);
+      setInterval(loadStatus, 10000);
+    })();
+  </script>
+</body>
+
+</html>

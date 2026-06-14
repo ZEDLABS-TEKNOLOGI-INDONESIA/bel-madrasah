@@ -113,6 +113,8 @@ create_project_dir() {
     fi
 
     mkdir -p "$PROJECT_DIR/tone"
+    mkdir -p "$PROJECT_DIR/data"
+    mkdir -p "$PROJECT_DIR/static"
     success "Direktori proyek: $PROJECT_DIR"
 }
 
@@ -121,19 +123,18 @@ build_binary() {
 
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-    if [ ! -f "$SCRIPT_DIR/main.go" ]; then
-        error "main.go tidak ditemukan di direktori installer ($SCRIPT_DIR)."
-        exit 1
-    fi
+    # Validasi file Go yang diperlukan (jadwal.go sudah dihapus/digabung ke storage.go)
+    for f in main.go auth.go handler.go storage.go go.mod; do
+        if [ ! -f "$SCRIPT_DIR/$f" ]; then
+            error "$f tidak ditemukan di direktori installer ($SCRIPT_DIR)."
+            exit 1
+        fi
+    done
 
-    if [ ! -f "$SCRIPT_DIR/jadwal.go" ]; then
-        error "jadwal.go tidak ditemukan di direktori installer ($SCRIPT_DIR)."
-        exit 1
-    fi
-
-    if [ ! -f "$SCRIPT_DIR/go.mod" ]; then
-        info "go.mod tidak ditemukan, membuat modul baru..."
-        (cd "$SCRIPT_DIR" && go mod init bel-madrasah)
+    # Hapus jadwal.go jika masih ada (menyebabkan compile error)
+    if [ -f "$SCRIPT_DIR/jadwal.go" ]; then
+        warning "jadwal.go ditemukan dan akan dihapus (sudah digabung ke storage.go)."
+        rm -f "$SCRIPT_DIR/jadwal.go"
     fi
 
     if ! (cd "$SCRIPT_DIR" && go build -o "$PROJECT_DIR/bel-madrasah" .); then
@@ -143,6 +144,67 @@ build_binary() {
 
     chmod +x "$PROJECT_DIR/bel-madrasah"
     success "Binary berhasil dibangun: $PROJECT_DIR/bel-madrasah"
+}
+
+setup_nginx() {
+    info "Mengkonfigurasi nginx reverse proxy..."
+
+    if ! cmd_exists nginx; then
+        install_package nginx
+    fi
+
+    local NGINX_CONF="/etc/nginx/sites-available/bel-madrasah"
+    local NGINX_ENABLED="/etc/nginx/sites-enabled/bel-madrasah"
+
+    cat > "$NGINX_CONF" << 'EOF'
+server {
+    listen 80;
+    server_name _;
+
+    client_max_body_size 32M;
+
+    location / {
+        proxy_pass         http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+}
+EOF
+
+    # Aktifkan site
+    ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
+
+    # Nonaktifkan default nginx jika ada
+    if [ -f /etc/nginx/sites-enabled/default ]; then
+        rm -f /etc/nginx/sites-enabled/default
+        warning "Site default nginx dinonaktifkan."
+    fi
+
+    if nginx -t 2>/dev/null; then
+        systemctl enable nginx
+        systemctl reload nginx
+        success "nginx dikonfigurasi dan direload."
+    else
+        error "Konfigurasi nginx tidak valid. Cek manual: nginx -t"
+        exit 1
+    fi
+}
+
+copy_static() {
+    info "Menyalin file static..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    if [ -d "$SCRIPT_DIR/static" ]; then
+        cp -r "$SCRIPT_DIR/static/." "$PROJECT_DIR/static/"
+        success "File static disalin ke $PROJECT_DIR/static/"
+    else
+        warning "Direktori static tidak ditemukan, dilewati."
+    fi
 }
 
 create_systemd_service() {
@@ -159,7 +221,7 @@ Type=simple
 ExecStart=$PROJECT_DIR/bel-madrasah
 Restart=always
 RestartSec=10
-User=$RUN_USER
+User=root
 StandardOutput=journal
 StandardError=journal
 WorkingDirectory=$PROJECT_DIR
@@ -220,6 +282,15 @@ download_tone() {
     FAIL_COUNT=0
 
     for file in "${AUDIO_FILES[@]}"; do
+        # Lewati jika sudah ada di direktori lokal
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [ -f "$SCRIPT_DIR/tone/$file" ]; then
+            cp "$SCRIPT_DIR/tone/$file" "$PROJECT_DIR/tone/$file"
+            success "$file (lokal)"
+            ((SUCCESS_COUNT++))
+            continue
+        fi
+
         if curl -f -L --silent --show-error -o "$PROJECT_DIR/tone/$file" "$BASE_URL/$file"; then
             success "$file"
             ((SUCCESS_COUNT++))
@@ -232,19 +303,30 @@ download_tone() {
     echo
     info "Berhasil: $SUCCESS_COUNT | Gagal: $FAIL_COUNT"
 
-    ls -lh "$PROJECT_DIR/tone/" > "$PROJECT_DIR/audio-list.txt"
-
     if [ "$FAIL_COUNT" -gt 0 ]; then
         warning "Beberapa file gagal diunduh. Unduh manual dari:"
         warning "https://github.com/zulfikriyahya/bel-madrasah/tree/main/tone"
     fi
 }
 
+detect_audio_device() {
+    info "Mendeteksi perangkat audio ALSA..."
+    if cmd_exists aplay; then
+        echo
+        aplay -l 2>/dev/null || warning "Tidak dapat mendeteksi perangkat audio."
+        echo
+        warning "Pastikan nilai alsaDev di main.go sesuai dengan perangkat audio Anda."
+        warning "Default saat ini: hw:1,0"
+    fi
+}
+
 set_permissions() {
     info "Mengatur izin file..."
-    chown -R "$RUN_USER":"$RUN_USER" "$PROJECT_DIR"
+    chown -R root:root "$PROJECT_DIR"
     chmod 755 "$PROJECT_DIR"
     chmod 755 "$PROJECT_DIR/tone"
+    chmod 755 "$PROJECT_DIR/data"
+    chmod 755 "$PROJECT_DIR/static"
     chmod 755 "$PROJECT_DIR/bel-madrasah"
     chmod 644 "$PROJECT_DIR/tone/"*.mp3 2>/dev/null || true
     success "Izin file diatur."
@@ -259,6 +341,12 @@ test_installation() {
     fi
     success "Binary ditemukan."
 
+    if [ ! -f "$PROJECT_DIR/static/index.html" ]; then
+        warning "index.html tidak ditemukan di $PROJECT_DIR/static/."
+    else
+        success "File static ditemukan."
+    fi
+
     if ! systemctl is-enabled "$SERVICE_NAME.service" >/dev/null 2>&1; then
         error "Service belum diaktifkan."
         exit 1
@@ -271,6 +359,7 @@ start_service() {
 
     if ! systemctl start "$SERVICE_NAME.service"; then
         error "Gagal menjalankan service."
+        error "Cek log: journalctl -u $SERVICE_NAME -n 50"
         exit 1
     fi
 
@@ -280,6 +369,9 @@ start_service() {
 }
 
 show_completion() {
+    # Dapatkan IP lokal
+    LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+
     echo
     echo "========================================="
     success "INSTALASI SELESAI"
@@ -288,7 +380,12 @@ show_completion() {
     info "Direktori  : $PROJECT_DIR"
     info "Binary     : $PROJECT_DIR/bel-madrasah"
     info "Service    : $SERVICE_NAME"
-    info "User       : $RUN_USER"
+    echo
+    if [ -n "$LOCAL_IP" ]; then
+        info "Akses web  : http://$LOCAL_IP"
+    fi
+    info "Login      : admin / admin123"
+    warning "Segera ganti password setelah login pertama!"
     echo
     echo "Perintah pengelolaan service:"
     echo "  sudo systemctl status  $SERVICE_NAME"
@@ -318,8 +415,11 @@ main() {
     install_ffmpeg
     install_curl
     install_alsa
+    detect_audio_device
     create_project_dir
     build_binary
+    copy_static
+    setup_nginx
     create_systemd_service
     setup_service
     download_tone
