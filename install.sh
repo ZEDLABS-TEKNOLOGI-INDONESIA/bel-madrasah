@@ -117,225 +117,26 @@ create_project_dir() {
     success "Direktori proyek: $PROJECT_DIR"
 }
 
-create_main_py() {
-    info "Membuat main.py..."
+copy_python_files() {
+    info "Menyalin file Python..."
 
-    cat > "$PROJECT_DIR/main.py" << 'PYEOF'
-import time
-import subprocess
-import os
-import sys
-from datetime import datetime
-from jadwal import JADWAL
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-VOLUME = "0.85"
-FFMPEG_BIN = "/usr/bin/ffmpeg"
+    if [ ! -f "$SCRIPT_DIR/main.py" ]; then
+        error "main.py tidak ditemukan di direktori installer ($SCRIPT_DIR)."
+        exit 1
+    fi
 
-active_processes = []
+    if [ ! -f "$SCRIPT_DIR/jadwal.py" ]; then
+        error "jadwal.py tidak ditemukan di direktori installer ($SCRIPT_DIR)."
+        exit 1
+    fi
 
-
-def expand_path(path):
-    return os.path.expanduser(path)
-
-
-def cleanup_processes():
-    global active_processes
-    active_processes = [p for p in active_processes if p.poll() is None]
-
-
-def play_sound(file_path):
-    full_path = expand_path(file_path)
-
-    if not os.path.isfile(full_path):
-        log(f"File tidak ditemukan: {full_path}")
-        return
-
-    cleanup_processes()
-
-    proc = subprocess.Popen(
-        [
-            FFMPEG_BIN,
-            "-hide_banner",
-            "-loglevel", "error",
-            "-i", full_path,
-            "-filter:a", f"volume={VOLUME}",
-            "-f", "alsa",
-            "hw:1,0"
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-    active_processes.append(proc)
-
-
-def get_hari():
-    hari_map = {
-        0: "Senin",
-        1: "Selasa",
-        2: "Rabu",
-        3: "Kamis",
-        4: "Jumat"
-    }
-    return hari_map.get(datetime.today().weekday(), None)
-
-
-def log(message):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] {message}", flush=True)
-
-
-def main():
-    if not os.path.isfile(FFMPEG_BIN):
-        log(f"ffmpeg tidak ditemukan di {FFMPEG_BIN}. Pastikan ffmpeg terinstall.")
-        sys.exit(1)
-
-    log("Sistem bel madrasah dimulai.")
-
-    sudah_diputar = set()
-    hari_sekarang = None
-
-    while True:
-        now = datetime.now()
-        hari = get_hari()
-
-        if hari != hari_sekarang:
-            if hari_sekarang is not None:
-                sudah_diputar.clear()
-                log("Cache jadwal direset untuk hari baru.")
-            hari_sekarang = hari
-
-        if hari and hari in JADWAL:
-            waktu_sekarang = now.strftime("%H:%M")
-
-            for jadwal_waktu, file_audio in JADWAL[hari]:
-                key = f"{hari}-{jadwal_waktu}"
-
-                if waktu_sekarang == jadwal_waktu and key not in sudah_diputar:
-                    log(f"Memutar: {os.path.basename(file_audio)} [{jadwal_waktu}]")
-                    play_sound(file_audio)
-                    sudah_diputar.add(key)
-
-        time.sleep(20)
-
-
-if __name__ == "__main__":
-    main()
-PYEOF
+    cp "$SCRIPT_DIR/main.py" "$PROJECT_DIR/main.py"
+    cp "$SCRIPT_DIR/jadwal.py" "$PROJECT_DIR/jadwal.py"
 
     chmod +x "$PROJECT_DIR/main.py"
-    success "main.py dibuat."
-}
-
-create_jadwal_py() {
-    info "Membuat jadwal.py..."
-
-    cat > "$PROJECT_DIR/jadwal.py" << 'PYEOF'
-BASE = "/opt/bel-madrasah/tone"
-
-JADWAL = {
-    "Senin": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
-        ("07:00", f"{BASE}/upacara.mp3"),
-        ("08:10", f"{BASE}/pelajaran-2.mp3"),
-        ("08:50", f"{BASE}/pelajaran-3.mp3"),
-        ("09:30", f"{BASE}/pelajaran-4.mp3"),
-        ("10:00", f"{BASE}/indonesia-raya.mp3"),
-        ("10:10", f"{BASE}/istirahat-1.mp3"),
-        ("10:20", f"{BASE}/kebersihan.mp3"),
-        ("10:30", f"{BASE}/pelajaran-5.mp3"),
-        ("11:10", f"{BASE}/pelajaran-6.mp3"),
-        ("11:50", f"{BASE}/istirahat-2.mp3"),
-        ("12:30", f"{BASE}/kebersihan.mp3"),
-        ("12:40", f"{BASE}/pelajaran-7.mp3"),
-        ("13:20", f"{BASE}/pelajaran-8.mp3"),
-        ("14:00", f"{BASE}/pelajaran-9.mp3"),
-        ("14:40", f"{BASE}/pelajaran-10.mp3"),
-        ("15:20", f"{BASE}/pelajaran-selesai.mp3"),
-        ("15:21", f"{BASE}/tanah-airku.mp3"),
-        ("16:30", f"{BASE}/hymne-madrasah.mp3"),
-    ],
-    "Selasa": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
-        ("07:30", f"{BASE}/pelajaran-1.mp3"),
-        ("08:10", f"{BASE}/pelajaran-2.mp3"),
-        ("08:50", f"{BASE}/pelajaran-3.mp3"),
-        ("09:30", f"{BASE}/pelajaran-4.mp3"),
-        ("10:10", f"{BASE}/istirahat-1.mp3"),
-        ("10:20", f"{BASE}/kebersihan.mp3"),
-        ("10:30", f"{BASE}/pelajaran-5.mp3"),
-        ("11:10", f"{BASE}/pelajaran-6.mp3"),
-        ("11:50", f"{BASE}/istirahat-2.mp3"),
-        ("12:30", f"{BASE}/kebersihan.mp3"),
-        ("12:40", f"{BASE}/pelajaran-7.mp3"),
-        ("13:20", f"{BASE}/pelajaran-8.mp3"),
-        ("14:00", f"{BASE}/pelajaran-9.mp3"),
-        ("14:40", f"{BASE}/pelajaran-10.mp3"),
-        ("15:20", f"{BASE}/pelajaran-selesai.mp3"),
-        ("15:21", f"{BASE}/tanah-airku.mp3"),
-        ("16:30", f"{BASE}/hymne-madrasah.mp3"),
-    ],
-    "Rabu": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
-        ("07:30", f"{BASE}/pelajaran-1.mp3"),
-        ("08:10", f"{BASE}/pelajaran-2.mp3"),
-        ("08:50", f"{BASE}/pelajaran-3.mp3"),
-        ("09:30", f"{BASE}/pelajaran-4.mp3"),
-        ("10:10", f"{BASE}/istirahat-1.mp3"),
-        ("10:20", f"{BASE}/kebersihan.mp3"),
-        ("10:30", f"{BASE}/pelajaran-5.mp3"),
-        ("11:10", f"{BASE}/pelajaran-6.mp3"),
-        ("11:50", f"{BASE}/istirahat-2.mp3"),
-        ("12:30", f"{BASE}/kebersihan.mp3"),
-        ("12:40", f"{BASE}/pelajaran-7.mp3"),
-        ("13:20", f"{BASE}/pelajaran-8.mp3"),
-        ("14:00", f"{BASE}/pelajaran-9.mp3"),
-        ("14:40", f"{BASE}/pelajaran-10.mp3"),
-        ("15:20", f"{BASE}/pelajaran-selesai.mp3"),
-        ("15:21", f"{BASE}/tanah-airku.mp3"),
-        ("16:30", f"{BASE}/hymne-madrasah.mp3"),
-    ],
-    "Kamis": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
-        ("07:00", f"{BASE}/literasi.mp3"),
-        ("08:10", f"{BASE}/pelajaran-2.mp3"),
-        ("08:50", f"{BASE}/pelajaran-3.mp3"),
-        ("09:30", f"{BASE}/pelajaran-4.mp3"),
-        ("10:00", f"{BASE}/indonesia-raya.mp3"),
-        ("10:10", f"{BASE}/istirahat-1.mp3"),
-        ("10:20", f"{BASE}/kebersihan.mp3"),
-        ("10:30", f"{BASE}/pelajaran-5.mp3"),
-        ("11:10", f"{BASE}/pelajaran-6.mp3"),
-        ("11:50", f"{BASE}/istirahat-2.mp3"),
-        ("12:30", f"{BASE}/kebersihan.mp3"),
-        ("12:40", f"{BASE}/pelajaran-7.mp3"),
-        ("13:20", f"{BASE}/pelajaran-8.mp3"),
-        ("14:00", f"{BASE}/pelajaran-9.mp3"),
-        ("14:40", f"{BASE}/pelajaran-10.mp3"),
-        ("15:20", f"{BASE}/pelajaran-selesai.mp3"),
-        ("15:21", f"{BASE}/tanah-airku.mp3"),
-        ("16:30", f"{BASE}/hymne-madrasah.mp3"),
-    ],
-    "Jumat": [
-        ("06:50", f"{BASE}/mars-madrasah.mp3"),
-        ("07:00", f"{BASE}/rohani.mp3"),
-        ("08:10", f"{BASE}/pelajaran-3.mp3"),
-        ("08:50", f"{BASE}/pelajaran-4.mp3"),
-        ("09:30", f"{BASE}/istirahat-1.mp3"),
-        ("09:40", f"{BASE}/kebersihan.mp3"),
-        ("10:10", f"{BASE}/pelajaran-5.mp3"),
-        ("10:40", f"{BASE}/pelajaran-6.mp3"),
-        ("11:20", f"{BASE}/istirahat-2.mp3"),
-        ("12:50", f"{BASE}/pelajaran-7.mp3"),
-        ("13:30", f"{BASE}/pelajaran-8.mp3"),
-        ("14:10", f"{BASE}/akhir-pekan.mp3"),
-        ("14:11", f"{BASE}/tanah-airku.mp3"),
-        ("14:12", f"{BASE}/pramuka.mp3"),
-        ("16:00", f"{BASE}/hymne-madrasah.mp3"),
-    ],
-}
-PYEOF
-
-    success "jadwal.py dibuat."
+    success "main.py dan jadwal.py berhasil disalin."
 }
 
 create_systemd_service() {
@@ -512,8 +313,7 @@ main() {
     install_curl
     install_alsa
     create_project_dir
-    create_main_py
-    create_jadwal_py
+    copy_python_files
     create_systemd_service
     setup_service
     download_tone
