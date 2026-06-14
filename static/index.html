@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Bel Madrasah</title>
   <meta name="description" content="Sistem bel otomatis MTsN 1 Pandeglang">
-  <meta name="theme-color" content="#1c0f04">
+  <meta name="theme-color" content="#1a0a00">
   <meta name="color-scheme" content="light">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" href="/static/icons/icon-192.png">
@@ -25,170 +25,175 @@
 
   <div class="splash" id="splash">
     <div class="splash-inner">
-      <div class="splash-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+      <div class="splash-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
       </div>
-      <div class="splash-label">Bel Madrasah</div>
-      <div class="splash-ring"></div>
+      <span class="splash-label">Bel Madrasah</span>
+      <div class="splash-spinner"></div>
     </div>
   </div>
 
   <div class="offline-bar" id="offlineBar">Tidak ada koneksi ke server</div>
 
-  <header>
-    <div class="brand">
-      <div class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
       </div>
-      <div>
-        <span class="brand-name">Bel Madrasah</span>
-        <span class="brand-sub">MTsN 1 Pandeglang</span>
+      <div class="topbar-title">
+        <span class="topbar-name">Bel Madrasah</span>
+        <span class="topbar-sub">MTsN 1 Pandeglang</span>
       </div>
     </div>
-    <div class="header-right">
-      <div class="status-group">
-        <span class="badge badge-mode reguler" id="modeBadge">Reguler</span>
-        <span class="badge badge-libur" id="liburBadge" style="display:none">Libur</span>
+    <div class="topbar-right">
+      <div class="status-cluster">
+        <span class="mode-chip" id="modeChip">Reguler</span>
+        <span class="libur-chip" id="liburChip">Libur</span>
         <div class="status-pill">
-          <span class="dot" id="statusDot"></span>
-          <span id="statusText">—</span>
+          <span class="status-dot" id="statusDot"></span>
+          <span class="status-text" id="statusText">—</span>
         </div>
       </div>
-      <button class="hbtn hbtn-primary" id="toggleBtn">—</button>
-      <button class="hbtn" id="logoutBtn">Keluar</button>
+      <button class="top-btn top-btn-accent" id="toggleBtn">—</button>
+      <button class="top-btn" id="logoutBtn">Keluar</button>
     </div>
   </header>
 
-  <div class="app-body">
+  <div class="layout">
+
     <aside class="sidebar">
-      <button class="nav-btn active" data-tab="jadwal">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-          <rect x="3" y="4" width="18" height="18" rx="2" />
-          <path d="M16 2v4M8 2v4M3 10h18" />
-        </svg>
-        Jadwal
-      </button>
-      <button class="nav-btn" data-tab="mode">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
-        </svg>
-        Mode Bel
-      </button>
-      <button class="nav-btn" data-tab="libur">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-          <rect x="3" y="4" width="18" height="18" rx="2" />
-          <path d="M16 2v4M8 2v4M3 10h18" />
-          <path d="M9 16l2 2 4-4" />
-        </svg>
-        Hari Libur
-      </button>
-      <button class="nav-btn" data-tab="log">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-          <polyline points="10 9 9 9 8 9" />
-        </svg>
-        Log
-      </button>
-      <button class="nav-btn" data-tab="audio">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-          <path d="M9 18V5l12-2v13" />
-          <circle cx="6" cy="18" r="3" />
-          <circle cx="18" cy="16" r="3" />
-        </svg>
-        Audio
-      </button>
-      <button class="nav-btn" data-tab="settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-          <circle cx="12" cy="12" r="3" />
-          <path
-            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-        Pengaturan
-      </button>
+      <nav class="sidebar-nav">
+        <button class="sidenav active" data-tab="jadwal">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18" />
+          </svg>
+          <span>Jadwal</span>
+        </button>
+        <button class="sidenav" data-tab="mode">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+          </svg>
+          <span>Mode Bel</span>
+        </button>
+        <button class="sidenav" data-tab="libur">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18" />
+            <path d="M9 16l2 2 4-4" />
+          </svg>
+          <span>Hari Libur</span>
+        </button>
+        <button class="sidenav" data-tab="log">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
+          <span>Log</span>
+        </button>
+        <button class="sidenav" data-tab="audio">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+          <span>Audio</span>
+        </button>
+        <button class="sidenav" data-tab="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          <span>Pengaturan</span>
+        </button>
+      </nav>
     </aside>
 
-    <main>
+    <main class="main-content">
 
-      <div class="section active" id="sec-jadwal">
-        <div class="page-title">Jadwal Bel</div>
+      <section class="page active" id="page-jadwal">
+        <h2 class="page-title">Jadwal Bel</h2>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Mode Pembelajaran</div>
               <div class="card-desc">Pilih mode untuk melihat dan mengelola jadwal</div>
             </div>
           </div>
-          <div class="mode-tabs">
-            <button class="mtab active reguler" data-mode="reguler">Reguler</button>
-            <button class="mtab ramadhan" data-mode="ramadhan">Ramadhan</button>
-            <button class="mtab pts" data-mode="pts">PTS</button>
-            <button class="mtab pas" data-mode="pas">PAS</button>
+          <div class="tab-strip" id="modeTabStrip">
+            <button class="mode-tab active" data-mode="reguler">Reguler</button>
+            <button class="mode-tab" data-mode="ramadhan">Ramadhan</button>
+            <button class="mode-tab" data-mode="pts">PTS</button>
+            <button class="mode-tab" data-mode="pas">PAS</button>
           </div>
-          <div class="row-form">
-            <div class="fg fg-grow">
+          <div class="add-row">
+            <div class="field-group">
               <label>Tambah Hari</label>
               <input type="text" id="newHariInput" placeholder="Contoh: Sabtu">
             </div>
-            <button class="btn primary" id="addHariBtn">Tambah Hari</button>
+            <button class="btn btn-primary" id="addHariBtn">Tambah</button>
           </div>
-          <div class="hari-tabs" id="hariTabs"></div>
+          <div class="hari-strip" id="hariStrip"></div>
         </div>
+
         <div class="card" id="jadwalCard">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title" id="jadwalTitle">Pilih hari</div>
-              <div class="card-desc" id="hariInfo">Pilih hari dari tab di atas</div>
+              <div class="card-desc" id="jadwalDesc">Pilih hari dari tab di atas</div>
             </div>
-            <div class="btn-row" id="jadwalActions" style="display:none">
-              <button class="btn ghost sm" id="deleteHariBtn">Hapus Hari</button>
-              <button class="btn primary sm" id="addEntryBtn">Tambah Bel</button>
+            <div class="btn-group" id="jadwalActions" style="display:none">
+              <button class="btn btn-ghost btn-sm" id="deleteHariBtn">Hapus Hari</button>
+              <button class="btn btn-primary btn-sm" id="addEntryBtn">Tambah Bel</button>
             </div>
           </div>
-          <div id="jadwalTable">
-            <div class="empty">Pilih hari untuk melihat jadwal bel</div>
+          <div id="jadwalBody">
+            <div class="empty-state">Pilih hari untuk melihat jadwal bel</div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="section" id="sec-mode">
-        <div class="page-title">Mode Bel</div>
+      <section class="page" id="page-mode">
+        <h2 class="page-title">Mode Bel</h2>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Mode Aktif</div>
-              <div class="card-desc">Pilih mode yang digunakan saat override manual diaktifkan</div>
+              <div class="card-desc">Pilih mode saat override manual diaktifkan</div>
             </div>
           </div>
           <div class="mode-grid">
-            <div class="mode-opt" id="modeOptReguler" data-mode="reguler">
-              <div class="mode-indicator"></div>
-              <div class="mode-name">Reguler</div>
-              <div class="mode-hint">Jadwal harian normal</div>
+            <div class="mode-card" id="mcard-reguler" data-mode="reguler">
+              <div class="mode-card-dot"></div>
+              <div class="mode-card-name">Reguler</div>
+              <div class="mode-card-hint">Jadwal harian normal</div>
             </div>
-            <div class="mode-opt ramadhan" id="modeOptRamadhan" data-mode="ramadhan">
-              <div class="mode-indicator"></div>
-              <div class="mode-name">Ramadhan</div>
-              <div class="mode-hint">Jadwal bulan Ramadhan</div>
+            <div class="mode-card" id="mcard-ramadhan" data-mode="ramadhan">
+              <div class="mode-card-dot"></div>
+              <div class="mode-card-name">Ramadhan</div>
+              <div class="mode-card-hint">Jadwal bulan Ramadhan</div>
             </div>
-            <div class="mode-opt pts" id="modeOptPTS" data-mode="pts">
-              <div class="mode-indicator"></div>
-              <div class="mode-name">PTS</div>
-              <div class="mode-hint">Penilaian Tengah Semester</div>
+            <div class="mode-card" id="mcard-pts" data-mode="pts">
+              <div class="mode-card-dot"></div>
+              <div class="mode-card-name">PTS</div>
+              <div class="mode-card-hint">Penilaian Tengah Semester</div>
             </div>
-            <div class="mode-opt pas" id="modeOptPAS" data-mode="pas">
-              <div class="mode-indicator"></div>
-              <div class="mode-name">PAS</div>
-              <div class="mode-hint">Penilaian Akhir Semester</div>
+            <div class="mode-card" id="mcard-pas" data-mode="pas">
+              <div class="mode-card-dot"></div>
+              <div class="mode-card-name">PAS</div>
+              <div class="mode-card-hint">Penilaian Akhir Semester</div>
             </div>
           </div>
           <div class="toggle-row">
@@ -198,128 +203,135 @@
             </div>
             <label class="switch">
               <input type="checkbox" id="overrideToggle">
-              <span class="track"></span>
+              <span class="switch-track"></span>
             </label>
           </div>
         </div>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Jadwal Otomatis Ramadhan</div>
               <div class="card-desc">Format MM-DD, berlaku setiap tahun</div>
             </div>
           </div>
           <div class="two-col">
-            <div class="fg">
+            <div class="field-group">
               <label>Mulai</label>
               <input type="text" id="ramadhanStart" placeholder="03-01" maxlength="5">
             </div>
-            <div class="fg">
+            <div class="field-group">
               <label>Akhir</label>
               <input type="text" id="ramadhanEnd" placeholder="03-31" maxlength="5">
             </div>
           </div>
         </div>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Jadwal Otomatis PTS</div>
-              <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal bertumpang tindih</div>
+              <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal tumpang tindih</div>
             </div>
           </div>
           <div class="two-col">
-            <div class="fg">
+            <div class="field-group">
               <label>Mulai PTS</label>
               <input type="date" id="ptsStart">
             </div>
-            <div class="fg">
+            <div class="field-group">
               <label>Akhir PTS</label>
               <input type="date" id="ptsEnd">
             </div>
           </div>
         </div>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Jadwal Otomatis PAS</div>
-              <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal bertumpang tindih</div>
+              <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal tumpang tindih</div>
             </div>
           </div>
           <div class="two-col">
-            <div class="fg">
+            <div class="field-group">
               <label>Mulai PAS</label>
               <input type="date" id="pasStart">
             </div>
-            <div class="fg">
+            <div class="field-group">
               <label>Akhir PAS</label>
               <input type="date" id="pasEnd">
             </div>
           </div>
           <div style="margin-top:20px">
-            <button class="btn primary" id="saveConfigBtn">Simpan Pengaturan</button>
+            <button class="btn btn-primary" id="saveConfigBtn">Simpan Pengaturan</button>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="section" id="sec-libur">
-        <div class="page-title">Hari Libur</div>
+      <section class="page" id="page-libur">
+        <h2 class="page-title">Hari Libur</h2>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Tambah Hari Libur</div>
               <div class="card-desc">Bel tidak akan berbunyi pada tanggal yang terdaftar</div>
             </div>
           </div>
-          <div class="notice warning">Scheduler akan melewati seluruh entri jadwal pada tanggal yang ditandai sebagai
-            hari libur.</div>
-          <div class="row-form">
-            <div class="fg fg-grow">
+          <div class="notice notice-warn">
+            Scheduler akan melewati seluruh entri jadwal pada tanggal yang ditandai sebagai hari libur.
+          </div>
+          <div class="add-row">
+            <div class="field-group">
               <label>Tanggal</label>
               <input type="date" id="newLiburDate">
             </div>
-            <button class="btn primary" id="addLiburBtn">Tambah</button>
+            <button class="btn btn-primary" id="addLiburBtn">Tambah</button>
           </div>
         </div>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div class="card-title">Daftar Hari Libur</div>
-            <span class="count" id="liburCount">0</span>
+            <span class="count-badge" id="liburCount">0</span>
           </div>
           <div id="liburList">
-            <div class="empty">Memuat...</div>
+            <div class="empty-state">Memuat...</div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="section" id="sec-log">
-        <div class="page-title">Log Aktivitas</div>
+      <section class="page" id="page-log">
+        <h2 class="page-title">Log Aktivitas</h2>
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Riwayat Bel</div>
               <div class="card-desc">Daftar bel yang telah diputar oleh scheduler</div>
             </div>
-            <button class="btn ghost sm" id="refreshLogBtn">Perbarui</button>
+            <button class="btn btn-ghost btn-sm" id="refreshLogBtn">Perbarui</button>
           </div>
-          <div id="logContainer">
-            <div class="empty">Memuat...</div>
+          <div id="logBody">
+            <div class="empty-state">Memuat...</div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="section" id="sec-audio">
-        <div class="page-title">Manajemen Audio</div>
+      <section class="page" id="page-audio">
+        <h2 class="page-title">Manajemen Audio</h2>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Unggah File Audio</div>
               <div class="card-desc">Format yang didukung: MP3, WAV, OGG — Maks. 32 MB</div>
             </div>
           </div>
           <div class="upload-zone" id="uploadZone">
-            <div class="upload-zone-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-                <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
+            <div class="upload-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+                <path d="M12 15V3m0 0-4 4m4-4 4 4M4 20h16" />
               </svg>
             </div>
             <p>Klik atau seret file audio ke sini</p>
@@ -327,156 +339,169 @@
           </div>
           <input type="file" id="fileInput" accept=".mp3,.wav,.ogg">
         </div>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div class="card-title">Daftar File Audio</div>
-            <span class="count" id="toneCount">0</span>
+            <span class="count-badge" id="toneCount">0</span>
           </div>
           <div id="toneList">
-            <div class="empty">Memuat...</div>
+            <div class="empty-state">Memuat...</div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="section" id="sec-settings">
-        <div class="page-title">Pengaturan</div>
+      <section class="page" id="page-settings">
+        <h2 class="page-title">Pengaturan</h2>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Pasang Aplikasi</div>
               <div class="card-desc">Tambahkan ke layar utama untuk akses cepat tanpa browser</div>
             </div>
           </div>
-          <button class="btn primary" id="installAppBtn" style="display:none">Pasang Aplikasi</button>
-          <span class="card-desc" id="installInfo">Aplikasi sudah terpasang atau tidak didukung di perangkat ini.</span>
+          <button class="btn btn-primary" id="installAppBtn" style="display:none">Pasang Aplikasi</button>
+          <p class="card-desc" id="installInfo">Aplikasi sudah terpasang atau tidak didukung di perangkat ini.</p>
         </div>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Backup dan Restore</div>
               <div class="card-desc">Ekspor atau impor seluruh data jadwal dalam format JSON</div>
             </div>
           </div>
-          <div class="btn-row">
-            <button class="btn success" id="backupBtn">Unduh Backup</button>
-            <label class="btn warning" style="cursor:pointer">
+          <div class="btn-group">
+            <button class="btn btn-success" id="backupBtn">Unduh Backup</button>
+            <label class="btn btn-warn" style="cursor:pointer">
               Restore dari File
               <input type="file" accept=".json" id="restoreInput" style="display:none">
             </label>
           </div>
-          <div class="card-desc" style="margin-top:12px">Mencakup jadwal reguler, Ramadhan, PTS, dan PAS.</div>
+          <p class="card-desc" style="margin-top:12px">Mencakup jadwal reguler, Ramadhan, PTS, dan PAS.</p>
         </div>
+
         <div class="card">
-          <div class="card-head">
+          <div class="card-header">
             <div>
               <div class="card-title">Ganti Password</div>
               <div class="card-desc">Minimal 6 karakter</div>
             </div>
           </div>
-          <div class="fg" style="margin-bottom:14px">
+          <div class="field-group" style="margin-bottom:14px">
             <label>Password Lama</label>
             <input type="password" id="oldPass" placeholder="Password saat ini" autocomplete="current-password">
           </div>
           <div class="two-col" style="margin-bottom:18px">
-            <div class="fg">
+            <div class="field-group">
               <label>Password Baru</label>
               <input type="password" id="newPass" placeholder="Min. 6 karakter" autocomplete="new-password">
             </div>
-            <div class="fg">
+            <div class="field-group">
               <label>Konfirmasi</label>
               <input type="password" id="confirmPass" placeholder="Ulangi password baru" autocomplete="new-password">
             </div>
           </div>
-          <button class="btn primary" id="changePassBtn">Perbarui Password</button>
+          <button class="btn btn-primary" id="changePassBtn">Perbarui Password</button>
         </div>
-      </div>
+      </section>
 
     </main>
   </div>
 
-  <nav class="bottom-nav">
-    <button class="bnav-btn active" data-tab="jadwal">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="botnav active" data-tab="jadwal">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
         <rect x="3" y="4" width="18" height="18" rx="2" />
         <path d="M16 2v4M8 2v4M3 10h18" />
       </svg>
-      Jadwal
+      <span>Jadwal</span>
     </button>
-    <button class="bnav-btn" data-tab="mode">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+    <button class="botnav" data-tab="mode">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
         <circle cx="12" cy="12" r="3" />
         <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
       </svg>
-      Mode
+      <span>Mode</span>
     </button>
-    <button class="bnav-btn" data-tab="libur">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+    <button class="botnav" data-tab="libur">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
         <rect x="3" y="4" width="18" height="18" rx="2" />
         <path d="M16 2v4M8 2v4M3 10h18" />
         <path d="M9 16l2 2 4-4" />
       </svg>
-      Libur
+      <span>Libur</span>
     </button>
-    <button class="bnav-btn" data-tab="log">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+    <button class="botnav" data-tab="log">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
         <polyline points="14 2 14 8 20 8" />
         <line x1="16" y1="13" x2="8" y2="13" />
       </svg>
-      Log
+      <span>Log</span>
     </button>
-    <button class="bnav-btn" data-tab="audio">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+    <button class="botnav" data-tab="audio">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
         <path d="M9 18V5l12-2v13" />
         <circle cx="6" cy="18" r="3" />
         <circle cx="18" cy="16" r="3" />
       </svg>
-      Audio
+      <span>Audio</span>
     </button>
-    <button class="bnav-btn" data-tab="settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+    <button class="botnav" data-tab="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
         <circle cx="12" cy="12" r="3" />
         <path
           d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
-      Setting
+      <span>Setting</span>
     </button>
   </nav>
 
-  <div class="overlay" id="entryModal">
+  <div class="modal-overlay" id="entryModal">
     <div class="modal">
-      <div class="modal-head">
-        <div class="modal-title" id="modalTitle">Tambah Bel</div>
-        <div class="modal-subtitle" id="modalSubtitle"></div>
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modalTitle">Tambah Bel</div>
+          <div class="modal-sub" id="modalSub"></div>
+        </div>
+        <button class="modal-close" id="cancelModalBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
       </div>
-      <div class="fg" style="margin-bottom:14px">
-        <label>Waktu</label>
-        <input type="time" id="entryWaktu">
+      <div class="modal-body">
+        <div class="field-group" style="margin-bottom:16px">
+          <label>Waktu</label>
+          <input type="time" id="entryWaktu">
+        </div>
+        <div class="field-group">
+          <label>File Audio</label>
+          <select id="entryAudio"></select>
+        </div>
       </div>
-      <div class="fg">
-        <label>File Audio</label>
-        <select id="entryAudio"></select>
-      </div>
-      <div class="modal-foot">
-        <button class="btn ghost" id="cancelModalBtn">Batal</button>
-        <button class="btn primary" id="saveEntryBtn">Simpan</button>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="cancelModalBtn2">Batal</button>
+        <button class="btn btn-primary" id="saveEntryBtn">Simpan</button>
       </div>
     </div>
   </div>
 
   <div class="pwa-banner" id="pwaBanner">
     <div class="pwa-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-        <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+        <path d="M12 15V3m0 0-4 4m4-4 4 4M4 20h16" />
       </svg>
     </div>
     <div class="pwa-text">
       <div class="pwa-title">Pasang Bel Madrasah</div>
       <div class="pwa-desc">Tambahkan ke layar utama untuk akses cepat</div>
     </div>
-    <div class="pwa-actions">
-      <button class="btn ghost sm" id="dismissBannerBtn">Nanti</button>
-      <button class="btn primary sm" id="installBannerBtn">Pasang</button>
+    <div class="pwa-btns">
+      <button class="btn btn-ghost btn-sm" id="dismissBannerBtn">Nanti</button>
+      <button class="btn btn-primary btn-sm" id="installBannerBtn">Pasang</button>
     </div>
   </div>
 
