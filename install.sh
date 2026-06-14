@@ -9,7 +9,6 @@ NC='\033[0m'
 PROJECT_DIR="/opt/bel-madrasah"
 SERVICE_NAME="bel-madrasah"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
-PYTHON_CMD="/usr/bin/python3"
 RUN_USER=$(logname 2>/dev/null || echo "${SUDO_USER:-$(whoami)}")
 
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -30,11 +29,11 @@ check_requirements() {
         exit 1
     fi
 
-    if ! cmd_exists python3; then
-        error "Python3 tidak ditemukan."
+    if ! cmd_exists go; then
+        error "Go tidak ditemukan. Install dari https://go.dev/dl/"
         exit 1
     fi
-    success "Python3: $(python3 --version)"
+    success "Go: $(go version)"
 
     if ! cmd_exists systemctl; then
         error "systemctl tidak ditemukan. Sistem memerlukan systemd."
@@ -117,26 +116,33 @@ create_project_dir() {
     success "Direktori proyek: $PROJECT_DIR"
 }
 
-copy_python_files() {
-    info "Menyalin file Python..."
+build_binary() {
+    info "Membangun binary Go..."
 
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-    if [ ! -f "$SCRIPT_DIR/main.py" ]; then
-        error "main.py tidak ditemukan di direktori installer ($SCRIPT_DIR)."
+    if [ ! -f "$SCRIPT_DIR/main.go" ]; then
+        error "main.go tidak ditemukan di direktori installer ($SCRIPT_DIR)."
         exit 1
     fi
 
-    if [ ! -f "$SCRIPT_DIR/jadwal.py" ]; then
-        error "jadwal.py tidak ditemukan di direktori installer ($SCRIPT_DIR)."
+    if [ ! -f "$SCRIPT_DIR/jadwal.go" ]; then
+        error "jadwal.go tidak ditemukan di direktori installer ($SCRIPT_DIR)."
         exit 1
     fi
 
-    cp "$SCRIPT_DIR/main.py" "$PROJECT_DIR/main.py"
-    cp "$SCRIPT_DIR/jadwal.py" "$PROJECT_DIR/jadwal.py"
+    if [ ! -f "$SCRIPT_DIR/go.mod" ]; then
+        info "go.mod tidak ditemukan, membuat modul baru..."
+        (cd "$SCRIPT_DIR" && go mod init bel-madrasah)
+    fi
 
-    chmod +x "$PROJECT_DIR/main.py"
-    success "main.py dan jadwal.py berhasil disalin."
+    if ! (cd "$SCRIPT_DIR" && go build -o "$PROJECT_DIR/bel-madrasah" .); then
+        error "Gagal membangun binary Go."
+        exit 1
+    fi
+
+    chmod +x "$PROJECT_DIR/bel-madrasah"
+    success "Binary berhasil dibangun: $PROJECT_DIR/bel-madrasah"
 }
 
 create_systemd_service() {
@@ -150,7 +156,7 @@ Wants=sound.target
 
 [Service]
 Type=simple
-ExecStart=$PYTHON_CMD $PROJECT_DIR/main.py
+ExecStart=$PROJECT_DIR/bel-madrasah
 Restart=always
 RestartSec=10
 User=$RUN_USER
@@ -239,7 +245,7 @@ set_permissions() {
     chown -R "$RUN_USER":"$RUN_USER" "$PROJECT_DIR"
     chmod 755 "$PROJECT_DIR"
     chmod 755 "$PROJECT_DIR/tone"
-    chmod 644 "$PROJECT_DIR"/*.py
+    chmod 755 "$PROJECT_DIR/bel-madrasah"
     chmod 644 "$PROJECT_DIR/tone/"*.mp3 2>/dev/null || true
     success "Izin file diatur."
 }
@@ -247,11 +253,11 @@ set_permissions() {
 test_installation() {
     info "Memverifikasi instalasi..."
 
-    if ! cd "$PROJECT_DIR" && python3 -c "from jadwal import JADWAL" 2>/dev/null; then
-        error "Import jadwal.py gagal. Periksa sintaks Python."
+    if [ ! -f "$PROJECT_DIR/bel-madrasah" ]; then
+        error "Binary tidak ditemukan di $PROJECT_DIR/bel-madrasah."
         exit 1
     fi
-    success "Sintaks Python valid."
+    success "Binary ditemukan."
 
     if ! systemctl is-enabled "$SERVICE_NAME.service" >/dev/null 2>&1; then
         error "Service belum diaktifkan."
@@ -280,6 +286,7 @@ show_completion() {
     echo "========================================="
     echo
     info "Direktori  : $PROJECT_DIR"
+    info "Binary     : $PROJECT_DIR/bel-madrasah"
     info "Service    : $SERVICE_NAME"
     info "User       : $RUN_USER"
     echo
@@ -289,7 +296,6 @@ show_completion() {
     echo "  sudo systemctl start   $SERVICE_NAME"
     echo "  sudo systemctl restart $SERVICE_NAME"
     echo "  sudo journalctl -u $SERVICE_NAME -f"
-    echo "  sudo nano $PROJECT_DIR/jadwal.py"
     echo
 }
 
@@ -313,7 +319,7 @@ main() {
     install_curl
     install_alsa
     create_project_dir
-    copy_python_files
+    build_binary
     create_systemd_service
     setup_service
     download_tone
