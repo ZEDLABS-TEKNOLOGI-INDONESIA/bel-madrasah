@@ -3,143 +3,145 @@
 *::after {
   box-sizing: border-box;
   margin: 0;
-  padding: 0
+  padding: 0;
 }
 
 body {
   font-family: 'Lexend', system-ui, sans-serif;
-  background: #1a0f00;
+  background: #1c0f04;
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  -webkit-font-smoothing: antialiased
+  -webkit-font-smoothing: antialiased;
 }
 
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background: radial-gradient(circle at 30% 30%, rgba(180, 100, 20, .18), transparent 55%), radial-gradient(circle at 70% 75%, rgba(140, 70, 10, .12), transparent 50%);
-  pointer-events: none
+  background:
+    radial-gradient(circle at 28% 28%, rgba(194, 82, 0, .18), transparent 55%),
+    radial-gradient(circle at 72% 75%, rgba(120, 60, 10, .12), transparent 50%);
+  pointer-events: none;
 }
 
 .card {
   position: relative;
-  background: #fff8f0;
+  background: #fffaf4;
   border-radius: 20px;
   box-shadow: 0 32px 64px rgba(0, 0, 0, .45), 0 4px 16px rgba(0, 0, 0, .2);
   padding: 40px 36px;
   width: min(380px, 100%);
-  animation: pop .35s cubic-bezier(.34, 1.56, .64, 1)
+  animation: pop .35s cubic-bezier(.34, 1.56, .64, 1);
 }
 
 @keyframes pop {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(.97)
+    transform: translateY(16px) scale(.97);
   }
 
   to {
     opacity: 1;
-    transform: none
+    transform: none;
   }
 }
 
 .logo {
   text-align: center;
-  margin-bottom: 32px
+  margin-bottom: 32px;
 }
 
 .logo-mark {
-  width: 54px;
-  height: 54px;
-  border-radius: 17px;
-  background: #fff3e0;
-  border: 1px solid #ffe0b2;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #fff3e6;
+  border: 1px solid #ffd9b3;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px
+  margin: 0 auto 16px;
 }
 
 .logo-mark svg {
   width: 24px;
   height: 24px;
-  stroke: #c75000
+  stroke: #c25200;
 }
 
 .logo h1 {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
-  color: #1a0f00;
-  letter-spacing: -.02em
+  color: #1c0f04;
+  letter-spacing: -.02em;
 }
 
 .logo p {
   font-size: 12px;
-  color: #a0785a;
+  color: #9a7050;
   margin-top: 4px;
-  font-weight: 400
+  font-weight: 400;
 }
 
 .error {
-  background: #fff0ed;
-  border: 1px solid #ffb4a0;
-  color: #8b1a00;
+  background: #fff1ee;
+  border: 1px solid #ffaa97;
+  color: #8b1500;
   border-radius: 9px;
   padding: 11px 14px;
   font-size: 12.5px;
   font-weight: 500;
   margin-bottom: 18px;
   display: none;
-  line-height: 1.4
+  line-height: 1.4;
 }
 
 .fg {
-  margin-bottom: 14px
+  margin-bottom: 14px;
 }
 
 label {
   display: block;
   font-size: 10px;
   font-weight: 600;
-  color: #8a6040;
+  color: #6b4423;
   text-transform: uppercase;
   letter-spacing: .07em;
-  margin-bottom: 7px
+  margin-bottom: 7px;
 }
 
 input {
   width: 100%;
   padding: 10px 13px;
-  border: 1px solid #e8d5c0;
+  border: 1px solid #e8d5bc;
   border-radius: 9px;
   font-size: 14px;
   font-family: inherit;
-  color: #1a0f00;
+  color: #1c0f04;
   outline: none;
   transition: border-color .15s, box-shadow .15s;
   background: #fff;
-  -webkit-appearance: none
+  -webkit-appearance: none;
 }
 
 input:focus {
-  border-color: #c75000;
-  box-shadow: 0 0 0 3px rgba(199, 80, 0, .12)
+  border-color: #c25200;
+  box-shadow: 0 0 0 3px rgba(194, 82, 0, .12);
 }
 
 input::placeholder {
-  color: #c8b09a
+  color: #c9a882;
 }
 
 .btn {
   width: 100%;
   padding: 11px;
   margin-top: 8px;
-  background: #c75000;
+  background: #c25200;
   color: #fff;
   border: none;
   border-radius: 9px;
@@ -147,29 +149,29 @@ input::placeholder {
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
-  box-shadow: 0 2px 8px rgba(199, 80, 0, .35);
+  box-shadow: 0 2px 8px rgba(194, 82, 0, .35);
   transition: background .2s, transform .1s;
-  letter-spacing: -.01em
+  letter-spacing: -.01em;
 }
 
 .btn:hover {
-  background: #a84200
+  background: #9e4200;
 }
 
 .btn:active {
-  transform: scale(.98)
+  transform: scale(.98);
 }
 
 .btn:disabled {
-  background: #d6c5b5;
+  background: #d4b898;
   box-shadow: none;
-  cursor: not-allowed
+  cursor: not-allowed;
 }
 
 .footer {
   text-align: center;
   font-size: 11px;
-  color: #c8b09a;
+  color: #c9a882;
   margin-top: 24px;
-  font-weight: 400
+  font-weight: 400;
 }

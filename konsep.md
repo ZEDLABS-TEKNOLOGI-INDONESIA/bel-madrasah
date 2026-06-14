@@ -10,8 +10,18 @@ finalkan project ini.
 - tanpa gap
 - jadikan mudah install dan uninstall dan remove project pada production
 
+
+
+
+
+
+
+finalkan project ini, untuk backend sudah optimal tinggal frontendnya
+
 ## Front end
-- Responsive
+- tanpa komentar
+- tanpa emoticon
+- Responsive (jadikan tampilan terbaik untuk handphone dan desktop)
 - Mudah Dikelola dan mudah bagi pengguna
 - tampilan rapi, elegan, dan professional
 - Tema warna hangat
