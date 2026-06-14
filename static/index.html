@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Bel Madrasah — MTsN 1 Pandeglang</title>
   <meta name="description" content="Sistem bel otomatis MTsN 1 Pandeglang">
-  <meta name="theme-color" content="#0c1a17">
+  <meta name="theme-color" content="#1a0f00">
   <meta name="color-scheme" content="light">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" href="/static/icons/icon-192.png">
@@ -17,9 +17,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
-    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 
@@ -62,18 +60,18 @@
           <span id="statusText">—</span>
         </div>
       </div>
-      <button class="hbtn hbtn-primary" id="toggleBtn" onclick="toggleService()">—</button>
-      <button class="hbtn" onclick="logout()">Keluar</button>
+      <button class="hbtn hbtn-primary" id="toggleBtn">—</button>
+      <button class="hbtn" id="logoutBtn">Keluar</button>
     </div>
   </header>
 
   <nav>
-    <button class="nav-btn active" onclick="switchTab('jadwal',this)">Jadwal</button>
-    <button class="nav-btn" onclick="switchTab('mode',this)">Mode Bel</button>
-    <button class="nav-btn" onclick="switchTab('libur',this)">Hari Libur</button>
-    <button class="nav-btn" onclick="switchTab('log',this)">Log</button>
-    <button class="nav-btn" onclick="switchTab('audio',this)">Audio</button>
-    <button class="nav-btn" onclick="switchTab('settings',this)">Pengaturan</button>
+    <button class="nav-btn active" data-tab="jadwal">Jadwal</button>
+    <button class="nav-btn" data-tab="mode">Mode Bel</button>
+    <button class="nav-btn" data-tab="libur">Hari Libur</button>
+    <button class="nav-btn" data-tab="log">Log</button>
+    <button class="nav-btn" data-tab="audio">Audio</button>
+    <button class="nav-btn" data-tab="settings">Pengaturan</button>
   </nav>
 
   <main>
@@ -87,21 +85,20 @@
           </div>
         </div>
         <div class="mode-tabs">
-          <button class="mtab active reguler" onclick="switchJadwalMode('reguler',this)">Reguler</button>
-          <button class="mtab ramadhan" onclick="switchJadwalMode('ramadhan',this)">Ramadhan</button>
-          <button class="mtab pts" onclick="switchJadwalMode('pts',this)">PTS</button>
-          <button class="mtab pas" onclick="switchJadwalMode('pas',this)">PAS</button>
+          <button class="mtab active reguler" data-mode="reguler">Reguler</button>
+          <button class="mtab ramadhan" data-mode="ramadhan">Ramadhan</button>
+          <button class="mtab pts" data-mode="pts">PTS</button>
+          <button class="mtab pas" data-mode="pas">PAS</button>
         </div>
         <div class="row-form">
           <div class="fg fg-grow">
             <label>Tambah Hari</label>
             <input type="text" id="newHariInput" placeholder="Contoh: Sabtu">
           </div>
-          <button class="btn primary" onclick="addHari()">Tambah Hari</button>
+          <button class="btn primary" id="addHariBtn">Tambah Hari</button>
         </div>
         <div class="hari-tabs" id="hariTabs"></div>
       </div>
-
       <div class="card" id="jadwalCard">
         <div class="card-head">
           <div>
@@ -109,8 +106,8 @@
             <div class="card-desc" id="hariInfo"></div>
           </div>
           <div class="btn-row" id="jadwalActions" style="display:none">
-            <button class="btn ghost sm" onclick="deleteHari()">Hapus Hari</button>
-            <button class="btn primary sm" onclick="openAddEntry()">Tambah Bel</button>
+            <button class="btn ghost sm" id="deleteHariBtn">Hapus Hari</button>
+            <button class="btn primary sm" id="addEntryBtn">Tambah Bel</button>
           </div>
         </div>
         <div id="jadwalTable">
@@ -128,22 +125,22 @@
           </div>
         </div>
         <div class="mode-grid">
-          <div class="mode-opt" id="modeOptReguler" onclick="selectMode('reguler')">
+          <div class="mode-opt" id="modeOptReguler" data-mode="reguler">
             <div class="mode-indicator"></div>
             <div class="mode-name">Reguler</div>
             <div class="mode-hint">Jadwal harian normal</div>
           </div>
-          <div class="mode-opt ramadhan" id="modeOptRamadhan" onclick="selectMode('ramadhan')">
+          <div class="mode-opt ramadhan" id="modeOptRamadhan" data-mode="ramadhan">
             <div class="mode-indicator"></div>
             <div class="mode-name">Ramadhan</div>
             <div class="mode-hint">Jadwal bulan Ramadhan</div>
           </div>
-          <div class="mode-opt pts" id="modeOptPTS" onclick="selectMode('pts')">
+          <div class="mode-opt pts" id="modeOptPTS" data-mode="pts">
             <div class="mode-indicator"></div>
             <div class="mode-name">PTS</div>
             <div class="mode-hint">Penilaian Tengah Semester</div>
           </div>
-          <div class="mode-opt pas" id="modeOptPAS" onclick="selectMode('pas')">
+          <div class="mode-opt pas" id="modeOptPAS" data-mode="pas">
             <div class="mode-indicator"></div>
             <div class="mode-name">PAS</div>
             <div class="mode-hint">Penilaian Akhir Semester</div>
@@ -155,12 +152,11 @@
             <div class="toggle-hint">Paksa mode di atas, abaikan jadwal otomatis berbasis tanggal</div>
           </div>
           <label class="switch">
-            <input type="checkbox" id="overrideToggle" onchange="onOverrideChange()">
+            <input type="checkbox" id="overrideToggle">
             <span class="track"></span>
           </label>
         </div>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
@@ -179,12 +175,11 @@
           </div>
         </div>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
             <div class="card-title">Jadwal Otomatis PTS</div>
-            <div class="card-desc">Diprioritaskan di atas mode Ramadhan jika tanggal bertumpang tindih</div>
+            <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal bertumpang tindih</div>
           </div>
         </div>
         <div class="two-col">
@@ -198,12 +193,11 @@
           </div>
         </div>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
             <div class="card-title">Jadwal Otomatis PAS</div>
-            <div class="card-desc">Diprioritaskan di atas mode Ramadhan jika tanggal bertumpang tindih</div>
+            <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal bertumpang tindih</div>
           </div>
         </div>
         <div class="two-col">
@@ -217,7 +211,7 @@
           </div>
         </div>
         <div style="margin-top:22px">
-          <button class="btn primary" onclick="saveConfig()">Simpan Pengaturan</button>
+          <button class="btn primary" id="saveConfigBtn">Simpan Pengaturan</button>
         </div>
       </div>
     </div>
@@ -237,7 +231,7 @@
             <label>Tanggal</label>
             <input type="date" id="newLiburDate">
           </div>
-          <button class="btn primary" onclick="addLibur()">Tambah</button>
+          <button class="btn primary" id="addLiburBtn">Tambah</button>
         </div>
       </div>
       <div class="card">
@@ -258,7 +252,7 @@
             <div class="card-title">Log Aktivitas</div>
             <div class="card-desc">Riwayat bel yang telah diputar</div>
           </div>
-          <button class="btn ghost sm" onclick="loadLog()">Perbarui</button>
+          <button class="btn ghost sm" id="refreshLogBtn">Perbarui</button>
         </div>
         <div id="logContainer">
           <div class="empty">Memuat...</div>
@@ -274,9 +268,7 @@
             <div class="card-desc">Format yang didukung: MP3, WAV, OGG — Maks. 32 MB</div>
           </div>
         </div>
-        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()"
-          ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
-          ondrop="handleDrop(event)">
+        <div class="upload-zone" id="uploadZone">
           <div class="upload-zone-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
               <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
@@ -285,7 +277,7 @@
           <p>Klik atau seret file audio ke sini</p>
           <small>MP3, WAV, OGG — Maks. 32 MB</small>
         </div>
-        <input type="file" id="fileInput" accept=".mp3,.wav,.ogg" onchange="uploadFile(this.files[0])">
+        <input type="file" id="fileInput" accept=".mp3,.wav,.ogg">
       </div>
       <div class="card">
         <div class="card-head">
@@ -306,11 +298,9 @@
             <div class="card-desc">Tambahkan ke layar utama untuk akses cepat tanpa browser</div>
           </div>
         </div>
-        <button class="btn primary" id="installAppBtn" onclick="promptInstall()" style="display:none">Pasang
-          Aplikasi</button>
+        <button class="btn primary" id="installAppBtn" style="display:none">Pasang Aplikasi</button>
         <span class="card-desc" id="installInfo">Aplikasi sudah terpasang atau tidak didukung di perangkat ini.</span>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
@@ -319,15 +309,14 @@
           </div>
         </div>
         <div class="btn-row">
-          <button class="btn success" onclick="downloadBackup()">Unduh Backup</button>
+          <button class="btn success" id="backupBtn">Unduh Backup</button>
           <label class="btn warning" style="cursor:pointer">
             Restore dari File
-            <input type="file" accept=".json" style="display:none" onchange="restoreBackup(this.files[0])">
+            <input type="file" accept=".json" id="restoreInput" style="display:none">
           </label>
         </div>
         <div class="card-desc" style="margin-top:14px">Mencakup jadwal reguler, Ramadhan, PTS, dan PAS.</div>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
@@ -349,7 +338,7 @@
             <input type="password" id="confirmPass" placeholder="Ulangi password baru">
           </div>
         </div>
-        <button class="btn primary" onclick="changePassword()">Perbarui Password</button>
+        <button class="btn primary" id="changePassBtn">Perbarui Password</button>
       </div>
     </div>
 
@@ -370,8 +359,8 @@
         <select id="entryAudio"></select>
       </div>
       <div class="modal-foot">
-        <button class="btn ghost" onclick="closeModal()">Batal</button>
-        <button class="btn primary" onclick="saveEntry()">Simpan</button>
+        <button class="btn ghost" id="cancelModalBtn">Batal</button>
+        <button class="btn primary" id="saveEntryBtn">Simpan</button>
       </div>
     </div>
   </div>
@@ -387,8 +376,8 @@
       <div class="pwa-desc">Tambahkan ke layar utama untuk akses cepat</div>
     </div>
     <div class="pwa-actions">
-      <button class="btn ghost sm" onclick="dismissBanner()">Nanti</button>
-      <button class="btn primary sm" onclick="promptInstall()">Pasang</button>
+      <button class="btn ghost sm" id="dismissBannerBtn">Nanti</button>
+      <button class="btn primary sm" id="installBannerBtn">Pasang</button>
     </div>
   </div>
 

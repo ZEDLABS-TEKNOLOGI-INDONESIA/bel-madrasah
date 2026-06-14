@@ -37,26 +37,23 @@ var (
 	sessionsMu sync.RWMutex
 )
 
-func hashPassword(password string) string {
-	h := sha256.Sum256([]byte(password))
+func hashPassword(p string) string {
+	h := sha256.Sum256([]byte(p))
 	return hex.EncodeToString(h[:])
 }
 
 func initAuth() error {
 	if _, err := os.Stat(usersFile); os.IsNotExist(err) {
-		defaultUser := User{
-			Username:     "admin",
-			PasswordHash: hashPassword("admin123"),
-		}
-		data, err := json.MarshalIndent(defaultUser, "", "  ")
+		u := User{Username: "admin", PasswordHash: hashPassword("admin123")}
+		data, err := json.MarshalIndent(u, "", "  ")
 		if err != nil {
 			return err
 		}
 		if err := os.WriteFile(usersFile, data, 0600); err != nil {
 			return err
 		}
-		logMsg("Akun admin default dibuat. Username: admin | Password: admin123")
-		logMsg("PENTING: Segera ganti password melalui halaman pengaturan.")
+		logMsg("akun admin default dibuat — username: admin | password: admin123")
+		logMsg("segera ganti password melalui halaman pengaturan")
 	}
 	return nil
 }
@@ -95,26 +92,23 @@ func createSession(username string) (string, error) {
 		return "", err
 	}
 	sessionsMu.Lock()
-	sessions[token] = &Session{
-		Username:  username,
-		ExpiresAt: time.Now().Add(sessionTimeout),
-	}
+	sessions[token] = &Session{Username: username, ExpiresAt: time.Now().Add(sessionTimeout)}
 	sessionsMu.Unlock()
 	return token, nil
 }
 
 func getSession(r *http.Request) *Session {
-	cookie, err := r.Cookie(cookieName)
+	c, err := r.Cookie(cookieName)
 	if err != nil {
 		return nil
 	}
 	sessionsMu.RLock()
-	sess, ok := sessions[cookie.Value]
+	s, ok := sessions[c.Value]
 	sessionsMu.RUnlock()
-	if !ok || time.Now().After(sess.ExpiresAt) {
+	if !ok || time.Now().After(s.ExpiresAt) {
 		return nil
 	}
-	return sess
+	return s
 }
 
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -122,7 +116,7 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		if getSession(r) == nil {
 			if r.Header.Get("Accept") == "application/json" ||
 				r.Header.Get("Content-Type") == "application/json" {
-				jsonError(w, "Unauthorized", http.StatusUnauthorized)
+				jsonError(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -171,23 +165,21 @@ import (
 	"time"
 )
 
+var validModes = map[string]bool{"reguler": true, "ramadhan": true, "pts": true, "pas": true}
+
 func registerRoutes(mux *http.ServeMux) {
 	registerPWARoutes(mux)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
-
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
 	mux.HandleFunc("/", requireAuth(handleIndex))
-
 	mux.HandleFunc("/api/jadwal", requireAuth(handleJadwal))
 	mux.HandleFunc("/api/jadwal/hari", requireAuth(handleJadwalHari))
 	mux.HandleFunc("/api/jadwal/entry", requireAuth(handleJadwalEntry))
-
 	mux.HandleFunc("/api/tones", requireAuth(handleTones))
 	mux.HandleFunc("/api/tones/upload", requireAuth(handleTonesUpload))
 	mux.HandleFunc("/api/tones/delete", requireAuth(handleTonesDelete))
 	mux.HandleFunc("/api/tones/preview", requireAuth(handleTonesPreview))
-
 	mux.HandleFunc("/api/config", requireAuth(handleConfig))
 	mux.HandleFunc("/api/libur", requireAuth(handleLibur))
 	mux.HandleFunc("/api/log", requireAuth(handleLog))
@@ -199,56 +191,55 @@ func registerRoutes(mux *http.ServeMux) {
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
 		if getSession(r) != nil {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
 		http.ServeFile(w, r, filepath.Join(staticDir, "login.html"))
-		return
-	}
-	if r.Method != http.MethodPost {
+	case http.MethodPost:
+		var body struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonError(w, "request tidak valid", http.StatusBadRequest)
+			return
+		}
+		user, err := loadUser()
+		if err != nil {
+			jsonError(w, "gagal memuat data user", http.StatusInternalServerError)
+			return
+		}
+		if body.Username != user.Username || hashPassword(body.Password) != user.PasswordHash {
+			jsonError(w, "username atau password salah", http.StatusUnauthorized)
+			return
+		}
+		token, err := createSession(body.Username)
+		if err != nil {
+			jsonError(w, "gagal membuat sesi", http.StatusInternalServerError)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     cookieName,
+			Value:    token,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Expires:  time.Now().Add(sessionTimeout),
+		})
+		jsonOK(w, map[string]string{"message": "login berhasil"})
+	default:
 		http.NotFound(w, r)
-		return
 	}
-	var body struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, "Request tidak valid", http.StatusBadRequest)
-		return
-	}
-	user, err := loadUser()
-	if err != nil {
-		jsonError(w, "Gagal memuat data user", http.StatusInternalServerError)
-		return
-	}
-	if body.Username != user.Username || hashPassword(body.Password) != user.PasswordHash {
-		jsonError(w, "Username atau password salah", http.StatusUnauthorized)
-		return
-	}
-	token, err := createSession(body.Username)
-	if err != nil {
-		jsonError(w, "Gagal membuat sesi", http.StatusInternalServerError)
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     cookieName,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(sessionTimeout),
-	})
-	jsonOK(w, map[string]string{"message": "Login berhasil"})
 }
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(cookieName)
+	c, err := r.Cookie(cookieName)
 	if err == nil {
 		sessionsMu.Lock()
-		delete(sessions, cookie.Value)
+		delete(sessions, c.Value)
 		sessionsMu.Unlock()
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -270,28 +261,28 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		NewPassword string `json:"new_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, "Request tidak valid", http.StatusBadRequest)
+		jsonError(w, "request tidak valid", http.StatusBadRequest)
 		return
 	}
 	user, err := loadUser()
 	if err != nil {
-		jsonError(w, "Gagal memuat data user", http.StatusInternalServerError)
+		jsonError(w, "gagal memuat data user", http.StatusInternalServerError)
 		return
 	}
 	if hashPassword(body.OldPassword) != user.PasswordHash {
-		jsonError(w, "Password lama salah", http.StatusUnauthorized)
+		jsonError(w, "password lama salah", http.StatusUnauthorized)
 		return
 	}
 	if len(body.NewPassword) < 6 {
-		jsonError(w, "Password baru minimal 6 karakter", http.StatusBadRequest)
+		jsonError(w, "password baru minimal 6 karakter", http.StatusBadRequest)
 		return
 	}
 	user.PasswordHash = hashPassword(body.NewPassword)
 	if err := saveUser(user); err != nil {
-		jsonError(w, "Gagal menyimpan password", http.StatusInternalServerError)
+		jsonError(w, "gagal menyimpan password", http.StatusInternalServerError)
 		return
 	}
-	jsonOK(w, map[string]string{"message": "Password berhasil diubah"})
+	jsonOK(w, map[string]string{"message": "password berhasil diubah"})
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -307,36 +298,32 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		cfg, err := loadConfig()
 		if err != nil {
-			jsonError(w, "Gagal memuat config", http.StatusInternalServerError)
+			jsonError(w, "gagal memuat config", http.StatusInternalServerError)
 			return
 		}
-		active := resolveMode(cfg)
 		jsonOK(w, map[string]any{
 			"config":      cfg,
-			"active_mode": active,
+			"active_mode": resolveMode(cfg),
 			"is_libur":    isLibur(cfg),
 		})
-
 	case http.MethodPost:
 		var body Config
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			jsonError(w, "Request tidak valid", http.StatusBadRequest)
+			jsonError(w, "request tidak valid", http.StatusBadRequest)
 			return
 		}
-		validModes := map[string]bool{"reguler": true, "ramadhan": true, "pts": true, "pas": true}
 		if !validModes[body.Mode] {
-			jsonError(w, "Mode tidak valid", http.StatusBadRequest)
+			jsonError(w, "mode tidak valid", http.StatusBadRequest)
 			return
 		}
 		existing, _ := loadConfig()
 		body.LiburDates = existing.LiburDates
 		if err := saveConfig(body); err != nil {
-			jsonError(w, "Gagal menyimpan config", http.StatusInternalServerError)
+			jsonError(w, "gagal menyimpan config", http.StatusInternalServerError)
 			return
 		}
-		logMsg(fmt.Sprintf("Config diperbarui: mode=%s override=%v", body.Mode, body.ManualOverride))
-		jsonOK(w, map[string]string{"message": "Config berhasil disimpan"})
-
+		logMsg(fmt.Sprintf("config diperbarui: mode=%s override=%v", body.Mode, body.ManualOverride))
+		jsonOK(w, map[string]string{"message": "config berhasil disimpan"})
 	default:
 		http.NotFound(w, r)
 	}
@@ -347,7 +334,7 @@ func handleLibur(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		cfg, err := loadConfig()
 		if err != nil {
-			jsonError(w, "Gagal memuat config", http.StatusInternalServerError)
+			jsonError(w, "gagal memuat config", http.StatusInternalServerError)
 			return
 		}
 		dates := cfg.LiburDates
@@ -356,52 +343,50 @@ func handleLibur(w http.ResponseWriter, r *http.Request) {
 		}
 		sort.Strings(dates)
 		jsonOK(w, map[string]any{"libur": dates})
-
 	case http.MethodPost:
 		var body struct {
 			Action string `json:"action"`
 			Date   string `json:"date"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			jsonError(w, "Request tidak valid", http.StatusBadRequest)
+			jsonError(w, "request tidak valid", http.StatusBadRequest)
 			return
 		}
 		if _, err := time.Parse("2006-01-02", body.Date); err != nil {
-			jsonError(w, "Format tanggal tidak valid (YYYY-MM-DD)", http.StatusBadRequest)
+			jsonError(w, "format tanggal tidak valid (YYYY-MM-DD)", http.StatusBadRequest)
 			return
 		}
 		cfg, err := loadConfig()
 		if err != nil {
-			jsonError(w, "Gagal memuat config", http.StatusInternalServerError)
+			jsonError(w, "gagal memuat config", http.StatusInternalServerError)
 			return
 		}
 		switch body.Action {
 		case "add":
 			for _, d := range cfg.LiburDates {
 				if d == body.Date {
-					jsonError(w, "Tanggal sudah ada", http.StatusBadRequest)
+					jsonError(w, "tanggal sudah ada", http.StatusBadRequest)
 					return
 				}
 			}
 			cfg.LiburDates = append(cfg.LiburDates, body.Date)
 		case "delete":
-			newDates := cfg.LiburDates[:0]
+			n := cfg.LiburDates[:0]
 			for _, d := range cfg.LiburDates {
 				if d != body.Date {
-					newDates = append(newDates, d)
+					n = append(n, d)
 				}
 			}
-			cfg.LiburDates = newDates
+			cfg.LiburDates = n
 		default:
-			jsonError(w, "Action tidak valid", http.StatusBadRequest)
+			jsonError(w, "action tidak valid", http.StatusBadRequest)
 			return
 		}
 		if err := saveConfig(cfg); err != nil {
-			jsonError(w, "Gagal menyimpan config", http.StatusInternalServerError)
+			jsonError(w, "gagal menyimpan config", http.StatusInternalServerError)
 			return
 		}
-		jsonOK(w, map[string]string{"message": "Berhasil"})
-
+		jsonOK(w, map[string]string{"message": "berhasil"})
 	default:
 		http.NotFound(w, r)
 	}
@@ -413,17 +398,16 @@ func handleJadwal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mode := r.URL.Query().Get("mode")
-	validModes := map[string]bool{"reguler": true, "ramadhan": true, "pts": true, "pas": true}
-	if mode == "" || !validModes[mode] {
+	if !validModes[mode] {
 		mode = "reguler"
 	}
 	j, err := loadJadwal()
 	if err != nil {
-		jsonError(w, "Gagal memuat jadwal", http.StatusInternalServerError)
+		jsonError(w, "gagal memuat jadwal", http.StatusInternalServerError)
 		return
 	}
-	mj, ok := j[mode]
-	if !ok {
+	mj := j[mode]
+	if mj == nil {
 		mj = map[string][]Entry{}
 	}
 	days := make([]string, 0, len(mj))
@@ -445,22 +429,21 @@ func handleJadwalHari(w http.ResponseWriter, r *http.Request) {
 		Hari   string `json:"hari"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, "Request tidak valid", http.StatusBadRequest)
+		jsonError(w, "request tidak valid", http.StatusBadRequest)
 		return
 	}
-	validModes := map[string]bool{"reguler": true, "ramadhan": true, "pts": true, "pas": true}
 	if !validModes[body.Mode] {
-		jsonError(w, "Mode tidak valid", http.StatusBadRequest)
+		jsonError(w, "mode tidak valid", http.StatusBadRequest)
 		return
 	}
 	body.Hari = strings.TrimSpace(body.Hari)
 	if body.Hari == "" {
-		jsonError(w, "Nama hari tidak boleh kosong", http.StatusBadRequest)
+		jsonError(w, "nama hari tidak boleh kosong", http.StatusBadRequest)
 		return
 	}
 	j, err := loadJadwal()
 	if err != nil {
-		jsonError(w, "Gagal memuat jadwal", http.StatusInternalServerError)
+		jsonError(w, "gagal memuat jadwal", http.StatusInternalServerError)
 		return
 	}
 	if j[body.Mode] == nil {
@@ -469,21 +452,21 @@ func handleJadwalHari(w http.ResponseWriter, r *http.Request) {
 	switch body.Action {
 	case "add":
 		if _, exists := j[body.Mode][body.Hari]; exists {
-			jsonError(w, fmt.Sprintf("Hari %s sudah ada", body.Hari), http.StatusBadRequest)
+			jsonError(w, "hari "+body.Hari+" sudah ada", http.StatusBadRequest)
 			return
 		}
 		j[body.Mode][body.Hari] = []Entry{}
 	case "delete":
 		delete(j[body.Mode], body.Hari)
 	default:
-		jsonError(w, "Action tidak valid", http.StatusBadRequest)
+		jsonError(w, "action tidak valid", http.StatusBadRequest)
 		return
 	}
 	if err := saveJadwal(j); err != nil {
-		jsonError(w, "Gagal menyimpan jadwal", http.StatusInternalServerError)
+		jsonError(w, "gagal menyimpan jadwal", http.StatusInternalServerError)
 		return
 	}
-	jsonOK(w, map[string]string{"message": "Berhasil"})
+	jsonOK(w, map[string]string{"message": "berhasil"})
 }
 
 func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
@@ -499,26 +482,25 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 		Entry  Entry  `json:"entry"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, "Request tidak valid", http.StatusBadRequest)
+		jsonError(w, "request tidak valid", http.StatusBadRequest)
 		return
 	}
-	validModes := map[string]bool{"reguler": true, "ramadhan": true, "pts": true, "pas": true}
 	if !validModes[body.Mode] {
-		jsonError(w, "Mode tidak valid", http.StatusBadRequest)
+		jsonError(w, "mode tidak valid", http.StatusBadRequest)
 		return
 	}
 	j, err := loadJadwal()
 	if err != nil {
-		jsonError(w, "Gagal memuat jadwal", http.StatusInternalServerError)
+		jsonError(w, "gagal memuat jadwal", http.StatusInternalServerError)
 		return
 	}
 	if j[body.Mode] == nil {
-		jsonError(w, "Mode tidak ditemukan", http.StatusNotFound)
+		jsonError(w, "mode tidak ditemukan", http.StatusNotFound)
 		return
 	}
 	entries, ok := j[body.Mode][body.Hari]
 	if !ok {
-		jsonError(w, fmt.Sprintf("Hari %s tidak ditemukan", body.Hari), http.StatusNotFound)
+		jsonError(w, "hari "+body.Hari+" tidak ditemukan", http.StatusNotFound)
 		return
 	}
 	switch body.Action {
@@ -527,33 +509,33 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 		sort.Slice(entries, func(i, k int) bool { return entries[i].Waktu < entries[k].Waktu })
 	case "edit":
 		if body.Index < 0 || body.Index >= len(entries) {
-			jsonError(w, "Index tidak valid", http.StatusBadRequest)
+			jsonError(w, "index tidak valid", http.StatusBadRequest)
 			return
 		}
 		entries[body.Index] = body.Entry
 		sort.Slice(entries, func(i, k int) bool { return entries[i].Waktu < entries[k].Waktu })
 	case "delete":
 		if body.Index < 0 || body.Index >= len(entries) {
-			jsonError(w, "Index tidak valid", http.StatusBadRequest)
+			jsonError(w, "index tidak valid", http.StatusBadRequest)
 			return
 		}
 		entries = append(entries[:body.Index], entries[body.Index+1:]...)
 	default:
-		jsonError(w, "Action tidak valid", http.StatusBadRequest)
+		jsonError(w, "action tidak valid", http.StatusBadRequest)
 		return
 	}
 	j[body.Mode][body.Hari] = entries
 	if err := saveJadwal(j); err != nil {
-		jsonError(w, "Gagal menyimpan jadwal", http.StatusInternalServerError)
+		jsonError(w, "gagal menyimpan jadwal", http.StatusInternalServerError)
 		return
 	}
-	jsonOK(w, map[string]string{"message": "Berhasil"})
+	jsonOK(w, map[string]string{"message": "berhasil"})
 }
 
 func handleTones(w http.ResponseWriter, r *http.Request) {
 	files, err := listTones()
 	if err != nil {
-		jsonError(w, "Gagal membaca direktori tone", http.StatusInternalServerError)
+		jsonError(w, "gagal membaca direktori tone", http.StatusInternalServerError)
 		return
 	}
 	jsonOK(w, map[string]any{"tones": files})
@@ -565,34 +547,33 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		jsonError(w, "File terlalu besar (maks 32MB)", http.StatusBadRequest)
+		jsonError(w, "file terlalu besar (maks 32MB)", http.StatusBadRequest)
 		return
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		jsonError(w, "Gagal membaca file", http.StatusBadRequest)
+		jsonError(w, "gagal membaca file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
-
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if ext != ".mp3" && ext != ".wav" && ext != ".ogg" {
-		jsonError(w, "Format tidak didukung. Gunakan mp3, wav, atau ogg.", http.StatusBadRequest)
+		jsonError(w, "format tidak didukung (mp3, wav, ogg)", http.StatusBadRequest)
 		return
 	}
 	filename := filepath.Base(header.Filename)
 	dst, err := os.Create(filepath.Join(toneDir, filename))
 	if err != nil {
-		jsonError(w, "Gagal menyimpan file", http.StatusInternalServerError)
+		jsonError(w, "gagal menyimpan file", http.StatusInternalServerError)
 		return
 	}
 	defer dst.Close()
 	if _, err := io.Copy(dst, file); err != nil {
-		jsonError(w, "Gagal menulis file", http.StatusInternalServerError)
+		jsonError(w, "gagal menulis file", http.StatusInternalServerError)
 		return
 	}
-	logMsg(fmt.Sprintf("File audio diupload: %s", filename))
-	jsonOK(w, map[string]string{"message": "Upload berhasil", "filename": filename})
+	logMsg("audio diupload: " + filename)
+	jsonOK(w, map[string]string{"message": "upload berhasil", "filename": filename})
 }
 
 func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
@@ -604,21 +585,21 @@ func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
 		Filename string `json:"filename"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, "Request tidak valid", http.StatusBadRequest)
+		jsonError(w, "request tidak valid", http.StatusBadRequest)
 		return
 	}
 	filename := filepath.Base(body.Filename)
-	fullPath := filepath.Join(toneDir, filename)
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		jsonError(w, "File tidak ditemukan", http.StatusNotFound)
+	full := filepath.Join(toneDir, filename)
+	if _, err := os.Stat(full); os.IsNotExist(err) {
+		jsonError(w, "file tidak ditemukan", http.StatusNotFound)
 		return
 	}
-	if err := os.Remove(fullPath); err != nil {
-		jsonError(w, "Gagal menghapus file", http.StatusInternalServerError)
+	if err := os.Remove(full); err != nil {
+		jsonError(w, "gagal menghapus file", http.StatusInternalServerError)
 		return
 	}
-	logMsg(fmt.Sprintf("File audio dihapus: %s", filename))
-	jsonOK(w, map[string]string{"message": "File berhasil dihapus"})
+	logMsg("audio dihapus: " + filename)
+	jsonOK(w, map[string]string{"message": "file berhasil dihapus"})
 }
 
 func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
@@ -630,18 +611,18 @@ func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 		Filename string `json:"filename"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		jsonError(w, "Request tidak valid", http.StatusBadRequest)
+		jsonError(w, "request tidak valid", http.StatusBadRequest)
 		return
 	}
 	filename := filepath.Base(body.Filename)
-	fullPath := filepath.Join(toneDir, filename)
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		jsonError(w, "File tidak ditemukan", http.StatusNotFound)
+	full := filepath.Join(toneDir, filename)
+	if _, err := os.Stat(full); os.IsNotExist(err) {
+		jsonError(w, "file tidak ditemukan", http.StatusNotFound)
 		return
 	}
-	go playSound(fullPath)
-	logMsg(fmt.Sprintf("Preview tone: %s", filename))
-	jsonOK(w, map[string]string{"message": fmt.Sprintf("Memutar %s", filename)})
+	go playSound(full)
+	logMsg("preview: " + filename)
+	jsonOK(w, map[string]string{"message": "memutar " + filename})
 }
 
 func handleLog(w http.ResponseWriter, r *http.Request) {
@@ -651,7 +632,7 @@ func handleLog(w http.ResponseWriter, r *http.Request) {
 	}
 	logs, err := readLog()
 	if err != nil {
-		jsonError(w, "Gagal membaca log", http.StatusInternalServerError)
+		jsonError(w, "gagal membaca log", http.StatusInternalServerError)
 		return
 	}
 	jsonOK(w, map[string]any{"logs": logs})
@@ -664,12 +645,12 @@ func handleBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	j, err := loadJadwal()
 	if err != nil {
-		jsonError(w, "Gagal memuat jadwal", http.StatusInternalServerError)
+		jsonError(w, "gagal memuat jadwal", http.StatusInternalServerError)
 		return
 	}
 	data, err := json.MarshalIndent(j, "", "  ")
 	if err != nil {
-		jsonError(w, "Gagal membuat backup", http.StatusInternalServerError)
+		jsonError(w, "gagal membuat backup", http.StatusInternalServerError)
 		return
 	}
 	fname := "backup-jadwal-" + time.Now().Format("20060102-150405") + ".json"
@@ -684,70 +665,59 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseMultipartForm(4 << 20); err != nil {
-		jsonError(w, "File terlalu besar", http.StatusBadRequest)
+		jsonError(w, "file terlalu besar", http.StatusBadRequest)
 		return
 	}
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		jsonError(w, "Gagal membaca file", http.StatusBadRequest)
+		jsonError(w, "gagal membaca file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
-
 	data, err := io.ReadAll(file)
 	if err != nil {
-		jsonError(w, "Gagal membaca isi file", http.StatusInternalServerError)
+		jsonError(w, "gagal membaca isi file", http.StatusInternalServerError)
 		return
 	}
-
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		jsonError(w, "File tidak valid (bukan JSON yang benar)", http.StatusBadRequest)
+		jsonError(w, "file tidak valid", http.StatusBadRequest)
 		return
 	}
-
-	validModes := map[string]bool{"reguler": true, "ramadhan": true, "pts": true, "pas": true}
 	j := make(ModeJadwal)
-
-	for mode, rawMode := range raw {
+	for mode, rm := range raw {
 		if !validModes[mode] {
 			continue
 		}
-		var hariMap map[string][]Entry
-		if err := json.Unmarshal(rawMode, &hariMap); err != nil {
-			jsonError(w, fmt.Sprintf("Format mode %s tidak valid", mode), http.StatusBadRequest)
+		var hm map[string][]Entry
+		if err := json.Unmarshal(rm, &hm); err != nil {
+			jsonError(w, "format mode "+mode+" tidak valid", http.StatusBadRequest)
 			return
 		}
-		j[mode] = hariMap
+		j[mode] = hm
 	}
-
-	for _, mode := range []string{"reguler", "ramadhan", "pts", "pas"} {
-		if j[mode] == nil {
-			j[mode] = map[string][]Entry{}
+	for _, m := range []string{"reguler", "ramadhan", "pts", "pas"} {
+		if j[m] == nil {
+			j[m] = map[string][]Entry{}
 		}
 	}
-
 	if err := saveJadwal(j); err != nil {
-		jsonError(w, "Gagal menyimpan jadwal", http.StatusInternalServerError)
+		jsonError(w, "gagal menyimpan jadwal", http.StatusInternalServerError)
 		return
 	}
-	logMsg("Jadwal berhasil direstore dari backup.")
-	jsonOK(w, map[string]string{"message": "Jadwal berhasil direstore"})
+	logMsg("jadwal direstore dari backup")
+	jsonOK(w, map[string]string{"message": "jadwal berhasil direstore"})
 }
 
 func handleServiceStatus(w http.ResponseWriter, r *http.Request) {
 	schedulerMu.Lock()
 	running := schedulerRunning
 	schedulerMu.Unlock()
-
 	cfg, _ := loadConfig()
-	active := resolveMode(cfg)
-	libur := isLibur(cfg)
-
 	jsonOK(w, map[string]any{
 		"running":     running,
-		"active_mode": active,
-		"is_libur":    libur,
+		"active_mode": resolveMode(cfg),
+		"is_libur":    isLibur(cfg),
 	})
 }
 
@@ -760,13 +730,12 @@ func handleServiceToggle(w http.ResponseWriter, r *http.Request) {
 	schedulerRunning = !schedulerRunning
 	running := schedulerRunning
 	schedulerMu.Unlock()
-
 	state := "dihentikan"
 	if running {
 		state = "dijalankan"
 	}
-	logMsg(fmt.Sprintf("Scheduler %s via web.", state))
-	jsonOK(w, map[string]any{"running": running, "message": fmt.Sprintf("Scheduler %s", state)})
+	logMsg("scheduler " + state + " via web")
+	jsonOK(w, map[string]any{"running": running, "message": "scheduler " + state})
 }
 
 ```
@@ -1301,18 +1270,17 @@ import (
 )
 
 const (
-	ffmpegBin  = "/usr/bin/ffmpeg"
-	audioSink  = "default"
-	audioDriver = "pulse"
-	volume     = "0.85"
-	sleepSec  = 20 * time.Second
 	port      = ":8081"
 	toneDir   = "/opt/bel-madrasah/tone"
 	dataDir   = "/opt/bel-madrasah/data"
 	staticDir = "/opt/bel-madrasah/static"
+	volume    = "0.85"
+	sleepSec  = 20 * time.Second
 )
 
 var (
+	ffmpegPath string
+
 	activeProcs []*exec.Cmd
 	procMu      sync.Mutex
 
@@ -1325,14 +1293,14 @@ func logMsg(msg string) {
 }
 
 func getHari() string {
-	hariMap := map[time.Weekday]string{
+	m := map[time.Weekday]string{
 		time.Monday:    "Senin",
 		time.Tuesday:   "Selasa",
 		time.Wednesday: "Rabu",
 		time.Thursday:  "Kamis",
 		time.Friday:    "Jumat",
 	}
-	return hariMap[time.Now().Weekday()]
+	return m[time.Now().Weekday()]
 }
 
 func stopAllProcs() {
@@ -1349,49 +1317,44 @@ func stopAllProcs() {
 	time.Sleep(200 * time.Millisecond)
 }
 
-func cleanupProcs() {
-	procMu.Lock()
-	defer procMu.Unlock()
-	alive := activeProcs[:0]
-	for _, p := range activeProcs {
-		if p.ProcessState == nil {
-			alive = append(alive, p)
-		}
-	}
-	activeProcs = alive
-}
-
 func playSound(filePath string) {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		logMsg(fmt.Sprintf("File tidak ditemukan: %s", filePath))
+		logMsg("file tidak ditemukan: " + filePath)
 		return
 	}
 	stopAllProcs()
-	cmd := exec.Command(
-		ffmpegBin,
+	args := []string{
 		"-hide_banner", "-loglevel", "error",
 		"-i", filePath,
-		"-filter:a", fmt.Sprintf("volume=%s", volume),
-		"-f", audioDriver, audioSink,
-	)
+		"-filter:a", "volume=" + volume,
+		"-f", "pulse", "default",
+	}
+	cmd := exec.Command(ffmpegPath, args...)
 	if err := cmd.Start(); err != nil {
-		logMsg(fmt.Sprintf("Gagal memutar audio: %s", err))
+		logMsg("gagal memutar audio: " + err.Error())
 		return
 	}
 	procMu.Lock()
 	activeProcs = append(activeProcs, cmd)
 	procMu.Unlock()
 	go func() {
-		if err := cmd.Wait(); err != nil {
-			logMsg(fmt.Sprintf("Audio selesai dengan error: %s", err))
+		_ = cmd.Wait()
+		procMu.Lock()
+		alive := activeProcs[:0]
+		for _, p := range activeProcs {
+			if p.ProcessState == nil {
+				alive = append(alive, p)
+			}
 		}
+		activeProcs = alive
+		procMu.Unlock()
 	}()
 }
 
 func runScheduler() {
-	logMsg("Scheduler bel madrasah dimulai.")
-	sudahDiputar := make(map[string]bool)
-	hariSekarang := ""
+	logMsg("scheduler dimulai")
+	played := make(map[string]bool)
+	lastDay := ""
 
 	for {
 		schedulerMu.Lock()
@@ -1406,12 +1369,11 @@ func runScheduler() {
 		now := time.Now()
 		hari := getHari()
 
-		if hari != hariSekarang {
-			if hariSekarang != "" {
-				sudahDiputar = make(map[string]bool)
-				logMsg("Cache jadwal direset untuk hari baru.")
+		if hari != lastDay {
+			if lastDay != "" {
+				played = make(map[string]bool)
 			}
-			hariSekarang = hari
+			lastDay = hari
 		}
 
 		if hari == "" {
@@ -1431,39 +1393,37 @@ func runScheduler() {
 		}
 
 		mode := resolveMode(cfg)
-
 		jadwal, err := loadJadwal()
 		if err != nil {
 			time.Sleep(sleepSec)
 			continue
 		}
 
-		modeJadwal, ok := jadwal[mode]
+		mj, ok := jadwal[mode]
 		if !ok {
 			time.Sleep(sleepSec)
 			continue
 		}
 
-		jadwalHari, ok := modeJadwal[hari]
+		entries, ok := mj[hari]
 		if !ok {
 			time.Sleep(sleepSec)
 			continue
 		}
 
-		waktuSekarang := now.Format("15:04")
-		for _, entry := range jadwalHari {
-			key := fmt.Sprintf("%s-%s-%s", mode, hari, entry.Waktu)
-			if waktuSekarang == entry.Waktu && !sudahDiputar[key] {
-				logMsg(fmt.Sprintf("[%s] Memutar: %s [%s]", mode, filepath.Base(entry.Audio), entry.Waktu))
-				playSound(entry.Audio)
-				sudahDiputar[key] = true
-
+		waktu := now.Format("15:04")
+		for _, e := range entries {
+			key := mode + "|" + hari + "|" + e.Waktu
+			if waktu == e.Waktu && !played[key] {
+				logMsg(fmt.Sprintf("[%s] %s [%s]", mode, filepath.Base(e.Audio), e.Waktu))
+				playSound(e.Audio)
+				played[key] = true
 				writeLog(ActivityLog{
 					Time:  now.Format("2006-01-02 15:04:05"),
 					Mode:  mode,
 					Hari:  hari,
-					Waktu: entry.Waktu,
-					Audio: filepath.Base(entry.Audio),
+					Waktu: e.Waktu,
+					Audio: filepath.Base(e.Audio),
 				})
 			}
 		}
@@ -1472,23 +1432,42 @@ func runScheduler() {
 	}
 }
 
-func main() {
-	if _, err := os.Stat(ffmpegBin); os.IsNotExist(err) {
-		log.Fatalf("ffmpeg tidak ditemukan di %s.", ffmpegBin)
+func resolveFfmpeg() string {
+	candidates := []string{
+		"/usr/bin/ffmpeg",
+		"/usr/local/bin/ffmpeg",
+		"/bin/ffmpeg",
 	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	if p, err := exec.LookPath("ffmpeg"); err == nil {
+		return p
+	}
+	return ""
+}
+
+func main() {
+	ffmpegPath = resolveFfmpeg()
+	if ffmpegPath == "" {
+		log.Fatal("ffmpeg tidak ditemukan di sistem")
+	}
+	logMsg("ffmpeg: " + ffmpegPath)
 
 	for _, d := range []string{toneDir, dataDir, staticDir} {
 		if err := os.MkdirAll(d, 0755); err != nil {
-			log.Fatalf("Gagal membuat direktori %s: %s", d, err)
+			log.Fatalf("gagal membuat direktori %s: %s", d, err)
 		}
 	}
 
 	if err := initStorage(); err != nil {
-		log.Fatalf("Gagal inisialisasi storage: %s", err)
+		log.Fatalf("gagal inisialisasi storage: %s", err)
 	}
 
 	if err := initAuth(); err != nil {
-		log.Fatalf("Gagal inisialisasi auth: %s", err)
+		log.Fatalf("gagal inisialisasi auth: %s", err)
 	}
 
 	go runScheduler()
@@ -1496,9 +1475,9 @@ func main() {
 	mux := http.NewServeMux()
 	registerRoutes(mux)
 
-	logMsg(fmt.Sprintf("Web server berjalan di port %s", port))
+	logMsg("server berjalan di port " + port)
 	if err := http.ListenAndServe(port, mux); err != nil {
-		log.Fatalf("Server error: %s", err)
+		log.Fatalf("server error: %s", err)
 	}
 }
 
@@ -1538,7 +1517,7 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Bel Madrasah — MTsN 1 Pandeglang</title>
   <meta name="description" content="Sistem bel otomatis MTsN 1 Pandeglang">
-  <meta name="theme-color" content="#0c1a17">
+  <meta name="theme-color" content="#1a0f00">
   <meta name="color-scheme" content="light">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" href="/static/icons/icon-192.png">
@@ -1549,9 +1528,7 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
-    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 
@@ -1594,18 +1571,18 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
           <span id="statusText">—</span>
         </div>
       </div>
-      <button class="hbtn hbtn-primary" id="toggleBtn" onclick="toggleService()">—</button>
-      <button class="hbtn" onclick="logout()">Keluar</button>
+      <button class="hbtn hbtn-primary" id="toggleBtn">—</button>
+      <button class="hbtn" id="logoutBtn">Keluar</button>
     </div>
   </header>
 
   <nav>
-    <button class="nav-btn active" onclick="switchTab('jadwal',this)">Jadwal</button>
-    <button class="nav-btn" onclick="switchTab('mode',this)">Mode Bel</button>
-    <button class="nav-btn" onclick="switchTab('libur',this)">Hari Libur</button>
-    <button class="nav-btn" onclick="switchTab('log',this)">Log</button>
-    <button class="nav-btn" onclick="switchTab('audio',this)">Audio</button>
-    <button class="nav-btn" onclick="switchTab('settings',this)">Pengaturan</button>
+    <button class="nav-btn active" data-tab="jadwal">Jadwal</button>
+    <button class="nav-btn" data-tab="mode">Mode Bel</button>
+    <button class="nav-btn" data-tab="libur">Hari Libur</button>
+    <button class="nav-btn" data-tab="log">Log</button>
+    <button class="nav-btn" data-tab="audio">Audio</button>
+    <button class="nav-btn" data-tab="settings">Pengaturan</button>
   </nav>
 
   <main>
@@ -1619,21 +1596,20 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
           </div>
         </div>
         <div class="mode-tabs">
-          <button class="mtab active reguler" onclick="switchJadwalMode('reguler',this)">Reguler</button>
-          <button class="mtab ramadhan" onclick="switchJadwalMode('ramadhan',this)">Ramadhan</button>
-          <button class="mtab pts" onclick="switchJadwalMode('pts',this)">PTS</button>
-          <button class="mtab pas" onclick="switchJadwalMode('pas',this)">PAS</button>
+          <button class="mtab active reguler" data-mode="reguler">Reguler</button>
+          <button class="mtab ramadhan" data-mode="ramadhan">Ramadhan</button>
+          <button class="mtab pts" data-mode="pts">PTS</button>
+          <button class="mtab pas" data-mode="pas">PAS</button>
         </div>
         <div class="row-form">
           <div class="fg fg-grow">
             <label>Tambah Hari</label>
             <input type="text" id="newHariInput" placeholder="Contoh: Sabtu">
           </div>
-          <button class="btn primary" onclick="addHari()">Tambah Hari</button>
+          <button class="btn primary" id="addHariBtn">Tambah Hari</button>
         </div>
         <div class="hari-tabs" id="hariTabs"></div>
       </div>
-
       <div class="card" id="jadwalCard">
         <div class="card-head">
           <div>
@@ -1641,8 +1617,8 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
             <div class="card-desc" id="hariInfo"></div>
           </div>
           <div class="btn-row" id="jadwalActions" style="display:none">
-            <button class="btn ghost sm" onclick="deleteHari()">Hapus Hari</button>
-            <button class="btn primary sm" onclick="openAddEntry()">Tambah Bel</button>
+            <button class="btn ghost sm" id="deleteHariBtn">Hapus Hari</button>
+            <button class="btn primary sm" id="addEntryBtn">Tambah Bel</button>
           </div>
         </div>
         <div id="jadwalTable">
@@ -1660,22 +1636,22 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
           </div>
         </div>
         <div class="mode-grid">
-          <div class="mode-opt" id="modeOptReguler" onclick="selectMode('reguler')">
+          <div class="mode-opt" id="modeOptReguler" data-mode="reguler">
             <div class="mode-indicator"></div>
             <div class="mode-name">Reguler</div>
             <div class="mode-hint">Jadwal harian normal</div>
           </div>
-          <div class="mode-opt ramadhan" id="modeOptRamadhan" onclick="selectMode('ramadhan')">
+          <div class="mode-opt ramadhan" id="modeOptRamadhan" data-mode="ramadhan">
             <div class="mode-indicator"></div>
             <div class="mode-name">Ramadhan</div>
             <div class="mode-hint">Jadwal bulan Ramadhan</div>
           </div>
-          <div class="mode-opt pts" id="modeOptPTS" onclick="selectMode('pts')">
+          <div class="mode-opt pts" id="modeOptPTS" data-mode="pts">
             <div class="mode-indicator"></div>
             <div class="mode-name">PTS</div>
             <div class="mode-hint">Penilaian Tengah Semester</div>
           </div>
-          <div class="mode-opt pas" id="modeOptPAS" onclick="selectMode('pas')">
+          <div class="mode-opt pas" id="modeOptPAS" data-mode="pas">
             <div class="mode-indicator"></div>
             <div class="mode-name">PAS</div>
             <div class="mode-hint">Penilaian Akhir Semester</div>
@@ -1687,12 +1663,11 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
             <div class="toggle-hint">Paksa mode di atas, abaikan jadwal otomatis berbasis tanggal</div>
           </div>
           <label class="switch">
-            <input type="checkbox" id="overrideToggle" onchange="onOverrideChange()">
+            <input type="checkbox" id="overrideToggle">
             <span class="track"></span>
           </label>
         </div>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
@@ -1711,12 +1686,11 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
           </div>
         </div>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
             <div class="card-title">Jadwal Otomatis PTS</div>
-            <div class="card-desc">Diprioritaskan di atas mode Ramadhan jika tanggal bertumpang tindih</div>
+            <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal bertumpang tindih</div>
           </div>
         </div>
         <div class="two-col">
@@ -1730,12 +1704,11 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
           </div>
         </div>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
             <div class="card-title">Jadwal Otomatis PAS</div>
-            <div class="card-desc">Diprioritaskan di atas mode Ramadhan jika tanggal bertumpang tindih</div>
+            <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal bertumpang tindih</div>
           </div>
         </div>
         <div class="two-col">
@@ -1749,7 +1722,7 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
           </div>
         </div>
         <div style="margin-top:22px">
-          <button class="btn primary" onclick="saveConfig()">Simpan Pengaturan</button>
+          <button class="btn primary" id="saveConfigBtn">Simpan Pengaturan</button>
         </div>
       </div>
     </div>
@@ -1769,7 +1742,7 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
             <label>Tanggal</label>
             <input type="date" id="newLiburDate">
           </div>
-          <button class="btn primary" onclick="addLibur()">Tambah</button>
+          <button class="btn primary" id="addLiburBtn">Tambah</button>
         </div>
       </div>
       <div class="card">
@@ -1790,7 +1763,7 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
             <div class="card-title">Log Aktivitas</div>
             <div class="card-desc">Riwayat bel yang telah diputar</div>
           </div>
-          <button class="btn ghost sm" onclick="loadLog()">Perbarui</button>
+          <button class="btn ghost sm" id="refreshLogBtn">Perbarui</button>
         </div>
         <div id="logContainer">
           <div class="empty">Memuat...</div>
@@ -1806,9 +1779,7 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
             <div class="card-desc">Format yang didukung: MP3, WAV, OGG — Maks. 32 MB</div>
           </div>
         </div>
-        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()"
-          ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
-          ondrop="handleDrop(event)">
+        <div class="upload-zone" id="uploadZone">
           <div class="upload-zone-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
               <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
@@ -1817,7 +1788,7 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
           <p>Klik atau seret file audio ke sini</p>
           <small>MP3, WAV, OGG — Maks. 32 MB</small>
         </div>
-        <input type="file" id="fileInput" accept=".mp3,.wav,.ogg" onchange="uploadFile(this.files[0])">
+        <input type="file" id="fileInput" accept=".mp3,.wav,.ogg">
       </div>
       <div class="card">
         <div class="card-head">
@@ -1838,11 +1809,9 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
             <div class="card-desc">Tambahkan ke layar utama untuk akses cepat tanpa browser</div>
           </div>
         </div>
-        <button class="btn primary" id="installAppBtn" onclick="promptInstall()" style="display:none">Pasang
-          Aplikasi</button>
+        <button class="btn primary" id="installAppBtn" style="display:none">Pasang Aplikasi</button>
         <span class="card-desc" id="installInfo">Aplikasi sudah terpasang atau tidak didukung di perangkat ini.</span>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
@@ -1851,15 +1820,14 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
           </div>
         </div>
         <div class="btn-row">
-          <button class="btn success" onclick="downloadBackup()">Unduh Backup</button>
+          <button class="btn success" id="backupBtn">Unduh Backup</button>
           <label class="btn warning" style="cursor:pointer">
             Restore dari File
-            <input type="file" accept=".json" style="display:none" onchange="restoreBackup(this.files[0])">
+            <input type="file" accept=".json" id="restoreInput" style="display:none">
           </label>
         </div>
         <div class="card-desc" style="margin-top:14px">Mencakup jadwal reguler, Ramadhan, PTS, dan PAS.</div>
       </div>
-
       <div class="card">
         <div class="card-head">
           <div>
@@ -1881,7 +1849,7 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
             <input type="password" id="confirmPass" placeholder="Ulangi password baru">
           </div>
         </div>
-        <button class="btn primary" onclick="changePassword()">Perbarui Password</button>
+        <button class="btn primary" id="changePassBtn">Perbarui Password</button>
       </div>
     </div>
 
@@ -1902,8 +1870,8 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
         <select id="entryAudio"></select>
       </div>
       <div class="modal-foot">
-        <button class="btn ghost" onclick="closeModal()">Batal</button>
-        <button class="btn primary" onclick="saveEntry()">Simpan</button>
+        <button class="btn ghost" id="cancelModalBtn">Batal</button>
+        <button class="btn primary" id="saveEntryBtn">Simpan</button>
       </div>
     </div>
   </div>
@@ -1919,8 +1887,8 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
       <div class="pwa-desc">Tambahkan ke layar utama untuk akses cepat</div>
     </div>
     <div class="pwa-actions">
-      <button class="btn ghost sm" onclick="dismissBanner()">Nanti</button>
-      <button class="btn primary sm" onclick="promptInstall()">Pasang</button>
+      <button class="btn ghost sm" id="dismissBannerBtn">Nanti</button>
+      <button class="btn primary sm" id="installBannerBtn">Pasang</button>
     </div>
   </div>
 
@@ -1934,6 +1902,187 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 ```
 ---
 
+## static/login.css
+```css
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0
+}
+
+body {
+  font-family: 'Lexend', system-ui, sans-serif;
+  background: #1a0f00;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  -webkit-font-smoothing: antialiased
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(180, 100, 20, .18), transparent 55%), radial-gradient(circle at 70% 75%, rgba(140, 70, 10, .12), transparent 50%);
+  pointer-events: none
+}
+
+.card {
+  position: relative;
+  background: #fff8f0;
+  border-radius: 20px;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, .45), 0 4px 16px rgba(0, 0, 0, .2);
+  padding: 40px 36px;
+  width: min(380px, 100%);
+  animation: pop .35s cubic-bezier(.34, 1.56, .64, 1)
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(.97)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+.logo {
+  text-align: center;
+  margin-bottom: 32px
+}
+
+.logo-mark {
+  width: 54px;
+  height: 54px;
+  border-radius: 17px;
+  background: #fff3e0;
+  border: 1px solid #ffe0b2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px
+}
+
+.logo-mark svg {
+  width: 24px;
+  height: 24px;
+  stroke: #c75000
+}
+
+.logo h1 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a0f00;
+  letter-spacing: -.02em
+}
+
+.logo p {
+  font-size: 12px;
+  color: #a0785a;
+  margin-top: 4px;
+  font-weight: 400
+}
+
+.error {
+  background: #fff0ed;
+  border: 1px solid #ffb4a0;
+  color: #8b1a00;
+  border-radius: 9px;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 18px;
+  display: none;
+  line-height: 1.4
+}
+
+.fg {
+  margin-bottom: 14px
+}
+
+label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: #8a6040;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  margin-bottom: 7px
+}
+
+input {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1px solid #e8d5c0;
+  border-radius: 9px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #1a0f00;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  background: #fff;
+  -webkit-appearance: none
+}
+
+input:focus {
+  border-color: #c75000;
+  box-shadow: 0 0 0 3px rgba(199, 80, 0, .12)
+}
+
+input::placeholder {
+  color: #c8b09a
+}
+
+.btn {
+  width: 100%;
+  padding: 11px;
+  margin-top: 8px;
+  background: #c75000;
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 2px 8px rgba(199, 80, 0, .35);
+  transition: background .2s, transform .1s;
+  letter-spacing: -.01em
+}
+
+.btn:hover {
+  background: #a84200
+}
+
+.btn:active {
+  transform: scale(.98)
+}
+
+.btn:disabled {
+  background: #d6c5b5;
+  box-shadow: none;
+  cursor: not-allowed
+}
+
+.footer {
+  text-align: center;
+  font-size: 11px;
+  color: #c8b09a;
+  margin-top: 24px;
+  font-weight: 400
+}
+
+```
+---
+
 ## static/login.html
 ```html
 <!DOCTYPE html>
@@ -1943,7 +2092,7 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Masuk — Bel Madrasah</title>
-  <meta name="theme-color" content="#0c1a17">
+  <meta name="theme-color" content="#1a0f00">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" href="/static/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
@@ -1951,187 +2100,8 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap"
-    rel="stylesheet">
-  <style>
-    *,
-    *::before,
-    *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: 'Inter', system-ui, sans-serif;
-      background: #0c1a17;
-      min-height: 100vh;
-      min-height: 100dvh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(circle at 25% 25%, rgba(15, 118, 110, .15), transparent 50%),
-        radial-gradient(circle at 75% 75%, rgba(15, 118, 110, .08), transparent 50%);
-      pointer-events: none;
-    }
-
-    .card {
-      position: relative;
-      background: #fff;
-      border-radius: 20px;
-      box-shadow: 0 32px 64px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .2);
-      padding: 40px 36px;
-      width: min(380px, 100%);
-      animation: pop .35s cubic-bezier(.34, 1.56, .64, 1);
-    }
-
-    @keyframes pop {
-      from {
-        opacity: 0;
-        transform: translateY(16px) scale(.97);
-      }
-
-      to {
-        opacity: 1;
-        transform: none;
-      }
-    }
-
-    .logo {
-      text-align: center;
-      margin-bottom: 32px;
-    }
-
-    .logo-mark {
-      width: 54px;
-      height: 54px;
-      border-radius: 17px;
-      background: #f0fdf9;
-      border: 1px solid #ccfbef;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-    }
-
-    .logo-mark svg {
-      width: 24px;
-      height: 24px;
-      stroke: #0f766e;
-    }
-
-    .logo h1 {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      font-size: 18px;
-      font-weight: 800;
-      color: #1c1917;
-      letter-spacing: -.02em;
-    }
-
-    .logo p {
-      font-size: 12px;
-      color: #a8a29e;
-      margin-top: 4px;
-    }
-
-    .error {
-      background: #fef2f2;
-      border: 1px solid #fca5a5;
-      color: #991b1b;
-      border-radius: 9px;
-      padding: 11px 14px;
-      font-size: 12.5px;
-      font-weight: 500;
-      margin-bottom: 18px;
-      display: none;
-      line-height: 1.4;
-    }
-
-    .fg {
-      margin-bottom: 14px;
-    }
-
-    label {
-      display: block;
-      font-size: 10px;
-      font-weight: 700;
-      color: #78716c;
-      text-transform: uppercase;
-      letter-spacing: .07em;
-      margin-bottom: 7px;
-    }
-
-    input {
-      width: 100%;
-      padding: 10px 13px;
-      border: 1px solid #e7e5e4;
-      border-radius: 9px;
-      font-size: 14px;
-      font-family: inherit;
-      color: #1c1917;
-      outline: none;
-      transition: border-color .15s, box-shadow .15s;
-      background: #fff;
-      -webkit-appearance: none;
-    }
-
-    input:focus {
-      border-color: #0f766e;
-      box-shadow: 0 0 0 3px rgba(15, 118, 110, .1);
-    }
-
-    input::placeholder {
-      color: #d6d3d1;
-    }
-
-    .btn {
-      width: 100%;
-      padding: 11px;
-      margin-top: 8px;
-      background: #0f766e;
-      color: #fff;
-      border: none;
-      border-radius: 9px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      font-family: inherit;
-      box-shadow: 0 2px 8px rgba(15, 118, 110, .3);
-      transition: background .2s, transform .1s;
-      letter-spacing: -.01em;
-    }
-
-    .btn:hover {
-      background: #0d6460;
-    }
-
-    .btn:active {
-      transform: scale(.98);
-    }
-
-    .btn:disabled {
-      background: #d6d3d1;
-      box-shadow: none;
-      cursor: not-allowed;
-    }
-
-    .footer {
-      text-align: center;
-      font-size: 11px;
-      color: #d6d3d1;
-      margin-top: 24px;
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/login.css">
 </head>
 
 <body>
@@ -2146,61 +2116,74 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
       <h1>Bel Madrasah</h1>
       <p>MTsN 1 Pandeglang</p>
     </div>
-
     <div class="error" id="errMsg"></div>
-
     <div class="fg">
       <label>Username</label>
       <input type="text" id="username" placeholder="admin" autocomplete="username">
     </div>
     <div class="fg">
       <label>Password</label>
-      <input type="password" id="password" placeholder="Masukkan password" autocomplete="current-password"
-        onkeydown="if(event.key==='Enter')login()">
+      <input type="password" id="password" placeholder="Masukkan password" autocomplete="current-password">
     </div>
-    <button class="btn" id="loginBtn" onclick="login()">Masuk</button>
+    <button class="btn" id="loginBtn">Masuk</button>
     <div class="footer">Sistem Bel Otomatis Madrasah</div>
   </div>
-
-  <script>
-    async function login() {
-      const btn = document.getElementById("loginBtn");
-      const err = document.getElementById("errMsg");
-      const u = document.getElementById("username").value.trim();
-      const p = document.getElementById("password").value;
-      if (!u || !p) { showErr("Username dan password harus diisi"); return; }
-      btn.disabled = true;
-      btn.textContent = "Memproses...";
-      err.style.display = "none";
-      try {
-        const res = await fetch("/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: u, password: p }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        window.location.href = "/";
-      } catch (e) {
-        showErr(e.message);
-        btn.disabled = false;
-        btn.textContent = "Masuk";
-      }
-    }
-
-    function showErr(msg) {
-      const el = document.getElementById("errMsg");
-      el.textContent = msg;
-      el.style.display = "block";
-    }
-
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => { }));
-    }
-  </script>
+  <script src="/static/login.js"></script>
 </body>
 
 </html>
+
+```
+---
+
+## static/login.js
+```text
+(function () {
+  var btn = document.getElementById("loginBtn");
+  var err = document.getElementById("errMsg");
+
+  function showErr(msg) {
+    err.textContent = msg;
+    err.style.display = "block";
+  }
+
+  async function login() {
+    var u = document.getElementById("username").value.trim();
+    var p = document.getElementById("password").value;
+    if (!u || !p) {
+      showErr("Username dan password harus diisi");
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "Memproses...";
+    err.style.display = "none";
+    try {
+      var res = await fetch("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: u, password: p }),
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      window.location.href = "/";
+    } catch (e) {
+      showErr(e.message);
+      btn.disabled = false;
+      btn.textContent = "Masuk";
+    }
+  }
+
+  btn.addEventListener("click", login);
+  document.getElementById("password").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") login();
+  });
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js").catch(function () {});
+    });
+  }
+})();
 
 ```
 ---
@@ -2227,44 +2210,8 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
   ],
   "icons": [
     {
-      "src": "/static/icons/icon-72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/static/icons/icon-96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/static/icons/icon-128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/static/icons/icon-144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/static/icons/icon-152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
       "src": "/static/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/static/icons/icon-384.png",
-      "sizes": "384x384",
       "type": "image/png",
       "purpose": "any"
     },
@@ -2273,18 +2220,6 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
-    },
-    {
-      "src": "/static/icons/icon-maskable-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/static/icons/icon-maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -3080,61 +3015,49 @@ window.addEventListener("click", (e) => {
 ## static/style.css
 ```css
 :root {
-  --ink: #1c1917;
-  --ink-2: #44403c;
-  --ink-3: #78716c;
-  --ink-4: #a8a29e;
-  --ink-5: #d6d3d1;
-  --bg: #faf9f7;
-  --bg-2: #f5f3f0;
+  --ink: #1a0f00;
+  --ink-2: #3d2200;
+  --ink-3: #7a5230;
+  --ink-4: #a8845a;
+  --ink-5: #d4b898;
+  --bg: #fdf6ee;
+  --bg-2: #f7ede0;
   --surface: #ffffff;
-  --surface-2: #fdf9f6;
-  --border: #e8e3dd;
-  --border-2: #f0ece8;
-
-  --teal: #0f766e;
-  --teal-d: #0d6460;
-  --teal-l: #f0fdf9;
-  --teal-m: #ccfbef;
-  --teal-b: #99f6e4;
-
-  --amber: #92400e;
-  --amber-d: #78350f;
+  --surface-2: #fffaf5;
+  --border: #ead9c4;
+  --border-2: #f0e4d0;
+  --brand: #c75000;
+  --brand-d: #a84200;
+  --brand-l: #fff3e0;
+  --brand-m: #ffe0b2;
+  --brand-b: #ffcc80;
+  --amber: #8a5400;
+  --amber-d: #6d4000;
   --amber-l: #fffbeb;
-  --amber-m: #fef3c7;
+  --amber-m: #fff3c4;
   --amber-b: #fde68a;
-
-  --green: #166534;
+  --green: #1a5c2a;
   --green-l: #f0fdf4;
   --green-m: #dcfce7;
   --green-b: #86efac;
-
-  --red: #991b1b;
-  --red-l: #fef2f2;
-  --red-m: #fee2e2;
-  --red-b: #fca5a5;
-
-  --violet: #5b21b6;
-  --violet-l: #f5f3ff;
-  --violet-m: #ede9fe;
-
-  --rose: #9f1239;
-  --rose-l: #fff1f2;
-  --rose-m: #ffe4e6;
-
-  --brand: #0f766e;
-  --brand-d: #0d6460;
-
+  --red: #8b1a00;
+  --red-l: #fff0ed;
+  --red-m: #ffd5cc;
+  --red-b: #ffb4a0;
+  --violet: #4a1c8a;
+  --violet-l: #f5f0ff;
+  --violet-m: #ede0ff;
+  --rose: #8a0a2e;
+  --rose-l: #fff0f3;
+  --rose-m: #ffd6e0;
   --r: 8px;
   --r-md: 12px;
   --r-lg: 16px;
   --r-xl: 20px;
-
-  --sh: 0 1px 2px rgba(0, 0, 0, .05);
-  --sh-md: 0 4px 8px rgba(0, 0, 0, .06), 0 1px 3px rgba(0, 0, 0, .04);
-  --sh-lg: 0 12px 24px rgba(0, 0, 0, .08), 0 4px 8px rgba(0, 0, 0, .04);
-  --sh-xl: 0 24px 48px rgba(0, 0, 0, .12), 0 8px 16px rgba(0, 0, 0, .06);
-
+  --sh: 0 1px 3px rgba(100, 50, 0, .06);
+  --sh-md: 0 4px 10px rgba(100, 50, 0, .08), 0 1px 3px rgba(100, 50, 0, .04);
+  --sh-lg: 0 12px 24px rgba(100, 50, 0, .1), 0 4px 8px rgba(100, 50, 0, .04);
+  --sh-xl: 0 24px 48px rgba(100, 50, 0, .14), 0 8px 16px rgba(100, 50, 0, .06);
   --header-h: 64px;
   --nav-h: 48px;
 }
@@ -3144,82 +3067,81 @@ window.addEventListener("click", (e) => {
 *::after {
   box-sizing: border-box;
   margin: 0;
-  padding: 0;
+  padding: 0
 }
 
 html {
   -webkit-text-size-adjust: 100%;
-  scroll-behavior: smooth;
+  scroll-behavior: smooth
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Lexend', system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--ink);
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
+  min-height: 100vh
 }
 
 ::-webkit-scrollbar {
   width: 6px;
-  height: 6px;
+  height: 6px
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: transparent
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 6px;
+  border-radius: 6px
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-5);
+  background: var(--ink-5)
 }
 
-/* SPLASH */
 .splash {
   position: fixed;
   inset: 0;
-  background: #0c1a17;
+  background: #1a0f00;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  transition: opacity .5s ease, visibility .5s ease;
+  transition: opacity .5s ease, visibility .5s ease
 }
 
 .splash.gone {
   opacity: 0;
   visibility: hidden;
-  pointer-events: none;
+  pointer-events: none
 }
 
 .splash-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 24px
 }
 
 .splash-mark {
   width: 56px;
   height: 56px;
   border-radius: 18px;
-  background: rgba(15, 118, 110, .2);
-  border: 1px solid rgba(15, 118, 110, .3);
+  background: rgba(199, 80, 0, .2);
+  border: 1px solid rgba(199, 80, 0, .3);
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: center
 }
 
 .splash-mark svg {
   width: 26px;
   height: 26px;
-  stroke: #5eead4;
+  stroke: #ffb74d
 }
 
 .splash-label {
@@ -3227,7 +3149,7 @@ body {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: uppercase
 }
 
 .splash-ring {
@@ -3235,17 +3157,16 @@ body {
   height: 20px;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, .1);
-  border-top-color: #5eead4;
-  animation: spin .7s linear infinite;
+  border-top-color: #ffb74d;
+  animation: spin .7s linear infinite
 }
 
 @keyframes spin {
   to {
-    transform: rotate(360deg);
+    transform: rotate(360deg)
   }
 }
 
-/* OFFLINE BAR */
 .offline-bar {
   position: fixed;
   top: 0;
@@ -3260,16 +3181,15 @@ body {
   padding: 6px 16px;
   letter-spacing: .01em;
   transform: translateY(-100%);
-  transition: transform .3s ease;
+  transition: transform .3s ease
 }
 
 .offline-bar.show {
-  transform: translateY(0);
+  transform: translateY(0)
 }
 
-/* HEADER */
 header {
-  background: #0c1a17;
+  background: #1a0f00;
   height: var(--header-h);
   display: flex;
   align-items: center;
@@ -3279,14 +3199,14 @@ header {
   position: sticky;
   top: 0;
   z-index: 200;
-  border-bottom: 1px solid rgba(255, 255, 255, .06);
+  border-bottom: 1px solid rgba(255, 255, 255, .06)
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
+  min-width: 0
 }
 
 .brand-mark {
@@ -3294,26 +3214,25 @@ header {
   height: 36px;
   border-radius: 11px;
   flex-shrink: 0;
-  background: rgba(94, 234, 212, .08);
-  border: 1px solid rgba(94, 234, 212, .15);
+  background: rgba(255, 183, 77, .1);
+  border: 1px solid rgba(255, 183, 77, .18);
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: center
 }
 
 .brand-mark svg {
   width: 17px;
   height: 17px;
-  stroke: #5eead4;
+  stroke: #ffb74d
 }
 
 .brand-name {
-  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 15px;
   font-weight: 700;
   color: #fff;
   letter-spacing: -.01em;
-  display: block;
+  display: block
 }
 
 .brand-sub {
@@ -3321,58 +3240,59 @@ header {
   color: rgba(255, 255, 255, .35);
   display: block;
   margin-top: 1px;
+  font-weight: 400
 }
 
 .header-controls {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  flex-shrink: 0
 }
 
 .status-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8px
 }
 
 .badge {
   padding: 3px 9px;
   border-radius: 20px;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: uppercase
 }
 
 .badge-mode {
-  background: rgba(94, 234, 212, .1);
-  color: #5eead4;
-  border: 1px solid rgba(94, 234, 212, .2);
+  background: rgba(255, 183, 77, .12);
+  color: #ffb74d;
+  border: 1px solid rgba(255, 183, 77, .22)
 }
 
 .badge-mode.ramadhan {
-  background: rgba(251, 191, 36, .1);
-  color: #fbbf24;
-  border-color: rgba(251, 191, 36, .2);
+  background: rgba(255, 220, 100, .1);
+  color: #ffd54f;
+  border-color: rgba(255, 220, 100, .2)
 }
 
 .badge-mode.pts {
   background: rgba(167, 139, 250, .1);
-  color: #a78bfa;
-  border-color: rgba(167, 139, 250, .2);
+  color: #b39ddb;
+  border-color: rgba(167, 139, 250, .2)
 }
 
 .badge-mode.pas {
-  background: rgba(251, 113, 133, .1);
-  color: #fb7185;
-  border-color: rgba(251, 113, 133, .2);
+  background: rgba(255, 138, 128, .1);
+  color: #ff8a80;
+  border-color: rgba(255, 138, 128, .2)
 }
 
 .badge-libur {
-  background: rgba(248, 113, 113, .1);
-  color: #f87171;
-  border-color: rgba(248, 113, 113, .2);
+  background: rgba(255, 100, 80, .1);
+  color: #ff7043;
+  border: 1px solid rgba(255, 100, 80, .2)
 }
 
 .status-pill {
@@ -3384,7 +3304,8 @@ header {
   border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 20px;
   font-size: 11.5px;
-  color: rgba(255, 255, 255, .6);
+  color: rgba(255, 255, 255, .55);
+  font-weight: 400
 }
 
 .dot {
@@ -3393,12 +3314,12 @@ header {
   border-radius: 50%;
   background: #6b7280;
   flex-shrink: 0;
-  transition: background .3s, box-shadow .3s;
+  transition: background .3s, box-shadow .3s
 }
 
 .dot.on {
-  background: #34d399;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, .18);
+  background: #66bb6a;
+  box-shadow: 0 0 0 3px rgba(102, 187, 106, .2)
 }
 
 .hbtn {
@@ -3412,26 +3333,25 @@ header {
   font-family: inherit;
   cursor: pointer;
   transition: all .15s ease;
-  white-space: nowrap;
+  white-space: nowrap
 }
 
 .hbtn:hover {
   background: rgba(255, 255, 255, .12);
-  color: #fff;
+  color: #fff
 }
 
 .hbtn-primary {
-  background: rgba(94, 234, 212, .12);
-  border-color: rgba(94, 234, 212, .2);
-  color: #5eead4;
+  background: rgba(199, 80, 0, .25);
+  border-color: rgba(199, 80, 0, .4);
+  color: #ffb74d
 }
 
 .hbtn-primary:hover {
-  background: rgba(94, 234, 212, .2);
-  color: #2dd4bf;
+  background: rgba(199, 80, 0, .38);
+  color: #ffd54f
 }
 
-/* NAV */
 nav {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -3444,11 +3364,11 @@ nav {
   scrollbar-width: none;
   height: var(--nav-h);
   align-items: center;
-  gap: 2px;
+  gap: 2px
 }
 
 nav::-webkit-scrollbar {
-  display: none;
+  display: none
 }
 
 .nav-btn {
@@ -3463,57 +3383,54 @@ nav::-webkit-scrollbar {
   border-radius: var(--r);
   white-space: nowrap;
   transition: color .15s, background .15s;
-  font-family: inherit;
-  position: relative;
+  font-family: inherit
 }
 
 .nav-btn:hover:not(.active) {
   color: var(--ink-2);
-  background: var(--bg-2);
+  background: var(--bg-2)
 }
 
 .nav-btn.active {
   color: var(--brand);
-  background: var(--teal-l);
-  font-weight: 600;
+  background: var(--brand-l);
+  font-weight: 600
 }
 
-/* MAIN */
 main {
   max-width: 980px;
   margin: 0 auto;
-  padding: 28px 24px 80px;
+  padding: 28px 24px 80px
 }
 
 .section {
-  display: none;
+  display: none
 }
 
 .section.active {
   display: block;
-  animation: fadeUp .25s ease both;
+  animation: fadeUp .25s ease both
 }
 
 @keyframes fadeUp {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(8px)
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0)
   }
 }
 
-/* CARD */
 .card {
   background: var(--surface);
   border-radius: var(--r-lg);
   border: 1px solid var(--border);
   box-shadow: var(--sh);
   padding: 24px;
-  margin-bottom: 16px;
+  margin-bottom: 16px
 }
 
 .card-head {
@@ -3522,15 +3439,14 @@ main {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 20px
 }
 
 .card-title {
-  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 14px;
   font-weight: 700;
   color: var(--ink);
-  letter-spacing: -.01em;
+  letter-spacing: -.01em
 }
 
 .card-desc {
@@ -3538,30 +3454,14 @@ main {
   color: var(--ink-4);
   margin-top: 3px;
   line-height: 1.5;
+  font-weight: 400
 }
 
-/* SECTION TITLE */
-.sec-title {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -.02em;
-  margin-bottom: 6px;
-}
-
-.sec-desc {
-  font-size: 13px;
-  color: var(--ink-3);
-  margin-bottom: 24px;
-}
-
-/* MODE TABS (jadwal) */
 .mode-tabs {
   display: flex;
   gap: 6px;
   margin-bottom: 20px;
-  flex-wrap: wrap;
+  flex-wrap: wrap
 }
 
 .mtab {
@@ -3574,47 +3474,46 @@ main {
   font-weight: 600;
   color: var(--ink-3);
   transition: all .15s ease;
-  font-family: inherit;
+  font-family: inherit
 }
 
 .mtab:hover:not(.active) {
   border-color: var(--ink-5);
   color: var(--ink-2);
-  background: var(--bg-2);
+  background: var(--bg-2)
 }
 
 .mtab.active.reguler {
-  background: var(--teal);
+  background: var(--brand);
   color: #fff;
-  border-color: var(--teal);
+  border-color: var(--brand)
 }
 
 .mtab.active.ramadhan {
   background: #d97706;
   color: #fff;
-  border-color: #d97706;
+  border-color: #d97706
 }
 
 .mtab.active.pts {
   background: var(--violet);
   color: #fff;
-  border-color: var(--violet);
+  border-color: var(--violet)
 }
 
 .mtab.active.pas {
   background: var(--rose);
   color: #fff;
-  border-color: var(--rose);
+  border-color: var(--rose)
 }
 
-/* HARI TABS */
 .hari-tabs {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--border-2);
+  border-top: 1px solid var(--border-2)
 }
 
 .hari-tab {
@@ -3627,32 +3526,31 @@ main {
   font-weight: 600;
   color: var(--ink-2);
   transition: all .15s ease;
-  font-family: inherit;
+  font-family: inherit
 }
 
 .hari-tab:hover:not(.active) {
-  border-color: var(--teal-b);
-  color: var(--teal);
-  background: var(--teal-l);
+  border-color: var(--brand-b);
+  color: var(--brand);
+  background: var(--brand-l)
 }
 
 .hari-tab.active {
-  background: var(--teal);
+  background: var(--brand);
   color: #fff;
-  border-color: var(--teal);
+  border-color: var(--brand)
 }
 
-/* MODE GRID */
 .mode-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 20px
 }
 
-@media (max-width: 560px) {
+@media(max-width:560px) {
   .mode-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr
   }
 }
 
@@ -3663,36 +3561,36 @@ main {
   cursor: pointer;
   text-align: center;
   transition: all .18s ease;
-  background: var(--bg);
+  background: var(--bg)
 }
 
 .mode-opt:hover {
-  border-color: var(--teal-b);
-  background: var(--teal-l);
+  border-color: var(--brand-b);
+  background: var(--brand-l)
 }
 
 .mode-opt.active {
-  border-color: var(--teal);
-  background: var(--teal-l);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, .08);
+  border-color: var(--brand);
+  background: var(--brand-l);
+  box-shadow: 0 0 0 3px rgba(199, 80, 0, .08)
 }
 
 .mode-opt.active.ramadhan {
   border-color: #d97706;
   background: var(--amber-l);
-  box-shadow: 0 0 0 3px rgba(217, 119, 6, .08);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, .08)
 }
 
 .mode-opt.active.pts {
   border-color: var(--violet);
   background: var(--violet-l);
-  box-shadow: 0 0 0 3px rgba(91, 33, 182, .08);
+  box-shadow: 0 0 0 3px rgba(74, 28, 138, .08)
 }
 
 .mode-opt.active.pas {
   border-color: var(--rose);
   background: var(--rose-l);
-  box-shadow: 0 0 0 3px rgba(159, 18, 57, .08);
+  box-shadow: 0 0 0 3px rgba(138, 10, 46, .08)
 }
 
 .mode-indicator {
@@ -3701,31 +3599,30 @@ main {
   border-radius: 50%;
   background: var(--border);
   margin: 0 auto 10px;
-  transition: background .18s;
+  transition: background .18s
 }
 
 .mode-opt.active .mode-indicator {
-  background: var(--teal);
+  background: var(--brand)
 }
 
 .mode-opt.active.ramadhan .mode-indicator {
-  background: #d97706;
+  background: #d97706
 }
 
 .mode-opt.active.pts .mode-indicator {
-  background: var(--violet);
+  background: var(--violet)
 }
 
 .mode-opt.active.pas .mode-indicator {
-  background: var(--rose);
+  background: var(--rose)
 }
 
 .mode-name {
   font-size: 13px;
   font-weight: 700;
   color: var(--ink);
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  letter-spacing: -.01em;
+  letter-spacing: -.01em
 }
 
 .mode-hint {
@@ -3733,9 +3630,9 @@ main {
   color: var(--ink-4);
   margin-top: 3px;
   line-height: 1.4;
+  font-weight: 400
 }
 
-/* TOGGLE ROW */
 .toggle-row {
   display: flex;
   align-items: center;
@@ -3743,32 +3640,33 @@ main {
   padding: 18px 0 0;
   border-top: 1px solid var(--border-2);
   gap: 16px;
-  margin-top: 6px;
+  margin-top: 6px
 }
 
 .toggle-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--ink)
 }
 
 .toggle-hint {
   font-size: 11.5px;
   color: var(--ink-4);
   margin-top: 2px;
+  font-weight: 400
 }
 
 .switch {
   position: relative;
   width: 42px;
   height: 24px;
-  flex-shrink: 0;
+  flex-shrink: 0
 }
 
 .switch input {
   opacity: 0;
   width: 0;
-  height: 0;
+  height: 0
 }
 
 .track {
@@ -3777,7 +3675,7 @@ main {
   background: var(--ink-5);
   border-radius: 24px;
   cursor: pointer;
-  transition: background .25s;
+  transition: background .25s
 }
 
 .track::before {
@@ -3790,54 +3688,53 @@ main {
   background: #fff;
   border-radius: 50%;
   transition: transform .25s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2)
 }
 
 input:checked+.track {
-  background: var(--teal);
+  background: var(--brand)
 }
 
 input:checked+.track::before {
-  transform: translateX(18px);
+  transform: translateX(18px)
 }
 
-/* FORM */
 .row-form {
   display: flex;
   gap: 10px;
   align-items: flex-end;
-  flex-wrap: wrap;
+  flex-wrap: wrap
 }
 
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 14px
 }
 
-@media (max-width: 480px) {
+@media(max-width:480px) {
   .two-col {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr
   }
 }
 
 .fg {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 6px
 }
 
 .fg-grow {
   flex: 1;
-  min-width: 140px;
+  min-width: 140px
 }
 
 label {
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ink-3);
   text-transform: uppercase;
-  letter-spacing: .06em;
+  letter-spacing: .06em
 }
 
 input[type=text],
@@ -3855,20 +3752,19 @@ select {
   outline: none;
   font-family: inherit;
   transition: border-color .15s, box-shadow .15s;
-  -webkit-appearance: none;
+  -webkit-appearance: none
 }
 
 input::placeholder {
-  color: var(--ink-5);
+  color: var(--ink-5)
 }
 
 input:focus,
 select:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, .1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(199, 80, 0, .1)
 }
 
-/* BUTTONS */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -3882,140 +3778,139 @@ select:focus {
   font-family: inherit;
   transition: all .15s ease;
   white-space: nowrap;
-  line-height: 1.2;
+  line-height: 1.2
 }
 
 .btn:active {
-  transform: scale(.97);
+  transform: scale(.97)
 }
 
 .btn.primary {
-  background: var(--teal);
+  background: var(--brand);
   color: #fff;
-  border-color: var(--teal);
-  box-shadow: 0 1px 3px rgba(15, 118, 110, .3);
+  border-color: var(--brand);
+  box-shadow: 0 1px 4px rgba(199, 80, 0, .3)
 }
 
 .btn.primary:hover {
-  background: var(--teal-d);
+  background: var(--brand-d)
 }
 
 .btn.ghost {
   background: var(--surface);
   color: var(--ink-2);
-  border-color: var(--border);
+  border-color: var(--border)
 }
 
 .btn.ghost:hover {
   background: var(--bg-2);
-  border-color: var(--ink-5);
+  border-color: var(--ink-5)
 }
 
 .btn.danger {
   background: var(--red-l);
   color: var(--red);
-  border-color: var(--red-b);
+  border-color: var(--red-b)
 }
 
 .btn.danger:hover {
-  background: var(--red-m);
+  background: var(--red-m)
 }
 
 .btn.success {
   background: var(--green-l);
   color: var(--green);
-  border-color: var(--green-b);
+  border-color: var(--green-b)
 }
 
 .btn.success:hover {
-  background: var(--green-m);
+  background: var(--green-m)
 }
 
 .btn.warning {
   background: var(--amber-l);
   color: var(--amber);
-  border-color: var(--amber-b);
+  border-color: var(--amber-b)
 }
 
 .btn.warning:hover {
-  background: var(--amber-m);
+  background: var(--amber-m)
 }
 
 .btn.sm {
   padding: 5px 11px;
-  font-size: 11.5px;
+  font-size: 11.5px
 }
 
 .btn-row {
   display: flex;
   gap: 6px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: wrap
 }
 
-/* TABLE */
 .table-wrap {
   overflow-x: auto;
   border-radius: var(--r);
-  border: 1px solid var(--border-2);
+  border: 1px solid var(--border-2)
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 13px
 }
 
 th {
   text-align: left;
   padding: 9px 14px;
-  background: var(--bg);
+  background: var(--bg-2);
   color: var(--ink-3);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .07em;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border)
 }
 
 td {
   padding: 11px 14px;
   border-bottom: 1px solid var(--border-2);
   vertical-align: middle;
-  color: var(--ink-2);
+  color: var(--ink-2)
 }
 
 tr:last-child td {
-  border-bottom: none;
+  border-bottom: none
 }
 
 tbody tr {
-  transition: background .1s;
+  transition: background .1s
 }
 
 tbody tr:hover td {
-  background: var(--bg);
+  background: var(--bg)
 }
 
 .t-time {
   font-weight: 700;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -.01em;
+  letter-spacing: -.01em
 }
 
 .t-audio {
   color: var(--ink-3);
   font-size: 12px;
+  font-weight: 400
 }
 
 .t-num {
   color: var(--ink-5);
   font-size: 11px;
-  width: 32px;
+  width: 32px
 }
 
-/* NOTICE */
 .notice {
   border-radius: var(--r);
   padding: 12px 14px;
@@ -4023,21 +3918,21 @@ tbody tr:hover td {
   border: 1px solid;
   margin-bottom: 18px;
   line-height: 1.5;
+  font-weight: 400
 }
 
 .notice.warning {
   background: var(--amber-l);
   border-color: var(--amber-b);
-  color: var(--amber-d);
+  color: var(--amber-d)
 }
 
 .notice.info {
-  background: var(--teal-l);
-  border-color: var(--teal-b);
-  color: var(--teal-d);
+  background: var(--brand-l);
+  border-color: var(--brand-b);
+  color: var(--brand-d)
 }
 
-/* LIBUR LIST */
 .libur-item {
   display: flex;
   align-items: center;
@@ -4048,22 +3943,22 @@ tbody tr:hover td {
   margin-bottom: 8px;
   gap: 10px;
   flex-wrap: wrap;
-  transition: border-color .15s;
+  transition: border-color .15s
 }
 
 .libur-item:last-child {
-  margin-bottom: 0;
+  margin-bottom: 0
 }
 
 .libur-item.today {
-  border-color: #fde68a;
-  background: var(--amber-l);
+  border-color: var(--amber-b);
+  background: var(--amber-l)
 }
 
 .libur-date {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--ink)
 }
 
 .today-tag {
@@ -4077,10 +3972,9 @@ tbody tr:hover td {
   font-size: 9.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .04em;
+  letter-spacing: .04em
 }
 
-/* TONE LIST */
 .tone-item {
   display: flex;
   align-items: center;
@@ -4091,25 +3985,24 @@ tbody tr:hover td {
   margin-bottom: 6px;
   gap: 10px;
   flex-wrap: wrap;
-  transition: border-color .15s;
+  transition: border-color .15s
 }
 
 .tone-item:hover {
-  border-color: var(--ink-5);
+  border-color: var(--ink-5)
 }
 
 .tone-item:last-child {
-  margin-bottom: 0;
+  margin-bottom: 0
 }
 
 .tone-name {
   font-size: 12.5px;
   color: var(--ink-2);
   word-break: break-all;
-  font-weight: 500;
+  font-weight: 500
 }
 
-/* UPLOAD ZONE */
 .upload-zone {
   border: 1.5px dashed var(--border);
   border-radius: var(--r-lg);
@@ -4117,13 +4010,13 @@ tbody tr:hover td {
   text-align: center;
   cursor: pointer;
   background: var(--bg);
-  transition: all .2s ease;
+  transition: all .2s ease
 }
 
 .upload-zone:hover,
 .upload-zone.over {
-  border-color: var(--teal);
-  background: var(--teal-l);
+  border-color: var(--brand);
+  background: var(--brand-l)
 }
 
 .upload-zone-icon {
@@ -4136,31 +4029,31 @@ tbody tr:hover td {
   align-items: center;
   justify-content: center;
   margin: 0 auto 14px;
-  transition: all .2s;
+  transition: all .2s
 }
 
 .upload-zone-icon svg {
   width: 20px;
   height: 20px;
   stroke: var(--ink-4);
-  transition: stroke .2s;
+  transition: stroke .2s
 }
 
 .upload-zone:hover .upload-zone-icon,
 .upload-zone.over .upload-zone-icon {
-  background: var(--teal-m);
-  border-color: var(--teal-b);
+  background: var(--brand-m);
+  border-color: var(--brand-b)
 }
 
 .upload-zone:hover .upload-zone-icon svg,
 .upload-zone.over .upload-zone-icon svg {
-  stroke: var(--teal);
+  stroke: var(--brand)
 }
 
 .upload-zone p {
   color: var(--ink-2);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 500
 }
 
 .upload-zone small {
@@ -4168,13 +4061,13 @@ tbody tr:hover td {
   color: var(--ink-4);
   display: block;
   margin-top: 4px;
+  font-weight: 400
 }
 
 #fileInput {
-  display: none;
+  display: none
 }
 
-/* LOG BADGE */
 .log-badge {
   display: inline-flex;
   align-items: center;
@@ -4183,30 +4076,29 @@ tbody tr:hover td {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: .05em
 }
 
 .log-badge.reguler {
-  background: var(--teal-l);
-  color: var(--teal-d);
+  background: var(--brand-l);
+  color: var(--brand-d)
 }
 
 .log-badge.ramadhan {
   background: var(--amber-l);
-  color: var(--amber-d);
+  color: var(--amber-d)
 }
 
 .log-badge.pts {
   background: var(--violet-l);
-  color: var(--violet);
+  color: var(--violet)
 }
 
 .log-badge.pas {
   background: var(--rose-l);
-  color: var(--rose);
+  color: var(--rose)
 }
 
-/* COUNT */
 .count {
   display: inline-flex;
   align-items: center;
@@ -4219,49 +4111,41 @@ tbody tr:hover td {
   border-radius: 11px;
   font-size: 11px;
   font-weight: 700;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border)
 }
 
-/* EMPTY */
 .empty {
   text-align: center;
   padding: 44px 20px;
   color: var(--ink-4);
   font-size: 13px;
+  font-weight: 400
 }
 
-/* DIVIDER */
-.divider {
-  height: 1px;
-  background: var(--border-2);
-  margin: 18px 0;
-}
-
-/* MODAL */
 .overlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(12, 26, 23, .6);
+  background: rgba(26, 15, 0, .6);
   z-index: 500;
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(6px);
-  padding: 20px;
+  padding: 20px
 }
 
 .overlay.open {
   display: flex;
-  animation: fadeIn .18s ease;
+  animation: fadeIn .18s ease
 }
 
 @keyframes fadeIn {
   from {
-    opacity: 0;
+    opacity: 0
   }
 
   to {
-    opacity: 1;
+    opacity: 1
   }
 }
 
@@ -4272,39 +4156,39 @@ tbody tr:hover td {
   width: min(440px, 100%);
   box-shadow: var(--sh-xl);
   border: 1px solid var(--border);
-  animation: popIn .2s cubic-bezier(.34, 1.56, .64, 1);
+  animation: popIn .2s cubic-bezier(.34, 1.56, .64, 1)
 }
 
 @keyframes popIn {
   from {
     opacity: 0;
-    transform: scale(.95) translateY(8px);
+    transform: scale(.95) translateY(8px)
   }
 
   to {
     opacity: 1;
-    transform: none;
+    transform: none
   }
 }
 
 .modal-head {
   margin-bottom: 22px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-2);
+  border-bottom: 1px solid var(--border-2)
 }
 
 .modal-title {
-  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 15px;
   font-weight: 700;
   color: var(--ink);
-  letter-spacing: -.01em;
+  letter-spacing: -.01em
 }
 
 .modal-subtitle {
   font-size: 12px;
   color: var(--ink-4);
   margin-top: 3px;
+  font-weight: 400
 }
 
 .modal-foot {
@@ -4313,10 +4197,9 @@ tbody tr:hover td {
   justify-content: flex-end;
   margin-top: 22px;
   padding-top: 16px;
-  border-top: 1px solid var(--border-2);
+  border-top: 1px solid var(--border-2)
 }
 
-/* TOAST */
 .toast {
   position: fixed;
   bottom: 24px;
@@ -4337,28 +4220,28 @@ tbody tr:hover td {
   transition: all .25s ease;
   box-shadow: var(--sh-xl);
   line-height: 1.4;
+  font-family: 'Lexend', inherit
 }
 
 .toast.show {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0)
 }
 
 .toast.error {
-  background: #b91c1c;
+  background: #7a1500
 }
 
 .toast.success {
-  background: #166534;
+  background: #1a5c2a
 }
 
-@media (min-width: 480px) {
+@media(min-width:480px) {
   .toast {
-    left: auto;
+    left: auto
   }
 }
 
-/* PWA BANNER */
 .pwa-banner {
   position: fixed;
   bottom: 20px;
@@ -4374,11 +4257,11 @@ tbody tr:hover td {
   align-items: center;
   gap: 14px;
   z-index: 400;
-  transition: transform .4s cubic-bezier(.34, 1.56, .64, 1);
+  transition: transform .4s cubic-bezier(.34, 1.56, .64, 1)
 }
 
 .pwa-banner.show {
-  transform: translate(-50%, 0);
+  transform: translate(-50%, 0)
 }
 
 .pwa-icon {
@@ -4386,97 +4269,97 @@ tbody tr:hover td {
   height: 40px;
   border-radius: 12px;
   flex-shrink: 0;
-  background: var(--teal-l);
-  border: 1px solid var(--teal-m);
+  background: var(--brand-l);
+  border: 1px solid var(--brand-m);
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: center
 }
 
 .pwa-icon svg {
   width: 18px;
   height: 18px;
-  stroke: var(--teal);
+  stroke: var(--brand)
 }
 
 .pwa-text {
   flex: 1;
-  min-width: 0;
+  min-width: 0
 }
 
 .pwa-title {
   font-size: 13px;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--ink)
 }
 
 .pwa-desc {
   font-size: 11.5px;
   color: var(--ink-4);
   margin-top: 2px;
+  font-weight: 400
 }
 
 .pwa-actions {
   display: flex;
   gap: 6px;
-  flex-shrink: 0;
+  flex-shrink: 0
 }
 
-/* RESPONSIVE */
-@media (max-width: 768px) {
+@media(max-width:768px) {
   main {
-    padding: 20px 16px 72px;
+    padding: 20px 16px 72px
   }
 
   header {
-    padding: 0 16px;
+    padding: 0 16px
   }
 
   .card {
-    padding: 18px;
+    padding: 18px
   }
 }
 
-@media (max-width: 600px) {
+@media(max-width:600px) {
   header {
     height: auto;
     flex-wrap: wrap;
     padding: 12px 16px;
     gap: 10px;
-    position: static;
+    position: static
   }
 
   nav {
     top: 0;
-    padding: 0 14px;
+    padding: 0 14px
   }
 
   .header-controls {
     width: 100%;
-    justify-content: space-between;
+    justify-content: space-between
   }
 
   .brand-sub {
-    display: none;
+    display: none
   }
 }
 
-@media (max-width: 460px) {
+@media(max-width:460px) {
   .row-form {
     flex-direction: column;
-    align-items: stretch;
+    align-items: stretch
   }
 
   .row-form .btn {
-    justify-content: center;
+    justify-content: center
   }
 
   .modal {
-    padding: 20px;
+    padding: 20px
   }
 
   .status-group .badge {
-    display: none;
+    display: none
   }
 }
 
@@ -4653,22 +4536,16 @@ var (
 
 func defaultConfig() Config {
 	return Config{
-		Mode:           "reguler",
-		ManualOverride: false,
-		RamadhanStart:  "03-01",
-		RamadhanEnd:    "03-31",
-		PTSStart:       "",
-		PTSEnd:         "",
-		PASStart:       "",
-		PASEnd:         "",
-		LiburDates:     []string{},
+		Mode:          "reguler",
+		RamadhanStart: "03-01",
+		RamadhanEnd:   "03-31",
+		LiburDates:    []string{},
 	}
 }
 
 func loadConfig() (Config, error) {
 	configMu.RLock()
 	defer configMu.RUnlock()
-
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return defaultConfig(), nil
@@ -4686,7 +4563,6 @@ func loadConfig() (Config, error) {
 func saveConfig(c Config) error {
 	configMu.Lock()
 	defer configMu.Unlock()
-
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
@@ -4701,21 +4577,14 @@ func resolveMode(c Config) string {
 	now := time.Now()
 	today := now.Format("2006-01-02")
 	md := now.Format("01-02")
-
-	if c.PTSStart != "" && c.PTSEnd != "" {
-		if today >= c.PTSStart && today <= c.PTSEnd {
-			return "pts"
-		}
+	if c.PTSStart != "" && c.PTSEnd != "" && today >= c.PTSStart && today <= c.PTSEnd {
+		return "pts"
 	}
-	if c.PASStart != "" && c.PASEnd != "" {
-		if today >= c.PASStart && today <= c.PASEnd {
-			return "pas"
-		}
+	if c.PASStart != "" && c.PASEnd != "" && today >= c.PASStart && today <= c.PASEnd {
+		return "pas"
 	}
-	if c.RamadhanStart != "" && c.RamadhanEnd != "" {
-		if md >= c.RamadhanStart && md <= c.RamadhanEnd {
-			return "ramadhan"
-		}
+	if c.RamadhanStart != "" && c.RamadhanEnd != "" && md >= c.RamadhanStart && md <= c.RamadhanEnd {
+		return "ramadhan"
 	}
 	return "reguler"
 }
@@ -4728,6 +4597,38 @@ func isLibur(c Config) bool {
 		}
 	}
 	return false
+}
+
+func loadJadwal() (ModeJadwal, error) {
+	jadwalMu.RLock()
+	defer jadwalMu.RUnlock()
+	data, err := os.ReadFile(jadwalFile)
+	if err != nil {
+		return nil, err
+	}
+	var j ModeJadwal
+	if err := json.Unmarshal(data, &j); err != nil {
+		return nil, err
+	}
+	if j == nil {
+		j = make(ModeJadwal)
+	}
+	for _, m := range []string{"reguler", "ramadhan", "pts", "pas"} {
+		if j[m] == nil {
+			j[m] = map[string][]Entry{}
+		}
+	}
+	return j, nil
+}
+
+func saveJadwal(j ModeJadwal) error {
+	jadwalMu.Lock()
+	defer jadwalMu.Unlock()
+	data, err := json.MarshalIndent(j, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(jadwalFile, data, 0644)
 }
 
 func writeJadwalFile(j ModeJadwal) error {
@@ -4744,27 +4645,21 @@ func initStorage() error {
 			return err
 		}
 	}
-
 	dj := defaultJadwal()
-	allModes := []string{"reguler", "ramadhan", "pts", "pas"}
-
 	data, err := os.ReadFile(jadwalFile)
 	if err != nil {
-		logMsg("jadwal.json tidak ditemukan, membuat default.")
+		logMsg("jadwal.json tidak ditemukan, membuat default")
 		return writeJadwalFile(dj)
 	}
-
 	var j ModeJadwal
 	if err := json.Unmarshal(data, &j); err != nil || j == nil {
-		logMsg("jadwal.json tidak valid, menulis ulang dengan default.")
+		logMsg("jadwal.json tidak valid, menulis ulang")
 		return writeJadwalFile(dj)
 	}
-
 	changed := false
-	for _, mode := range allModes {
-		if j[mode] == nil {
-			logMsg("Mode " + mode + " tidak ditemukan di jadwal.json, menambahkan default.")
-			j[mode] = dj[mode]
+	for _, m := range []string{"reguler", "ramadhan", "pts", "pas"} {
+		if j[m] == nil {
+			j[m] = dj[m]
 			changed = true
 		}
 	}
@@ -4774,41 +4669,6 @@ func initStorage() error {
 	return nil
 }
 
-func loadJadwal() (ModeJadwal, error) {
-	jadwalMu.RLock()
-	defer jadwalMu.RUnlock()
-
-	data, err := os.ReadFile(jadwalFile)
-	if err != nil {
-		return nil, err
-	}
-
-	var j ModeJadwal
-	if err := json.Unmarshal(data, &j); err != nil {
-		return nil, err
-	}
-	if j == nil {
-		j = make(ModeJadwal)
-	}
-	for _, mode := range []string{"reguler", "ramadhan", "pts", "pas"} {
-		if j[mode] == nil {
-			j[mode] = map[string][]Entry{}
-		}
-	}
-	return j, nil
-}
-
-func saveJadwal(j ModeJadwal) error {
-	jadwalMu.Lock()
-	defer jadwalMu.Unlock()
-
-	data, err := json.MarshalIndent(j, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(jadwalFile, data, 0644)
-}
-
 func listTones() ([]string, error) {
 	entries, err := os.ReadDir(toneDir)
 	if err != nil {
@@ -4816,11 +4676,12 @@ func listTones() ([]string, error) {
 	}
 	var files []string
 	for _, e := range entries {
-		if !e.IsDir() {
-			ext := filepath.Ext(e.Name())
-			if ext == ".mp3" || ext == ".wav" || ext == ".ogg" {
-				files = append(files, e.Name())
-			}
+		if e.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(e.Name())
+		if ext == ".mp3" || ext == ".wav" || ext == ".ogg" {
+			files = append(files, e.Name())
 		}
 	}
 	sort.Strings(files)
@@ -4830,13 +4691,11 @@ func listTones() ([]string, error) {
 func writeLog(entry ActivityLog) {
 	logMu.Lock()
 	defer logMu.Unlock()
-
 	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
 	defer f.Close()
-
 	line, _ := json.Marshal(entry)
 	f.Write(append(line, '\n'))
 }
@@ -4844,7 +4703,6 @@ func writeLog(entry ActivityLog) {
 func readLog() ([]ActivityLog, error) {
 	logMu.Lock()
 	defer logMu.Unlock()
-
 	data, err := os.ReadFile(logFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -4852,44 +4710,34 @@ func readLog() ([]ActivityLog, error) {
 		}
 		return nil, err
 	}
-
 	var logs []ActivityLog
-	for _, line := range splitLines(data) {
-		if len(line) == 0 {
-			continue
-		}
-		var l ActivityLog
-		if json.Unmarshal(line, &l) == nil {
-			logs = append(logs, l)
-		}
-	}
-
-	if len(logs) > maxLogLines {
-		logs = logs[len(logs)-maxLogLines:]
-	}
-	reverse(logs)
-	return logs, nil
-}
-
-func splitLines(data []byte) [][]byte {
-	var lines [][]byte
 	start := 0
 	for i, b := range data {
 		if b == '\n' {
-			lines = append(lines, data[start:i])
+			line := data[start:i]
 			start = i + 1
+			if len(line) == 0 {
+				continue
+			}
+			var l ActivityLog
+			if json.Unmarshal(line, &l) == nil {
+				logs = append(logs, l)
+			}
 		}
 	}
-	if start < len(data) {
-		lines = append(lines, data[start:])
+	if start < len(data) && len(data[start:]) > 0 {
+		var l ActivityLog
+		if json.Unmarshal(data[start:], &l) == nil {
+			logs = append(logs, l)
+		}
 	}
-	return lines
-}
-
-func reverse(logs []ActivityLog) {
+	if len(logs) > maxLogLines {
+		logs = logs[len(logs)-maxLogLines:]
+	}
 	for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
 		logs[i], logs[j] = logs[j], logs[i]
 	}
+	return logs, nil
 }
 
 func defaultJadwal() ModeJadwal {
