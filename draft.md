@@ -1667,9 +1667,9 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Bel Madrasah — MTsN 1 Pandeglang</title>
+  <title>Bel Madrasah</title>
   <meta name="description" content="Sistem bel otomatis MTsN 1 Pandeglang">
-  <meta name="theme-color" content="#1a0f00">
+  <meta name="theme-color" content="#1a0a00">
   <meta name="color-scheme" content="light">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" href="/static/icons/icon-192.png">
@@ -1688,359 +1688,483 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 
   <div class="splash" id="splash">
     <div class="splash-inner">
-      <div class="splash-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+      <div class="splash-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
       </div>
-      <div class="splash-label">Bel Madrasah</div>
-      <div class="splash-ring"></div>
+      <span class="splash-label">Bel Madrasah</span>
+      <div class="splash-spinner"></div>
     </div>
   </div>
 
   <div class="offline-bar" id="offlineBar">Tidak ada koneksi ke server</div>
 
-  <header>
-    <div class="brand">
-      <div class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
       </div>
-      <div>
-        <span class="brand-name">Bel Madrasah</span>
-        <span class="brand-sub">MTsN 1 Pandeglang</span>
+      <div class="topbar-title">
+        <span class="topbar-name">Bel Madrasah</span>
+        <span class="topbar-sub">MTsN 1 Pandeglang</span>
       </div>
     </div>
-    <div class="header-controls">
-      <div class="status-group">
-        <span class="badge badge-mode reguler" id="modeBadge">Reguler</span>
-        <span class="badge badge-libur" id="liburBadge" style="display:none">Libur</span>
+    <div class="topbar-right">
+      <div class="status-cluster">
+        <span class="mode-chip" id="modeChip">Reguler</span>
+        <span class="libur-chip" id="liburChip">Libur</span>
         <div class="status-pill">
-          <span class="dot" id="statusDot"></span>
-          <span id="statusText">—</span>
+          <span class="status-dot" id="statusDot"></span>
+          <span class="status-text" id="statusText">—</span>
         </div>
       </div>
-      <button class="hbtn hbtn-primary" id="toggleBtn">—</button>
-      <button class="hbtn" id="logoutBtn">Keluar</button>
+      <button class="top-btn top-btn-accent" id="toggleBtn">—</button>
+      <button class="top-btn" id="logoutBtn">Keluar</button>
     </div>
   </header>
 
-  <nav>
-    <button class="nav-btn active" data-tab="jadwal">Jadwal</button>
-    <button class="nav-btn" data-tab="mode">Mode Bel</button>
-    <button class="nav-btn" data-tab="libur">Hari Libur</button>
-    <button class="nav-btn" data-tab="log">Log</button>
-    <button class="nav-btn" data-tab="audio">Audio</button>
-    <button class="nav-btn" data-tab="settings">Pengaturan</button>
+  <div class="layout">
+
+    <aside class="sidebar">
+      <nav class="sidebar-nav">
+        <button class="sidenav active" data-tab="jadwal">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18" />
+          </svg>
+          <span>Jadwal</span>
+        </button>
+        <button class="sidenav" data-tab="mode">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+          </svg>
+          <span>Mode Bel</span>
+        </button>
+        <button class="sidenav" data-tab="libur">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18" />
+            <path d="M9 16l2 2 4-4" />
+          </svg>
+          <span>Hari Libur</span>
+        </button>
+        <button class="sidenav" data-tab="log">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
+          <span>Log</span>
+        </button>
+        <button class="sidenav" data-tab="audio">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+          <span>Audio</span>
+        </button>
+        <button class="sidenav" data-tab="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          <span>Pengaturan</span>
+        </button>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+
+      <section class="page active" id="page-jadwal">
+        <h2 class="page-title">Jadwal Bel</h2>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Mode Pembelajaran</div>
+              <div class="card-desc">Pilih mode untuk melihat dan mengelola jadwal</div>
+            </div>
+          </div>
+          <div class="tab-strip" id="modeTabStrip">
+            <button class="mode-tab active" data-mode="reguler">Reguler</button>
+            <button class="mode-tab" data-mode="ramadhan">Ramadhan</button>
+            <button class="mode-tab" data-mode="pts">PTS</button>
+            <button class="mode-tab" data-mode="pas">PAS</button>
+          </div>
+          <div class="add-row">
+            <div class="field-group">
+              <label>Tambah Hari</label>
+              <input type="text" id="newHariInput" placeholder="Contoh: Sabtu">
+            </div>
+            <button class="btn btn-primary" id="addHariBtn">Tambah</button>
+          </div>
+          <div class="hari-strip" id="hariStrip"></div>
+        </div>
+
+        <div class="card" id="jadwalCard">
+          <div class="card-header">
+            <div>
+              <div class="card-title" id="jadwalTitle">Pilih hari</div>
+              <div class="card-desc" id="jadwalDesc">Pilih hari dari tab di atas</div>
+            </div>
+            <div class="btn-group" id="jadwalActions" style="display:none">
+              <button class="btn btn-ghost btn-sm" id="deleteHariBtn">Hapus Hari</button>
+              <button class="btn btn-primary btn-sm" id="addEntryBtn">Tambah Bel</button>
+            </div>
+          </div>
+          <div id="jadwalBody">
+            <div class="empty-state">Pilih hari untuk melihat jadwal bel</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-mode">
+        <h2 class="page-title">Mode Bel</h2>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Mode Aktif</div>
+              <div class="card-desc">Pilih mode saat override manual diaktifkan</div>
+            </div>
+          </div>
+          <div class="mode-grid">
+            <div class="mode-card" id="mcard-reguler" data-mode="reguler">
+              <div class="mode-card-dot"></div>
+              <div class="mode-card-name">Reguler</div>
+              <div class="mode-card-hint">Jadwal harian normal</div>
+            </div>
+            <div class="mode-card" id="mcard-ramadhan" data-mode="ramadhan">
+              <div class="mode-card-dot"></div>
+              <div class="mode-card-name">Ramadhan</div>
+              <div class="mode-card-hint">Jadwal bulan Ramadhan</div>
+            </div>
+            <div class="mode-card" id="mcard-pts" data-mode="pts">
+              <div class="mode-card-dot"></div>
+              <div class="mode-card-name">PTS</div>
+              <div class="mode-card-hint">Penilaian Tengah Semester</div>
+            </div>
+            <div class="mode-card" id="mcard-pas" data-mode="pas">
+              <div class="mode-card-dot"></div>
+              <div class="mode-card-name">PAS</div>
+              <div class="mode-card-hint">Penilaian Akhir Semester</div>
+            </div>
+          </div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Override Manual</div>
+              <div class="toggle-hint">Paksa mode di atas, abaikan jadwal otomatis berbasis tanggal</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="overrideToggle">
+              <span class="switch-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Jadwal Otomatis Ramadhan</div>
+              <div class="card-desc">Format MM-DD, berlaku setiap tahun</div>
+            </div>
+          </div>
+          <div class="two-col">
+            <div class="field-group">
+              <label>Mulai</label>
+              <input type="text" id="ramadhanStart" placeholder="03-01" maxlength="5">
+            </div>
+            <div class="field-group">
+              <label>Akhir</label>
+              <input type="text" id="ramadhanEnd" placeholder="03-31" maxlength="5">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Jadwal Otomatis PTS</div>
+              <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal tumpang tindih</div>
+            </div>
+          </div>
+          <div class="two-col">
+            <div class="field-group">
+              <label>Mulai PTS</label>
+              <input type="date" id="ptsStart">
+            </div>
+            <div class="field-group">
+              <label>Akhir PTS</label>
+              <input type="date" id="ptsEnd">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Jadwal Otomatis PAS</div>
+              <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal tumpang tindih</div>
+            </div>
+          </div>
+          <div class="two-col">
+            <div class="field-group">
+              <label>Mulai PAS</label>
+              <input type="date" id="pasStart">
+            </div>
+            <div class="field-group">
+              <label>Akhir PAS</label>
+              <input type="date" id="pasEnd">
+            </div>
+          </div>
+          <div style="margin-top:20px">
+            <button class="btn btn-primary" id="saveConfigBtn">Simpan Pengaturan</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-libur">
+        <h2 class="page-title">Hari Libur</h2>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Tambah Hari Libur</div>
+              <div class="card-desc">Bel tidak akan berbunyi pada tanggal yang terdaftar</div>
+            </div>
+          </div>
+          <div class="notice notice-warn">
+            Scheduler akan melewati seluruh entri jadwal pada tanggal yang ditandai sebagai hari libur.
+          </div>
+          <div class="add-row">
+            <div class="field-group">
+              <label>Tanggal</label>
+              <input type="date" id="newLiburDate">
+            </div>
+            <button class="btn btn-primary" id="addLiburBtn">Tambah</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Daftar Hari Libur</div>
+            <span class="count-badge" id="liburCount">0</span>
+          </div>
+          <div id="liburList">
+            <div class="empty-state">Memuat...</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-log">
+        <h2 class="page-title">Log Aktivitas</h2>
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Riwayat Bel</div>
+              <div class="card-desc">Daftar bel yang telah diputar oleh scheduler</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="refreshLogBtn">Perbarui</button>
+          </div>
+          <div id="logBody">
+            <div class="empty-state">Memuat...</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-audio">
+        <h2 class="page-title">Manajemen Audio</h2>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Unggah File Audio</div>
+              <div class="card-desc">Format yang didukung: MP3, WAV, OGG — Maks. 32 MB</div>
+            </div>
+          </div>
+          <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+                <path d="M12 15V3m0 0-4 4m4-4 4 4M4 20h16" />
+              </svg>
+            </div>
+            <p>Klik atau seret file audio ke sini</p>
+            <small>MP3, WAV, OGG — Maks. 32 MB</small>
+          </div>
+          <input type="file" id="fileInput" accept=".mp3,.wav,.ogg">
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Daftar File Audio</div>
+            <span class="count-badge" id="toneCount">0</span>
+          </div>
+          <div id="toneList">
+            <div class="empty-state">Memuat...</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-settings">
+        <h2 class="page-title">Pengaturan</h2>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Pasang Aplikasi</div>
+              <div class="card-desc">Tambahkan ke layar utama untuk akses cepat tanpa browser</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="installAppBtn" style="display:none">Pasang Aplikasi</button>
+          <p class="card-desc" id="installInfo">Aplikasi sudah terpasang atau tidak didukung di perangkat ini.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Backup dan Restore</div>
+              <div class="card-desc">Ekspor atau impor seluruh data jadwal dalam format JSON</div>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-success" id="backupBtn">Unduh Backup</button>
+            <label class="btn btn-warn" style="cursor:pointer">
+              Restore dari File
+              <input type="file" accept=".json" id="restoreInput" style="display:none">
+            </label>
+          </div>
+          <p class="card-desc" style="margin-top:12px">Mencakup jadwal reguler, Ramadhan, PTS, dan PAS.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Ganti Password</div>
+              <div class="card-desc">Minimal 6 karakter</div>
+            </div>
+          </div>
+          <div class="field-group" style="margin-bottom:14px">
+            <label>Password Lama</label>
+            <input type="password" id="oldPass" placeholder="Password saat ini" autocomplete="current-password">
+          </div>
+          <div class="two-col" style="margin-bottom:18px">
+            <div class="field-group">
+              <label>Password Baru</label>
+              <input type="password" id="newPass" placeholder="Min. 6 karakter" autocomplete="new-password">
+            </div>
+            <div class="field-group">
+              <label>Konfirmasi</label>
+              <input type="password" id="confirmPass" placeholder="Ulangi password baru" autocomplete="new-password">
+            </div>
+          </div>
+          <button class="btn btn-primary" id="changePassBtn">Perbarui Password</button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="botnav active" data-tab="jadwal">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <path d="M16 2v4M8 2v4M3 10h18" />
+      </svg>
+      <span>Jadwal</span>
+    </button>
+    <button class="botnav" data-tab="mode">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+      </svg>
+      <span>Mode</span>
+    </button>
+    <button class="botnav" data-tab="libur">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <path d="M16 2v4M8 2v4M3 10h18" />
+        <path d="M9 16l2 2 4-4" />
+      </svg>
+      <span>Libur</span>
+    </button>
+    <button class="botnav" data-tab="log">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+      </svg>
+      <span>Log</span>
+    </button>
+    <button class="botnav" data-tab="audio">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+        <path d="M9 18V5l12-2v13" />
+        <circle cx="6" cy="18" r="3" />
+        <circle cx="18" cy="16" r="3" />
+      </svg>
+      <span>Audio</span>
+    </button>
+    <button class="botnav" data-tab="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+      <span>Setting</span>
+    </button>
   </nav>
 
-  <main>
-
-    <div class="section active" id="sec-jadwal">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Jadwal Bel</div>
-            <div class="card-desc">Kelola entri bel per hari dan mode pembelajaran</div>
-          </div>
-        </div>
-        <div class="mode-tabs">
-          <button class="mtab active reguler" data-mode="reguler">Reguler</button>
-          <button class="mtab ramadhan" data-mode="ramadhan">Ramadhan</button>
-          <button class="mtab pts" data-mode="pts">PTS</button>
-          <button class="mtab pas" data-mode="pas">PAS</button>
-        </div>
-        <div class="row-form">
-          <div class="fg fg-grow">
-            <label>Tambah Hari</label>
-            <input type="text" id="newHariInput" placeholder="Contoh: Sabtu">
-          </div>
-          <button class="btn primary" id="addHariBtn">Tambah Hari</button>
-        </div>
-        <div class="hari-tabs" id="hariTabs"></div>
-      </div>
-      <div class="card" id="jadwalCard">
-        <div class="card-head">
-          <div>
-            <div class="card-title" id="jadwalTitle">Pilih hari</div>
-            <div class="card-desc" id="hariInfo"></div>
-          </div>
-          <div class="btn-row" id="jadwalActions" style="display:none">
-            <button class="btn ghost sm" id="deleteHariBtn">Hapus Hari</button>
-            <button class="btn primary sm" id="addEntryBtn">Tambah Bel</button>
-          </div>
-        </div>
-        <div id="jadwalTable">
-          <div class="empty">Pilih hari dari daftar di atas</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section" id="sec-mode">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Mode Aktif</div>
-            <div class="card-desc">Pilih mode yang digunakan saat override manual diaktifkan</div>
-          </div>
-        </div>
-        <div class="mode-grid">
-          <div class="mode-opt" id="modeOptReguler" data-mode="reguler">
-            <div class="mode-indicator"></div>
-            <div class="mode-name">Reguler</div>
-            <div class="mode-hint">Jadwal harian normal</div>
-          </div>
-          <div class="mode-opt ramadhan" id="modeOptRamadhan" data-mode="ramadhan">
-            <div class="mode-indicator"></div>
-            <div class="mode-name">Ramadhan</div>
-            <div class="mode-hint">Jadwal bulan Ramadhan</div>
-          </div>
-          <div class="mode-opt pts" id="modeOptPTS" data-mode="pts">
-            <div class="mode-indicator"></div>
-            <div class="mode-name">PTS</div>
-            <div class="mode-hint">Penilaian Tengah Semester</div>
-          </div>
-          <div class="mode-opt pas" id="modeOptPAS" data-mode="pas">
-            <div class="mode-indicator"></div>
-            <div class="mode-name">PAS</div>
-            <div class="mode-hint">Penilaian Akhir Semester</div>
-          </div>
-        </div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">Override Manual</div>
-            <div class="toggle-hint">Paksa mode di atas, abaikan jadwal otomatis berbasis tanggal</div>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="overrideToggle">
-            <span class="track"></span>
-          </label>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Jadwal Otomatis Ramadhan</div>
-            <div class="card-desc">Format MM-DD, berlaku setiap tahun</div>
-          </div>
-        </div>
-        <div class="two-col">
-          <div class="fg">
-            <label>Mulai</label>
-            <input type="text" id="ramadhanStart" placeholder="03-01" maxlength="5">
-          </div>
-          <div class="fg">
-            <label>Akhir</label>
-            <input type="text" id="ramadhanEnd" placeholder="03-31" maxlength="5">
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Jadwal Otomatis PTS</div>
-            <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal bertumpang tindih</div>
-          </div>
-        </div>
-        <div class="two-col">
-          <div class="fg">
-            <label>Mulai PTS</label>
-            <input type="date" id="ptsStart">
-          </div>
-          <div class="fg">
-            <label>Akhir PTS</label>
-            <input type="date" id="ptsEnd">
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Jadwal Otomatis PAS</div>
-            <div class="card-desc">Diprioritaskan di atas Ramadhan jika tanggal bertumpang tindih</div>
-          </div>
-        </div>
-        <div class="two-col">
-          <div class="fg">
-            <label>Mulai PAS</label>
-            <input type="date" id="pasStart">
-          </div>
-          <div class="fg">
-            <label>Akhir PAS</label>
-            <input type="date" id="pasEnd">
-          </div>
-        </div>
-        <div style="margin-top:22px">
-          <button class="btn primary" id="saveConfigBtn">Simpan Pengaturan</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="section" id="sec-libur">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Tambah Hari Libur</div>
-            <div class="card-desc">Bel tidak akan berbunyi pada tanggal yang terdaftar</div>
-          </div>
-        </div>
-        <div class="notice warning">Scheduler akan melewati seluruh entri jadwal pada tanggal yang ditandai sebagai hari
-          libur.</div>
-        <div class="row-form">
-          <div class="fg fg-grow">
-            <label>Tanggal</label>
-            <input type="date" id="newLiburDate">
-          </div>
-          <button class="btn primary" id="addLiburBtn">Tambah</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div class="card-title">Daftar Hari Libur</div>
-          <span class="count" id="liburCount">0</span>
-        </div>
-        <div id="liburList">
-          <div class="empty">Memuat...</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section" id="sec-log">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Log Aktivitas</div>
-            <div class="card-desc">Riwayat bel yang telah diputar</div>
-          </div>
-          <button class="btn ghost sm" id="refreshLogBtn">Perbarui</button>
-        </div>
-        <div id="logContainer">
-          <div class="empty">Memuat...</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section" id="sec-audio">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Unggah File Audio</div>
-            <div class="card-desc">Format yang didukung: MP3, WAV, OGG — Maks. 32 MB</div>
-          </div>
-        </div>
-        <div class="upload-zone" id="uploadZone">
-          <div class="upload-zone-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-              <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
-            </svg>
-          </div>
-          <p>Klik atau seret file audio ke sini</p>
-          <small>MP3, WAV, OGG — Maks. 32 MB</small>
-        </div>
-        <input type="file" id="fileInput" accept=".mp3,.wav,.ogg">
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div class="card-title">Daftar File Audio</div>
-          <span class="count" id="toneCount">0</span>
-        </div>
-        <div id="toneList">
-          <div class="empty">Memuat...</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section" id="sec-settings">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Pasang Aplikasi</div>
-            <div class="card-desc">Tambahkan ke layar utama untuk akses cepat tanpa browser</div>
-          </div>
-        </div>
-        <button class="btn primary" id="installAppBtn" style="display:none">Pasang Aplikasi</button>
-        <span class="card-desc" id="installInfo">Aplikasi sudah terpasang atau tidak didukung di perangkat ini.</span>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Backup dan Restore</div>
-            <div class="card-desc">Ekspor atau impor seluruh data jadwal dalam format JSON</div>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn success" id="backupBtn">Unduh Backup</button>
-          <label class="btn warning" style="cursor:pointer">
-            Restore dari File
-            <input type="file" accept=".json" id="restoreInput" style="display:none">
-          </label>
-        </div>
-        <div class="card-desc" style="margin-top:14px">Mencakup jadwal reguler, Ramadhan, PTS, dan PAS.</div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Ganti Password</div>
-            <div class="card-desc">Minimal 6 karakter</div>
-          </div>
-        </div>
-        <div class="fg" style="margin-bottom:14px">
-          <label>Password Lama</label>
-          <input type="password" id="oldPass" placeholder="Password saat ini">
-        </div>
-        <div class="two-col" style="margin-bottom:18px">
-          <div class="fg">
-            <label>Password Baru</label>
-            <input type="password" id="newPass" placeholder="Min. 6 karakter">
-          </div>
-          <div class="fg">
-            <label>Konfirmasi</label>
-            <input type="password" id="confirmPass" placeholder="Ulangi password baru">
-          </div>
-        </div>
-        <button class="btn primary" id="changePassBtn">Perbarui Password</button>
-      </div>
-    </div>
-
-  </main>
-
-  <div class="overlay" id="entryModal">
+  <div class="modal-overlay" id="entryModal">
     <div class="modal">
-      <div class="modal-head">
-        <div class="modal-title" id="modalTitle">Tambah Bel</div>
-        <div class="modal-subtitle" id="modalSubtitle"></div>
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modalTitle">Tambah Bel</div>
+          <div class="modal-sub" id="modalSub"></div>
+        </div>
+        <button class="modal-close" id="cancelModalBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
       </div>
-      <div class="fg" style="margin-bottom:14px">
-        <label>Waktu</label>
-        <input type="time" id="entryWaktu">
+      <div class="modal-body">
+        <div class="field-group" style="margin-bottom:16px">
+          <label>Waktu</label>
+          <input type="time" id="entryWaktu">
+        </div>
+        <div class="field-group">
+          <label>File Audio</label>
+          <select id="entryAudio"></select>
+        </div>
       </div>
-      <div class="fg">
-        <label>File Audio</label>
-        <select id="entryAudio"></select>
-      </div>
-      <div class="modal-foot">
-        <button class="btn ghost" id="cancelModalBtn">Batal</button>
-        <button class="btn primary" id="saveEntryBtn">Simpan</button>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="cancelModalBtn2">Batal</button>
+        <button class="btn btn-primary" id="saveEntryBtn">Simpan</button>
       </div>
     </div>
   </div>
 
   <div class="pwa-banner" id="pwaBanner">
     <div class="pwa-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-        <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+        <path d="M12 15V3m0 0-4 4m4-4 4 4M4 20h16" />
       </svg>
     </div>
     <div class="pwa-text">
       <div class="pwa-title">Pasang Bel Madrasah</div>
       <div class="pwa-desc">Tambahkan ke layar utama untuk akses cepat</div>
     </div>
-    <div class="pwa-actions">
-      <button class="btn ghost sm" id="dismissBannerBtn">Nanti</button>
-      <button class="btn primary sm" id="installBannerBtn">Pasang</button>
+    <div class="pwa-btns">
+      <button class="btn btn-ghost btn-sm" id="dismissBannerBtn">Nanti</button>
+      <button class="btn btn-primary btn-sm" id="installBannerBtn">Pasang</button>
     </div>
   </div>
 
@@ -2061,175 +2185,192 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 *::after {
   box-sizing: border-box;
   margin: 0;
-  padding: 0
+  padding: 0;
 }
 
 body {
   font-family: 'Lexend', system-ui, sans-serif;
-  background: #1a0f00;
+  background: #1a0a00;
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  -webkit-font-smoothing: antialiased
+  padding: 20px;
+  -webkit-font-smoothing: antialiased;
 }
 
-body::before {
-  content: '';
+.login-bg {
   position: fixed;
   inset: 0;
-  background: radial-gradient(circle at 30% 30%, rgba(180, 100, 20, .18), transparent 55%), radial-gradient(circle at 70% 75%, rgba(140, 70, 10, .12), transparent 50%);
-  pointer-events: none
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(180, 70, 0, .22) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 80%, rgba(100, 40, 0, .16) 0%, transparent 55%),
+    #1a0a00;
 }
 
-.card {
-  position: relative;
-  background: #fff8f0;
+.login-card {
+  background: #fffaf4;
   border-radius: 20px;
-  box-shadow: 0 32px 64px rgba(0, 0, 0, .45), 0 4px 16px rgba(0, 0, 0, .2);
-  padding: 40px 36px;
-  width: min(380px, 100%);
-  animation: pop .35s cubic-bezier(.34, 1.56, .64, 1)
+  box-shadow: 0 40px 80px rgba(0, 0, 0, .5), 0 8px 24px rgba(0, 0, 0, .25);
+  padding: 44px 40px;
+  width: 100%;
+  max-width: 400px;
+  animation: cardIn .4s cubic-bezier(.34, 1.56, .64, 1) both;
 }
 
-@keyframes pop {
+@keyframes cardIn {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(.97)
+    transform: translateY(20px) scale(.96);
   }
 
   to {
     opacity: 1;
-    transform: none
+    transform: none;
   }
 }
 
-.logo {
+.login-brand {
   text-align: center;
-  margin-bottom: 32px
+  margin-bottom: 36px;
 }
 
-.logo-mark {
-  width: 54px;
-  height: 54px;
-  border-radius: 17px;
-  background: #fff3e0;
-  border: 1px solid #ffe0b2;
+.login-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fff3e6, #ffe0c0);
+  border: 1px solid #ffc999;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px
+  margin: 0 auto 16px;
+  box-shadow: 0 4px 12px rgba(194, 82, 0, .18);
 }
 
-.logo-mark svg {
-  width: 24px;
-  height: 24px;
-  stroke: #c75000
+.login-icon svg {
+  width: 26px;
+  height: 26px;
+  stroke: #b84800;
 }
 
-.logo h1 {
+.login-brand h1 {
   font-size: 18px;
   font-weight: 700;
-  color: #1a0f00;
-  letter-spacing: -.02em
+  color: #1a0a00;
+  letter-spacing: -.02em;
 }
 
-.logo p {
+.login-brand p {
   font-size: 12px;
-  color: #a0785a;
+  color: #9a6840;
   margin-top: 4px;
-  font-weight: 400
+  font-weight: 400;
 }
 
-.error {
-  background: #fff0ed;
-  border: 1px solid #ffb4a0;
-  color: #8b1a00;
-  border-radius: 9px;
-  padding: 11px 14px;
-  font-size: 12.5px;
-  font-weight: 500;
-  margin-bottom: 18px;
+.login-alert {
   display: none;
-  line-height: 1.4
+  background: #fff1ee;
+  border: 1px solid #ffb3a0;
+  color: #7a1400;
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  line-height: 1.45;
 }
 
-.fg {
-  margin-bottom: 14px
-}
-
-label {
+.login-alert.show {
   display: block;
-  font-size: 10px;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  font-size: 10.5px;
   font-weight: 600;
-  color: #8a6040;
+  color: #6b3a14;
   text-transform: uppercase;
   letter-spacing: .07em;
-  margin-bottom: 7px
+  margin-bottom: 7px;
 }
 
-input {
+.field input {
   width: 100%;
-  padding: 10px 13px;
-  border: 1px solid #e8d5c0;
-  border-radius: 9px;
+  padding: 11px 14px;
+  border: 1.5px solid #e8d0b8;
+  border-radius: 10px;
   font-size: 14px;
   font-family: inherit;
-  color: #1a0f00;
+  color: #1a0a00;
+  background: #fff;
   outline: none;
   transition: border-color .15s, box-shadow .15s;
-  background: #fff;
-  -webkit-appearance: none
+  -webkit-appearance: none;
 }
 
-input:focus {
-  border-color: #c75000;
-  box-shadow: 0 0 0 3px rgba(199, 80, 0, .12)
+.field input::placeholder {
+  color: #c8a888;
 }
 
-input::placeholder {
-  color: #c8b09a
+.field input:focus {
+  border-color: #b84800;
+  box-shadow: 0 0 0 3px rgba(184, 72, 0, .12);
 }
 
-.btn {
+.btn-login {
   width: 100%;
-  padding: 11px;
   margin-top: 8px;
-  background: #c75000;
+  padding: 12px;
+  background: linear-gradient(135deg, #c85200, #a03e00);
   color: #fff;
   border: none;
-  border-radius: 9px;
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
   font-family: inherit;
-  box-shadow: 0 2px 8px rgba(199, 80, 0, .35);
-  transition: background .2s, transform .1s;
-  letter-spacing: -.01em
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(184, 72, 0, .4);
+  transition: opacity .2s, transform .1s, box-shadow .2s;
+  letter-spacing: -.01em;
 }
 
-.btn:hover {
-  background: #a84200
+.btn-login:hover {
+  opacity: .92;
+  box-shadow: 0 6px 18px rgba(184, 72, 0, .48);
 }
 
-.btn:active {
-  transform: scale(.98)
+.btn-login:active {
+  transform: scale(.98);
 }
 
-.btn:disabled {
-  background: #d6c5b5;
+.btn-login:disabled {
+  background: #d4b898;
   box-shadow: none;
-  cursor: not-allowed
+  cursor: not-allowed;
 }
 
-.footer {
+.login-footer {
   text-align: center;
   font-size: 11px;
-  color: #c8b09a;
+  color: #c0a080;
   margin-top: 24px;
-  font-weight: 400
+  font-weight: 400;
+}
+
+@media (max-width: 420px) {
+  .login-card {
+    padding: 32px 24px;
+  }
 }
 
 ```
@@ -2244,7 +2385,7 @@ input::placeholder {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Masuk — Bel Madrasah</title>
-  <meta name="theme-color" content="#1a0f00">
+  <meta name="theme-color" content="#1a0a00">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" href="/static/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
@@ -2257,28 +2398,30 @@ input::placeholder {
 </head>
 
 <body>
-  <div class="card">
-    <div class="logo">
-      <div class="logo-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-        </svg>
+  <div class="login-bg">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="login-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+        </div>
+        <h1>Bel Madrasah</h1>
+        <p>MTsN 1 Pandeglang</p>
       </div>
-      <h1>Bel Madrasah</h1>
-      <p>MTsN 1 Pandeglang</p>
+      <div class="login-alert" id="loginAlert"></div>
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Masukkan username" autocomplete="username" autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Masukkan password" autocomplete="current-password">
+      </div>
+      <button class="btn-login" id="loginBtn">Masuk</button>
+      <div class="login-footer">Sistem Bel Otomatis Madrasah</div>
     </div>
-    <div class="error" id="errMsg"></div>
-    <div class="fg">
-      <label>Username</label>
-      <input type="text" id="username" placeholder="admin" autocomplete="username">
-    </div>
-    <div class="fg">
-      <label>Password</label>
-      <input type="password" id="password" placeholder="Masukkan password" autocomplete="current-password">
-    </div>
-    <button class="btn" id="loginBtn">Masuk</button>
-    <div class="footer">Sistem Bel Otomatis Madrasah</div>
   </div>
   <script src="/static/login.js"></script>
 </body>
@@ -2292,23 +2435,27 @@ input::placeholder {
 ```text
 (function () {
   var btn = document.getElementById("loginBtn");
-  var err = document.getElementById("errMsg");
+  var alert = document.getElementById("loginAlert");
 
-  function showErr(msg) {
-    err.textContent = msg;
-    err.style.display = "block";
+  function showAlert(msg) {
+    alert.textContent = msg;
+    alert.classList.add("show");
+  }
+
+  function hideAlert() {
+    alert.classList.remove("show");
   }
 
   async function login() {
     var u = document.getElementById("username").value.trim();
     var p = document.getElementById("password").value;
     if (!u || !p) {
-      showErr("Username dan password harus diisi");
+      showAlert("Username dan password harus diisi.");
       return;
     }
     btn.disabled = true;
     btn.textContent = "Memproses...";
-    err.style.display = "none";
+    hideAlert();
     try {
       var res = await fetch("/login", {
         method: "POST",
@@ -2319,7 +2466,7 @@ input::placeholder {
       if (!res.ok) throw new Error(data.error);
       window.location.href = "/";
     } catch (e) {
-      showErr(e.message);
+      showAlert(e.message);
       btn.disabled = false;
       btn.textContent = "Masuk";
     }
@@ -2328,6 +2475,9 @@ input::placeholder {
   btn.addEventListener("click", login);
   document.getElementById("password").addEventListener("keydown", function (e) {
     if (e.key === "Enter") login();
+  });
+  document.getElementById("username").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") document.getElementById("password").focus();
   });
 
   if ("serviceWorker" in navigator) {
@@ -2508,82 +2658,132 @@ input::placeholder {
 
 ## static/script.js
 ```text
-const MODE_LABELS = { reguler: "Reguler", ramadhan: "Ramadhan", pts: "PTS", pas: "PAS" };
-const DAY_ORDER = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+var MODE_LABELS = { reguler: "Reguler", ramadhan: "Ramadhan", pts: "PTS", pas: "PAS" };
+var DAY_ORDER = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 
-let currentJadwalMode = "reguler";
-let currentHari = null;
-let editIndex = -1;
-let allTones = [];
-let jadwalData = {};
-let configData = {};
-let deferredInstall = null;
+var jadwalMode = "reguler";
+var activeHari = null;
+var editIndex = -1;
+var allTones = [];
+var jadwalData = {};
+var configData = {};
+var deferredPWA = null;
 
-function toast(msg, type = "success") {
-  const el = document.getElementById("toast");
-  el.textContent = msg;
-  el.className = `toast show ${type}`;
-  clearTimeout(el._t);
-  el._t = setTimeout(() => (el.className = "toast"), 3000);
+var MON_ID = [
+  "",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "Mei",
+  "Jun",
+  "Jul",
+  "Agu",
+  "Sep",
+  "Okt",
+  "Nov",
+  "Des",
+];
+var DAY_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+function $(id) {
+  return document.getElementById(id);
 }
 
-async function api(url, method = "GET", body = null) {
-  const opts = { method, headers: { "Content-Type": "application/json" } };
+/* ─── TOAST ─── */
+function toast(msg, type) {
+  var el = $("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (type === "error" ? " error" : type === "ok" ? " ok" : "");
+  clearTimeout(el._t);
+  el._t = setTimeout(function () {
+    el.className = "toast";
+  }, 3000);
+}
+
+/* ─── API ─── */
+async function api(url, method, body) {
+  var opts = { method: method || "GET", headers: { "Content-Type": "application/json" } };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
-  const data = await res.json();
+  var res = await fetch(url, opts);
+  var data = await res.json();
   if (!res.ok) throw new Error(data.error || "Terjadi kesalahan");
   return data;
 }
 
-function switchTab(id, btn) {
-  document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
-  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
-  document.getElementById("sec-" + id).classList.add("active");
-  btn.classList.add("active");
+/* ─── NAV ─── */
+function switchTab(id) {
+  document.querySelectorAll(".page").forEach(function (el) {
+    el.classList.remove("active");
+  });
+  document.querySelectorAll(".sidenav, .botnav").forEach(function (el) {
+    el.classList.remove("active");
+  });
+  $("page-" + id).classList.add("active");
+  document.querySelectorAll('[data-tab="' + id + '"]').forEach(function (el) {
+    el.classList.add("active");
+  });
   if (id === "audio") loadTones();
   if (id === "log") loadLog();
   if (id === "libur") loadLibur();
   if (id === "mode") renderModeUI();
 }
 
-function logout() {
-  window.location.href = "/logout";
+function setupNav() {
+  document.querySelectorAll("[data-tab]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      switchTab(btn.dataset.tab);
+    });
+  });
+  document.querySelectorAll(".mode-tab").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      jadwalMode = btn.dataset.mode;
+      activeHari = null;
+      document.querySelectorAll(".mode-tab").forEach(function (b) {
+        b.classList.remove("active");
+      });
+      btn.classList.add("active");
+      loadJadwal();
+    });
+  });
+  document.querySelectorAll(".mode-card").forEach(function (el) {
+    el.addEventListener("click", function () {
+      selectMode(el.dataset.mode);
+    });
+  });
 }
 
+/* ─── STATUS ─── */
 async function loadStatus() {
   try {
-    const d = await api("/api/service/status");
-    const dot = document.getElementById("statusDot");
-    dot.className = "dot" + (d.running ? " on" : "");
-    document.getElementById("statusText").textContent = d.running ? "Aktif" : "Nonaktif";
-    document.getElementById("toggleBtn").textContent = d.running ? "Hentikan" : "Aktifkan";
-
-    const mode = d.active_mode || "reguler";
-    const badge = document.getElementById("modeBadge");
-    badge.textContent = MODE_LABELS[mode] || mode;
-    badge.className = "badge badge-mode " + mode;
-
-    const liburBadge = document.getElementById("liburBadge");
-    liburBadge.style.display = d.is_libur ? "" : "none";
+    var d = await api("/api/service/status");
+    var dot = $("statusDot");
+    dot.className = "status-dot" + (d.running ? " on" : "");
+    $("statusText").textContent = d.running ? "Aktif" : "Nonaktif";
+    $("toggleBtn").textContent = d.running ? "Hentikan" : "Aktifkan";
+    var mode = d.active_mode || "reguler";
+    var chip = $("modeChip");
+    chip.textContent = MODE_LABELS[mode] || mode;
+    chip.className = "mode-chip " + mode;
+    $("liburChip").className = "libur-chip" + (d.is_libur ? " show" : "");
   } catch (_) {}
 }
 
 async function toggleService() {
   try {
-    const d = await api("/api/service/toggle", "POST");
-    toast(d.message);
+    var d = await api("/api/service/toggle", "POST");
+    toast(d.message, "ok");
     loadStatus();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── CONFIG ─── */
 async function loadConfig() {
   try {
-    const d = await api("/api/config");
+    var d = await api("/api/config");
     configData = d.config;
-    return d;
   } catch (e) {
     toast(e.message, "error");
   }
@@ -2591,27 +2791,18 @@ async function loadConfig() {
 
 function renderModeUI() {
   if (!configData.mode) return;
-  const m = configData.mode;
-  const map = {
-    reguler: "modeOptReguler",
-    ramadhan: "modeOptRamadhan",
-    pts: "modeOptPTS",
-    pas: "modeOptPAS",
-  };
-
-  ["reguler", "ramadhan", "pts", "pas"].forEach((k) => {
-    const el = document.getElementById(map[k]);
-    const base = k === "reguler" ? "mode-opt" : `mode-opt ${k}`;
-    el.className = base + (m === k ? " active" : "");
+  var m = configData.mode;
+  ["reguler", "ramadhan", "pts", "pas"].forEach(function (k) {
+    var el = $("mcard-" + k);
+    el.className = "mode-card" + (m === k ? " active" : "");
   });
-
-  document.getElementById("overrideToggle").checked = configData.manual_override;
-  document.getElementById("ramadhanStart").value = configData.ramadhan_start || "";
-  document.getElementById("ramadhanEnd").value = configData.ramadhan_end || "";
-  document.getElementById("ptsStart").value = configData.pts_start || "";
-  document.getElementById("ptsEnd").value = configData.pts_end || "";
-  document.getElementById("pasStart").value = configData.pas_start || "";
-  document.getElementById("pasEnd").value = configData.pas_end || "";
+  $("overrideToggle").checked = configData.manual_override;
+  $("ramadhanStart").value = configData.ramadhan_start || "";
+  $("ramadhanEnd").value = configData.ramadhan_end || "";
+  $("ptsStart").value = configData.pts_start || "";
+  $("ptsEnd").value = configData.pts_end || "";
+  $("pasStart").value = configData.pas_start || "";
+  $("pasEnd").value = configData.pas_end || "";
 }
 
 function selectMode(mode) {
@@ -2619,15 +2810,10 @@ function selectMode(mode) {
   renderModeUI();
 }
 
-function onOverrideChange() {
-  configData.manual_override = document.getElementById("overrideToggle").checked;
-}
-
 async function saveConfig() {
-  const start = document.getElementById("ramadhanStart").value.trim();
-  const end = document.getElementById("ramadhanEnd").value.trim();
-  const mmdd = /^\d{2}-\d{2}$/;
-
+  var start = $("ramadhanStart").value.trim();
+  var end = $("ramadhanEnd").value.trim();
+  var mmdd = /^\d{2}-\d{2}$/;
   if (start && !mmdd.test(start)) {
     toast("Format Ramadhan harus MM-DD", "error");
     return;
@@ -2636,19 +2822,18 @@ async function saveConfig() {
     toast("Format Ramadhan harus MM-DD", "error");
     return;
   }
-
   try {
     await api("/api/config", "POST", {
       mode: configData.mode,
-      manual_override: document.getElementById("overrideToggle").checked,
+      manual_override: $("overrideToggle").checked,
       ramadhan_start: start,
       ramadhan_end: end,
-      pts_start: document.getElementById("ptsStart").value,
-      pts_end: document.getElementById("ptsEnd").value,
-      pas_start: document.getElementById("pasStart").value,
-      pas_end: document.getElementById("pasEnd").value,
+      pts_start: $("ptsStart").value,
+      pts_end: $("ptsEnd").value,
+      pas_start: $("pasStart").value,
+      pas_end: $("pasEnd").value,
     });
-    toast("Pengaturan disimpan");
+    toast("Pengaturan disimpan", "ok");
     loadStatus();
     await loadConfig();
     renderModeUI();
@@ -2657,25 +2842,47 @@ async function saveConfig() {
   }
 }
 
+/* ─── LIBUR ─── */
+function fmtDate(d) {
+  var parts = d.split("-");
+  return (
+    DAY_ID[new Date(d).getDay()] +
+    ", " +
+    parseInt(parts[2]) +
+    " " +
+    MON_ID[parseInt(parts[1])] +
+    " " +
+    parts[0]
+  );
+}
+
 async function loadLibur() {
   try {
-    const d = await api("/api/libur");
-    const list = d.libur || [];
-    document.getElementById("liburCount").textContent = list.length;
-    const c = document.getElementById("liburList");
+    var d = await api("/api/libur");
+    var list = d.libur || [];
+    $("liburCount").textContent = list.length;
+    var c = $("liburList");
     if (!list.length) {
-      c.innerHTML = '<div class="empty">Belum ada hari libur terdaftar</div>';
+      c.innerHTML = '<div class="empty-state">Belum ada hari libur terdaftar</div>';
       return;
     }
-
-    const today = new Date().toISOString().slice(0, 10);
+    var today = new Date().toISOString().slice(0, 10);
     c.innerHTML = list
-      .map((date) => {
-        const isToday = date === today;
-        return `<div class="libur-item${isToday ? " today" : ""}">
-        <div class="libur-date">${formatDate(date)}${isToday ? '<span class="today-tag">Hari Ini</span>' : ""}</div>
-        <button class="btn danger sm" onclick="deleteLibur('${date}')">Hapus</button>
-      </div>`;
+      .map(function (date) {
+        var isTdy = date === today;
+        return (
+          '<div class="libur-item' +
+          (isTdy ? " today" : "") +
+          '">' +
+          '<div class="libur-date">' +
+          fmtDate(date) +
+          (isTdy ? '<span class="today-tag">Hari Ini</span>' : "") +
+          "</div>" +
+          '<button class="btn btn-danger btn-sm" onclick="deleteLibur(\'' +
+          date +
+          "')\">Hapus</button>" +
+          "</div>"
+        );
       })
       .join("");
   } catch (e) {
@@ -2683,37 +2890,16 @@ async function loadLibur() {
   }
 }
 
-function formatDate(d) {
-  const mon = [
-    "",
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "Mei",
-    "Jun",
-    "Jul",
-    "Agu",
-    "Sep",
-    "Okt",
-    "Nov",
-    "Des",
-  ];
-  const day = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-  const [y, m, dd] = d.split("-");
-  return `${day[new Date(d).getDay()]}, ${parseInt(dd)} ${mon[parseInt(m)]} ${y}`;
-}
-
 async function addLibur() {
-  const date = document.getElementById("newLiburDate").value;
+  var date = $("newLiburDate").value;
   if (!date) {
     toast("Pilih tanggal terlebih dahulu", "error");
     return;
   }
   try {
-    await api("/api/libur", "POST", { action: "add", date });
-    toast("Tanggal libur ditambahkan");
-    document.getElementById("newLiburDate").value = "";
+    await api("/api/libur", "POST", { action: "add", date: date });
+    toast("Tanggal libur ditambahkan", "ok");
+    $("newLiburDate").value = "";
     loadLibur();
     loadStatus();
   } catch (e) {
@@ -2722,10 +2908,10 @@ async function addLibur() {
 }
 
 async function deleteLibur(date) {
-  if (!confirm(`Hapus ${formatDate(date)} dari daftar libur?`)) return;
+  if (!confirm("Hapus " + fmtDate(date) + " dari daftar libur?")) return;
   try {
-    await api("/api/libur", "POST", { action: "delete", date });
-    toast("Tanggal libur dihapus");
+    await api("/api/libur", "POST", { action: "delete", date: date });
+    toast("Tanggal libur dihapus", "ok");
     loadLibur();
     loadStatus();
   } catch (e) {
@@ -2733,106 +2919,115 @@ async function deleteLibur(date) {
   }
 }
 
-function switchJadwalMode(mode, btn) {
-  currentJadwalMode = mode;
-  currentHari = null;
-  document.querySelectorAll(".mtab").forEach((b) => b.classList.remove("active"));
-  btn.classList.add("active");
-  loadJadwal();
-}
-
+/* ─── JADWAL ─── */
 async function loadJadwal() {
   try {
-    const d = await api("/api/jadwal?mode=" + currentJadwalMode);
+    var d = await api("/api/jadwal?mode=" + jadwalMode);
     jadwalData = d.jadwal || {};
-    renderHariTabs(Object.keys(jadwalData));
-    if (currentHari && jadwalData[currentHari]) {
-      renderJadwalTable(currentHari);
+    renderHariStrip(Object.keys(jadwalData));
+    if (activeHari && jadwalData[activeHari]) {
+      renderJadwalTable(activeHari);
     } else {
-      currentHari = null;
-      document.getElementById("jadwalTitle").textContent = "Pilih hari";
-      document.getElementById("hariInfo").textContent = "";
-      document.getElementById("jadwalTable").innerHTML =
-        '<div class="empty">Pilih hari untuk melihat jadwal bel</div>';
-      document.getElementById("jadwalActions").style.display = "none";
+      activeHari = null;
+      $("jadwalTitle").textContent = "Pilih hari";
+      $("jadwalDesc").textContent = "Pilih hari dari tab di atas";
+      $("jadwalBody").innerHTML =
+        '<div class="empty-state">Pilih hari untuk melihat jadwal bel</div>';
+      $("jadwalActions").style.display = "none";
     }
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
-function renderHariTabs(days) {
-  const c = document.getElementById("hariTabs");
+function renderHariStrip(days) {
+  var c = $("hariStrip");
   if (!days.length) {
     c.innerHTML =
-      '<span style="font-size:12px;color:var(--ink-4)">Belum ada hari. Tambahkan di atas.</span>';
+      '<span style="font-size:12px;color:var(--c-ink4)">Belum ada hari. Tambahkan di atas.</span>';
     return;
   }
-  days.sort((a, b) => {
-    const ai = DAY_ORDER.indexOf(a),
+  days.sort(function (a, b) {
+    var ai = DAY_ORDER.indexOf(a),
       bi = DAY_ORDER.indexOf(b);
     return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
   });
   c.innerHTML = days
-    .map(
-      (h) =>
-        `<button class="hari-tab${h === currentHari ? " active" : ""}" onclick="selectHari('${h}')">${h}</button>`
-    )
+    .map(function (h) {
+      return (
+        '<button class="hari-tab' +
+        (h === activeHari ? " active" : "") +
+        '" onclick="selectHari(\'' +
+        h +
+        "')\">" +
+        h +
+        "</button>"
+      );
+    })
     .join("");
 }
 
 function selectHari(hari) {
-  currentHari = hari;
-  document
-    .querySelectorAll(".hari-tab")
-    .forEach((b) => b.classList.toggle("active", b.textContent === hari));
+  activeHari = hari;
+  document.querySelectorAll(".hari-tab").forEach(function (b) {
+    b.classList.toggle("active", b.textContent === hari);
+  });
   renderJadwalTable(hari);
-  document.getElementById("jadwalActions").style.display = "";
+  $("jadwalActions").style.display = "";
 }
 
 function renderJadwalTable(hari) {
-  document.getElementById("jadwalTitle").textContent =
-    `${hari} \u2014 ${MODE_LABELS[currentJadwalMode] || currentJadwalMode}`;
-  const entries = jadwalData[hari] || [];
-  document.getElementById("hariInfo").textContent = `${entries.length} entri`;
-
+  $("jadwalTitle").textContent = hari + " \u2014 " + (MODE_LABELS[jadwalMode] || jadwalMode);
+  var entries = jadwalData[hari] || [];
+  $("jadwalDesc").textContent = entries.length + " entri bel";
   if (!entries.length) {
-    document.getElementById("jadwalTable").innerHTML =
-      '<div class="empty">Belum ada jadwal bel untuk hari ini</div>';
+    $("jadwalBody").innerHTML =
+      '<div class="empty-state">Belum ada jadwal bel untuk hari ini</div>';
     return;
   }
-
-  let html = `<div class="table-wrap"><table><thead><tr>
-    <th style="width:32px">#</th><th>Waktu</th><th>Audio</th><th style="width:120px">Aksi</th>
-  </tr></thead><tbody>`;
-
-  entries.forEach((e, i) => {
-    const name = e.audio.split("/").pop();
-    html += `<tr>
-      <td class="t-num">${i + 1}</td>
-      <td class="t-time">${e.waktu}</td>
-      <td class="t-audio">${name}</td>
-      <td><div class="btn-row">
-        <button class="btn ghost sm" onclick="openEditEntry(${i})">Edit</button>
-        <button class="btn danger sm" onclick="deleteEntry(${i})">Hapus</button>
-      </div></td>
-    </tr>`;
-  });
-
-  html += "</tbody></table></div>";
-  document.getElementById("jadwalTable").innerHTML = html;
+  var rows = entries
+    .map(function (e, i) {
+      return (
+        "<tr>" +
+        '<td class="td-num">' +
+        (i + 1) +
+        "</td>" +
+        '<td class="td-time">' +
+        e.waktu +
+        "</td>" +
+        '<td class="td-audio">' +
+        e.audio.split("/").pop() +
+        "</td>" +
+        '<td><div class="btn-group">' +
+        '<button class="btn btn-ghost btn-sm" onclick="openEditEntry(' +
+        i +
+        ')">Edit</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteEntry(' +
+        i +
+        ')">Hapus</button>' +
+        "</div></td>" +
+        "</tr>"
+      );
+    })
+    .join("");
+  $("jadwalBody").innerHTML =
+    '<div class="table-wrap"><table>' +
+    '<thead><tr><th style="width:32px">#</th><th>Waktu</th><th>Audio</th><th style="width:130px">Aksi</th></tr></thead>' +
+    "<tbody>" +
+    rows +
+    "</tbody></table></div>";
 }
 
 async function addHari() {
-  const input = document.getElementById("newHariInput");
-  const hari = input.value.trim();
+  var input = $("newHariInput");
+  var hari = input.value.trim();
   if (!hari) {
     toast("Nama hari tidak boleh kosong", "error");
     return;
   }
   try {
-    await api("/api/jadwal/hari", "POST", { action: "add", mode: currentJadwalMode, hari });
-    toast(`Hari ${hari} ditambahkan`);
+    await api("/api/jadwal/hari", "POST", { action: "add", mode: jadwalMode, hari: hari });
+    toast("Hari " + hari + " ditambahkan", "ok");
     input.value = "";
     await loadJadwal();
     selectHari(hari);
@@ -2842,60 +3037,57 @@ async function addHari() {
 }
 
 async function deleteHari() {
-  if (!currentHari) return;
-  if (!confirm(`Hapus hari ${currentHari} beserta seluruh jadwalnya?`)) return;
+  if (!activeHari) return;
+  if (!confirm("Hapus hari " + activeHari + " beserta seluruh jadwalnya?")) return;
   try {
-    await api("/api/jadwal/hari", "POST", {
-      action: "delete",
-      mode: currentJadwalMode,
-      hari: currentHari,
-    });
-    toast(`Hari ${currentHari} dihapus`);
-    currentHari = null;
+    await api("/api/jadwal/hari", "POST", { action: "delete", mode: jadwalMode, hari: activeHari });
+    toast("Hari " + activeHari + " dihapus", "ok");
+    activeHari = null;
     await loadJadwal();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── ENTRY MODAL ─── */
 function openAddEntry() {
   editIndex = -1;
-  document.getElementById("modalTitle").textContent = `Tambah Bel`;
-  document.getElementById("modalSubtitle").textContent =
-    `${currentHari} \u2014 ${MODE_LABELS[currentJadwalMode]}`;
-  document.getElementById("entryWaktu").value = "";
-  populateAudioSelect("");
-  document.getElementById("entryModal").classList.add("open");
+  $("modalTitle").textContent = "Tambah Bel";
+  $("modalSub").textContent = activeHari + " \u2014 " + (MODE_LABELS[jadwalMode] || jadwalMode);
+  $("entryWaktu").value = "";
+  fillAudioSelect("");
+  $("entryModal").classList.add("open");
 }
 
 function openEditEntry(idx) {
   editIndex = idx;
-  const entry = jadwalData[currentHari][idx];
-  document.getElementById("modalTitle").textContent = `Edit Bel`;
-  document.getElementById("modalSubtitle").textContent =
-    `${currentHari} \u2014 ${MODE_LABELS[currentJadwalMode]}`;
-  document.getElementById("entryWaktu").value = entry.waktu;
-  populateAudioSelect(entry.audio);
-  document.getElementById("entryModal").classList.add("open");
+  var e = jadwalData[activeHari][idx];
+  $("modalTitle").textContent = "Edit Bel";
+  $("modalSub").textContent = activeHari + " \u2014 " + (MODE_LABELS[jadwalMode] || jadwalMode);
+  $("entryWaktu").value = e.waktu;
+  fillAudioSelect(e.audio);
+  $("entryModal").classList.add("open");
 }
 
-function populateAudioSelect(current) {
-  const sel = document.getElementById("entryAudio");
+function fillAudioSelect(current) {
+  var sel = $("entryAudio");
   sel.innerHTML = allTones
-    .map((t) => {
-      const fp = "/opt/bel-madrasah/tone/" + t;
-      return `<option value="${fp}"${current === fp ? " selected" : ""}>${t}</option>`;
+    .map(function (t) {
+      var fp = "/opt/bel-madrasah/tone/" + t;
+      return (
+        '<option value="' + fp + '"' + (current === fp ? " selected" : "") + ">" + t + "</option>"
+      );
     })
     .join("");
 }
 
 function closeModal() {
-  document.getElementById("entryModal").classList.remove("open");
+  $("entryModal").classList.remove("open");
 }
 
 async function saveEntry() {
-  const waktu = document.getElementById("entryWaktu").value;
-  const audio = document.getElementById("entryAudio").value;
+  var waktu = $("entryWaktu").value;
+  var audio = $("entryAudio").value;
   if (!waktu) {
     toast("Waktu harus diisi", "error");
     return;
@@ -2904,16 +3096,16 @@ async function saveEntry() {
     toast("Pilih file audio", "error");
     return;
   }
-  const action = editIndex === -1 ? "add" : "edit";
+  var action = editIndex === -1 ? "add" : "edit";
   try {
     await api("/api/jadwal/entry", "POST", {
-      action,
-      mode: currentJadwalMode,
-      hari: currentHari,
+      action: action,
+      mode: jadwalMode,
+      hari: activeHari,
       index: editIndex,
-      entry: { waktu, audio },
+      entry: { waktu: waktu, audio: audio },
     });
-    toast(action === "add" ? "Bel ditambahkan" : "Bel diperbarui");
+    toast(action === "add" ? "Bel ditambahkan" : "Bel diperbarui", "ok");
     closeModal();
     await loadJadwal();
   } catch (e) {
@@ -2926,71 +3118,92 @@ async function deleteEntry(idx) {
   try {
     await api("/api/jadwal/entry", "POST", {
       action: "delete",
-      mode: currentJadwalMode,
-      hari: currentHari,
+      mode: jadwalMode,
+      hari: activeHari,
       index: idx,
       entry: {},
     });
-    toast("Entri dihapus");
+    toast("Entri dihapus", "ok");
     await loadJadwal();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── LOG ─── */
 async function loadLog() {
-  const c = document.getElementById("logContainer");
+  var c = $("logBody");
   try {
-    const d = await api("/api/log");
-    const logs = d.logs || [];
+    var d = await api("/api/log");
+    var logs = d.logs || [];
     if (!logs.length) {
-      c.innerHTML = '<div class="empty">Belum ada aktivitas tercatat</div>';
+      c.innerHTML = '<div class="empty-state">Belum ada aktivitas tercatat</div>';
       return;
     }
-
-    let html = `<div class="table-wrap"><table><thead><tr>
-      <th>Waktu</th><th>Mode</th><th>Hari</th><th>Jam</th><th>Audio</th>
-    </tr></thead><tbody>`;
-
-    logs.forEach((l) => {
-      html += `<tr>
-        <td style="white-space:nowrap;color:var(--ink-4);font-size:11.5px">${l.time}</td>
-        <td><span class="log-badge ${l.mode}">${MODE_LABELS[l.mode] || l.mode}</span></td>
-        <td style="font-size:13px">${l.hari}</td>
-        <td class="t-time">${l.waktu}</td>
-        <td class="t-audio">${l.audio}</td>
-      </tr>`;
-    });
-
-    html += "</tbody></table></div>";
-    c.innerHTML = html;
+    var rows = logs
+      .map(function (l) {
+        return (
+          "<tr>" +
+          '<td style="white-space:nowrap;color:var(--c-ink4);font-size:11.5px">' +
+          l.time +
+          "</td>" +
+          '<td><span class="log-badge ' +
+          l.mode +
+          '">' +
+          (MODE_LABELS[l.mode] || l.mode) +
+          "</span></td>" +
+          '<td style="font-size:13px">' +
+          l.hari +
+          "</td>" +
+          '<td class="td-time">' +
+          l.waktu +
+          "</td>" +
+          '<td class="td-audio">' +
+          l.audio +
+          "</td>" +
+          "</tr>"
+        );
+      })
+      .join("");
+    c.innerHTML =
+      '<div class="table-wrap"><table>' +
+      "<thead><tr><th>Waktu</th><th>Mode</th><th>Hari</th><th>Jam</th><th>Audio</th></tr></thead>" +
+      "<tbody>" +
+      rows +
+      "</tbody></table></div>";
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── AUDIO / TONES ─── */
 async function loadTones() {
   try {
-    const d = await api("/api/tones");
+    var d = await api("/api/tones");
     allTones = d.tones || [];
-    document.getElementById("toneCount").textContent = allTones.length;
-    const list = document.getElementById("toneList");
+    $("toneCount").textContent = allTones.length;
+    var list = $("toneList");
     if (!allTones.length) {
-      list.innerHTML = '<div class="empty">Belum ada file audio</div>';
+      list.innerHTML = '<div class="empty-state">Belum ada file audio</div>';
       return;
     }
-
     list.innerHTML = allTones
-      .map(
-        (f) => `
-      <div class="tone-item">
-        <span class="tone-name">${f}</span>
-        <div class="btn-row">
-          <button class="btn success sm" onclick="previewTone('${f}')">Putar</button>
-          <button class="btn danger sm"  onclick="deleteTone('${f}')">Hapus</button>
-        </div>
-      </div>`
-      )
+      .map(function (f) {
+        return (
+          '<div class="tone-item">' +
+          '<span class="tone-name">' +
+          f +
+          "</span>" +
+          '<div class="btn-group">' +
+          '<button class="btn btn-success btn-sm" onclick="previewTone(\'' +
+          f +
+          "')\">Putar</button>" +
+          '<button class="btn btn-danger btn-sm" onclick="deleteTone(\'' +
+          f +
+          "')\">Hapus</button>" +
+          "</div></div>"
+        );
+      })
       .join("");
   } catch (e) {
     toast(e.message, "error");
@@ -2999,48 +3212,42 @@ async function loadTones() {
 
 async function uploadFile(file) {
   if (!file) return;
-  const fd = new FormData();
+  var fd = new FormData();
   fd.append("file", file);
   try {
     toast("Mengunggah " + file.name + "...");
-    const res = await fetch("/api/tones/upload", { method: "POST", body: fd });
-    const data = await res.json();
+    var res = await fetch("/api/tones/upload", { method: "POST", body: fd });
+    var data = await res.json();
     if (!res.ok) throw new Error(data.error);
-    toast(data.message);
-    document.getElementById("fileInput").value = "";
+    toast(data.message, "ok");
+    $("fileInput").value = "";
     loadTones();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
-function handleDrop(e) {
-  e.preventDefault();
-  document.getElementById("uploadZone").classList.remove("over");
-  const file = e.dataTransfer.files[0];
-  if (file) uploadFile(file);
-}
-
 async function previewTone(filename) {
   try {
-    await api("/api/tones/preview", "POST", { filename });
-    toast("Memutar " + filename);
+    await api("/api/tones/preview", "POST", { filename: filename });
+    toast("Memutar " + filename, "ok");
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
 async function deleteTone(filename) {
-  if (!confirm(`Hapus file ${filename}?`)) return;
+  if (!confirm("Hapus file " + filename + "?")) return;
   try {
-    await api("/api/tones/delete", "POST", { filename });
-    toast(filename + " berhasil dihapus");
+    await api("/api/tones/delete", "POST", { filename: filename });
+    toast(filename + " berhasil dihapus", "ok");
     loadTones();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── BACKUP / RESTORE ─── */
 function downloadBackup() {
   window.location.href = "/api/backup";
 }
@@ -3048,24 +3255,25 @@ function downloadBackup() {
 async function restoreBackup(file) {
   if (!file) return;
   if (!confirm("Restore akan mengganti seluruh jadwal yang ada. Lanjutkan?")) return;
-  const fd = new FormData();
+  var fd = new FormData();
   fd.append("file", file);
   try {
     toast("Merestore jadwal...");
-    const res = await fetch("/api/restore", { method: "POST", body: fd });
-    const data = await res.json();
+    var res = await fetch("/api/restore", { method: "POST", body: fd });
+    var data = await res.json();
     if (!res.ok) throw new Error(data.error);
-    toast(data.message);
+    toast(data.message, "ok");
     await loadJadwal();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── PASSWORD ─── */
 async function changePassword() {
-  const old = document.getElementById("oldPass").value;
-  const nw = document.getElementById("newPass").value;
-  const cf = document.getElementById("confirmPass").value;
+  var old = $("oldPass").value;
+  var nw = $("newPass").value;
+  var cf = $("confirmPass").value;
   if (nw !== cf) {
     toast("Konfirmasi password tidak cocok", "error");
     return;
@@ -3075,39 +3283,46 @@ async function changePassword() {
     return;
   }
   try {
-    const d = await api("/api/change-password", "POST", { old_password: old, new_password: nw });
-    toast(d.message);
-    ["oldPass", "newPass", "confirmPass"].forEach((id) => (document.getElementById(id).value = ""));
+    var d = await api("/api/change-password", "POST", { old_password: old, new_password: nw });
+    toast(d.message, "ok");
+    ["oldPass", "newPass", "confirmPass"].forEach(function (id) {
+      $(id).value = "";
+    });
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── OFFLINE ─── */
 function setupOffline() {
-  const bar = document.getElementById("offlineBar");
-  const update = () => bar.classList.toggle("show", !navigator.onLine);
+  var bar = $("offlineBar");
+  function update() {
+    bar.classList.toggle("show", !navigator.onLine);
+  }
   window.addEventListener("online", update);
   window.addEventListener("offline", update);
   update();
 }
 
+/* ─── PWA ─── */
 function setupPWA() {
-  const banner = document.getElementById("pwaBanner");
-  const btn = document.getElementById("installAppBtn");
-  const info = document.getElementById("installInfo");
-
-  window.addEventListener("beforeinstallprompt", (e) => {
+  var banner = $("pwaBanner");
+  var btn = $("installAppBtn");
+  var info = $("installInfo");
+  window.addEventListener("beforeinstallprompt", function (e) {
     e.preventDefault();
-    deferredInstall = e;
+    deferredPWA = e;
     if (btn) {
       btn.style.display = "";
       if (info) info.style.display = "none";
     }
-    if (banner) setTimeout(() => banner.classList.add("show"), 1800);
+    if (banner)
+      setTimeout(function () {
+        banner.classList.add("show");
+      }, 2000);
   });
-
-  window.addEventListener("appinstalled", () => {
-    deferredInstall = null;
+  window.addEventListener("appinstalled", function () {
+    deferredPWA = null;
     if (banner) banner.classList.remove("show");
     if (btn) btn.style.display = "none";
     if (info) {
@@ -3118,46 +3333,95 @@ function setupPWA() {
 }
 
 function dismissBanner() {
-  const banner = document.getElementById("pwaBanner");
-  if (banner) banner.classList.remove("show");
+  $("pwaBanner").classList.remove("show");
 }
 
 async function promptInstall() {
   dismissBanner();
-  if (!deferredInstall) {
+  if (!deferredPWA) {
     toast("Instalasi tidak tersedia di perangkat ini", "error");
     return;
   }
-  deferredInstall.prompt();
-  await deferredInstall.userChoice;
-  deferredInstall = null;
+  deferredPWA.prompt();
+  await deferredPWA.userChoice;
+  deferredPWA = null;
 }
 
-function applyTabFromQuery() {
-  const tab = new URLSearchParams(window.location.search).get("tab");
-  if (!tab) return;
-  const btn = Array.from(document.querySelectorAll(".nav-btn")).find(
-    (b) => b.getAttribute("onclick") && b.getAttribute("onclick").includes(`'${tab}'`)
-  );
-  if (btn) switchTab(tab, btn);
+/* ─── EVENTS ─── */
+function bindEvents() {
+  $("toggleBtn").addEventListener("click", toggleService);
+  $("logoutBtn").addEventListener("click", function () {
+    window.location.href = "/logout";
+  });
+
+  $("addHariBtn").addEventListener("click", addHari);
+  $("newHariInput").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") addHari();
+  });
+  $("deleteHariBtn").addEventListener("click", deleteHari);
+  $("addEntryBtn").addEventListener("click", openAddEntry);
+
+  $("saveEntryBtn").addEventListener("click", saveEntry);
+  $("cancelModalBtn").addEventListener("click", closeModal);
+  $("cancelModalBtn2").addEventListener("click", closeModal);
+  $("entryModal").addEventListener("click", function (e) {
+    if (e.target === $("entryModal")) closeModal();
+  });
+
+  $("overrideToggle").addEventListener("change", function () {
+    configData.manual_override = $("overrideToggle").checked;
+  });
+  $("saveConfigBtn").addEventListener("click", saveConfig);
+
+  $("addLiburBtn").addEventListener("click", addLibur);
+  $("refreshLogBtn").addEventListener("click", loadLog);
+  $("backupBtn").addEventListener("click", downloadBackup);
+  $("changePassBtn").addEventListener("click", changePassword);
+
+  $("installAppBtn").addEventListener("click", promptInstall);
+  $("dismissBannerBtn").addEventListener("click", dismissBanner);
+  $("installBannerBtn").addEventListener("click", promptInstall);
+
+  $("restoreInput").addEventListener("change", function (e) {
+    restoreBackup(e.target.files[0]);
+  });
+  $("fileInput").addEventListener("change", function (e) {
+    uploadFile(e.target.files[0]);
+  });
+
+  var zone = $("uploadZone");
+  zone.addEventListener("click", function () {
+    $("fileInput").click();
+  });
+  zone.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    zone.classList.add("over");
+  });
+  zone.addEventListener("dragleave", function () {
+    zone.classList.remove("over");
+  });
+  zone.addEventListener("drop", function (e) {
+    e.preventDefault();
+    zone.classList.remove("over");
+    var f = e.dataTransfer.files[0];
+    if (f) uploadFile(f);
+  });
 }
 
-window.addEventListener("click", (e) => {
-  if (e.target === document.getElementById("entryModal")) closeModal();
-});
-
-(async () => {
+/* ─── INIT ─── */
+(async function () {
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () =>
-      navigator.serviceWorker.register("/sw.js").catch(() => {})
-    );
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js").catch(function () {});
+    });
   }
+  setupNav();
+  bindEvents();
   setupOffline();
   setupPWA();
-  applyTabFromQuery();
   await Promise.all([loadStatus(), loadJadwal(), loadTones(), loadConfig()]);
   setInterval(loadStatus, 10000);
-  const splash = document.getElementById("splash");
+  var splash = $("splash");
   if (splash) splash.classList.add("gone");
 })();
 
@@ -3167,51 +3431,50 @@ window.addEventListener("click", (e) => {
 ## static/style.css
 ```css
 :root {
-  --ink: #1a0f00;
-  --ink-2: #3d2200;
-  --ink-3: #7a5230;
-  --ink-4: #a8845a;
-  --ink-5: #d4b898;
-  --bg: #fdf6ee;
-  --bg-2: #f7ede0;
-  --surface: #ffffff;
-  --surface-2: #fffaf5;
-  --border: #ead9c4;
-  --border-2: #f0e4d0;
-  --brand: #c75000;
-  --brand-d: #a84200;
-  --brand-l: #fff3e0;
-  --brand-m: #ffe0b2;
-  --brand-b: #ffcc80;
-  --amber: #8a5400;
-  --amber-d: #6d4000;
-  --amber-l: #fffbeb;
-  --amber-m: #fff3c4;
-  --amber-b: #fde68a;
-  --green: #1a5c2a;
-  --green-l: #f0fdf4;
-  --green-m: #dcfce7;
-  --green-b: #86efac;
-  --red: #8b1a00;
-  --red-l: #fff0ed;
-  --red-m: #ffd5cc;
-  --red-b: #ffb4a0;
-  --violet: #4a1c8a;
-  --violet-l: #f5f0ff;
-  --violet-m: #ede0ff;
-  --rose: #8a0a2e;
-  --rose-l: #fff0f3;
-  --rose-m: #ffd6e0;
-  --r: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 20px;
-  --sh: 0 1px 3px rgba(100, 50, 0, .06);
-  --sh-md: 0 4px 10px rgba(100, 50, 0, .08), 0 1px 3px rgba(100, 50, 0, .04);
-  --sh-lg: 0 12px 24px rgba(100, 50, 0, .1), 0 4px 8px rgba(100, 50, 0, .04);
-  --sh-xl: 0 24px 48px rgba(100, 50, 0, .14), 0 8px 16px rgba(100, 50, 0, .06);
-  --header-h: 64px;
-  --nav-h: 48px;
+  --c-bg: #fdf6ee;
+  --c-bg2: #f5ead8;
+  --c-surf: #ffffff;
+  --c-surf2: #fffaf4;
+  --c-border: #e8d0b8;
+  --c-border2: #f0e3cc;
+  --c-ink: #1a0a00;
+  --c-ink2: #3b1a06;
+  --c-ink3: #6b3a14;
+  --c-ink4: #9a6840;
+  --c-ink5: #c9a070;
+  --c-brand: #b84800;
+  --c-brand-d: #8e3600;
+  --c-brand-l: #fff3e6;
+  --c-brand-m: #ffd5a8;
+  --c-amber: #7a4800;
+  --c-amber-l: #fffbeb;
+  --c-amber-m: #fff0b8;
+  --c-amber-b: #fdd050;
+  --c-green: #1a5c28;
+  --c-green-l: #f0fdf4;
+  --c-green-m: #d0f5de;
+  --c-green-b: #6dd08c;
+  --c-red: #820f00;
+  --c-red-l: #fff1ee;
+  --c-red-m: #ffd0c8;
+  --c-red-b: #ffa090;
+  --c-violet: #430d8c;
+  --c-violet-l: #f3f0ff;
+  --c-violet-m: #e0d5ff;
+  --c-rose: #800826;
+  --c-rose-l: #fff0f3;
+  --c-rose-m: #ffd0dc;
+  --topbar-h: 60px;
+  --sidebar-w: 210px;
+  --botnav-h: 60px;
+  --radius: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow: 0 1px 4px rgba(60, 20, 0, .07);
+  --shadow-md: 0 4px 12px rgba(60, 20, 0, .1);
+  --shadow-lg: 0 12px 32px rgba(60, 20, 0, .13);
+  --shadow-xl: 0 24px 56px rgba(60, 20, 0, .18);
 }
 
 *,
@@ -3219,113 +3482,117 @@ window.addEventListener("click", (e) => {
 *::after {
   box-sizing: border-box;
   margin: 0;
-  padding: 0
+  padding: 0;
 }
 
 html {
   -webkit-text-size-adjust: 100%;
-  scroll-behavior: smooth
+  scroll-behavior: smooth;
 }
 
 body {
   font-family: 'Lexend', system-ui, -apple-system, sans-serif;
-  background: var(--bg);
-  color: var(--ink);
+  background: var(--c-bg);
+  color: var(--c-ink);
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh
+  min-height: 100vh;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 6px
+  background: var(--c-border);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-5)
+  background: var(--c-ink5);
 }
 
+
+/* === SPLASH === */
 .splash {
   position: fixed;
   inset: 0;
-  background: #1a0f00;
+  background: #1a0a00;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  transition: opacity .5s ease, visibility .5s ease
+  transition: opacity .5s, visibility .5s;
 }
 
 .splash.gone {
   opacity: 0;
   visibility: hidden;
-  pointer-events: none
+  pointer-events: none;
 }
 
 .splash-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px
+  gap: 18px;
 }
 
-.splash-mark {
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
-  background: rgba(199, 80, 0, .2);
-  border: 1px solid rgba(199, 80, 0, .3);
+.splash-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  background: rgba(184, 72, 0, .18);
+  border: 1px solid rgba(184, 72, 0, .28);
   display: flex;
   align-items: center;
-  justify-content: center
+  justify-content: center;
 }
 
-.splash-mark svg {
-  width: 26px;
-  height: 26px;
-  stroke: #ffb74d
+.splash-icon svg {
+  width: 24px;
+  height: 24px;
+  stroke: #ffa050;
 }
 
 .splash-label {
-  color: rgba(255, 255, 255, .5);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: .12em;
-  text-transform: uppercase
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .4);
 }
 
-.splash-ring {
-  width: 20px;
-  height: 20px;
+.splash-spinner {
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, .1);
-  border-top-color: #ffb74d;
-  animation: spin .7s linear infinite
+  border-top-color: #ffa050;
+  animation: spin .7s linear infinite;
 }
 
 @keyframes spin {
   to {
-    transform: rotate(360deg)
+    transform: rotate(360deg);
   }
 }
 
+
+/* === OFFLINE BAR === */
 .offline-bar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 300;
-  background: var(--amber);
+  z-index: 600;
+  background: var(--c-amber);
   color: #fff;
   text-align: center;
   font-size: 11.5px;
@@ -3333,560 +3600,384 @@ body {
   padding: 6px 16px;
   letter-spacing: .01em;
   transform: translateY(-100%);
-  transition: transform .3s ease
+  transition: transform .3s;
 }
 
 .offline-bar.show {
-  transform: translateY(0)
+  transform: none;
 }
 
-header {
-  background: #1a0f00;
-  height: var(--header-h);
+
+/* === TOPBAR === */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 300;
+  height: var(--topbar-h);
+  background: #1a0a00;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 28px;
-  gap: 16px;
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  border-bottom: 1px solid rgba(255, 255, 255, .06)
-}
-
-.brand {
-  display: flex;
-  align-items: center;
+  padding: 0 20px;
   gap: 12px;
-  min-width: 0
 }
 
-.brand-mark {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  flex-shrink: 0;
-  background: rgba(255, 183, 77, .1);
-  border: 1px solid rgba(255, 183, 77, .18);
-  display: flex;
-  align-items: center;
-  justify-content: center
-}
-
-.brand-mark svg {
-  width: 17px;
-  height: 17px;
-  stroke: #ffb74d
-}
-
-.brand-name {
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -.01em;
-  display: block
-}
-
-.brand-sub {
-  font-size: 10.5px;
-  color: rgba(255, 255, 255, .35);
-  display: block;
-  margin-top: 1px;
-  font-weight: 400
-}
-
-.header-controls {
+.topbar-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0
+  min-width: 0;
 }
 
-.status-group {
+.topbar-icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: rgba(255, 160, 80, .1);
+  border: 1px solid rgba(255, 160, 80, .16);
   display: flex;
   align-items: center;
-  gap: 8px
+  justify-content: center;
 }
 
-.badge {
+.topbar-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: #ffa050;
+}
+
+.topbar-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -.01em;
+}
+
+.topbar-sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, .3);
+  font-weight: 400;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.status-cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-chip {
   padding: 3px 9px;
   border-radius: 20px;
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  background: rgba(255, 160, 80, .1);
+  color: #ffa050;
+  border: 1px solid rgba(255, 160, 80, .2);
 }
 
-.badge-mode {
-  background: rgba(255, 183, 77, .12);
-  color: #ffb74d;
-  border: 1px solid rgba(255, 183, 77, .22)
+.mode-chip.ramadhan {
+  background: rgba(253, 208, 80, .1);
+  color: #fdd050;
+  border-color: rgba(253, 208, 80, .2);
 }
 
-.badge-mode.ramadhan {
-  background: rgba(255, 220, 100, .1);
-  color: #ffd54f;
-  border-color: rgba(255, 220, 100, .2)
+.mode-chip.pts {
+  background: rgba(167, 140, 255, .1);
+  color: #b0a0e8;
+  border-color: rgba(167, 140, 255, .2);
 }
 
-.badge-mode.pts {
-  background: rgba(167, 139, 250, .1);
-  color: #b39ddb;
-  border-color: rgba(167, 139, 250, .2)
+.mode-chip.pas {
+  background: rgba(255, 120, 90, .1);
+  color: #ff7858;
+  border-color: rgba(255, 120, 90, .2);
 }
 
-.badge-mode.pas {
-  background: rgba(255, 138, 128, .1);
-  color: #ff8a80;
-  border-color: rgba(255, 138, 128, .2)
+.libur-chip {
+  display: none;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  background: rgba(255, 90, 60, .1);
+  color: #ff6040;
+  border: 1px solid rgba(255, 90, 60, .18);
 }
 
-.badge-libur {
-  background: rgba(255, 100, 80, .1);
-  color: #ff7043;
-  border: 1px solid rgba(255, 100, 80, .2)
+.libur-chip.show {
+  display: inline-flex;
 }
 
 .status-pill {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px 4px 9px;
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
   background: rgba(255, 255, 255, .05);
   border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 20px;
-  font-size: 11.5px;
-  color: rgba(255, 255, 255, .55);
-  font-weight: 400
+  font-size: 11px;
+  color: rgba(255, 255, 255, .4);
+  font-weight: 400;
 }
 
-.dot {
+.status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #6b7280;
+  background: #555;
   flex-shrink: 0;
-  transition: background .3s, box-shadow .3s
+  transition: background .3s, box-shadow .3s;
 }
 
-.dot.on {
-  background: #66bb6a;
-  box-shadow: 0 0 0 3px rgba(102, 187, 106, .2)
+.status-dot.on {
+  background: #50b868;
+  box-shadow: 0 0 0 3px rgba(80, 184, 104, .22);
 }
 
-.hbtn {
-  padding: 6px 14px;
-  border-radius: var(--r);
+.top-btn {
+  padding: 6px 13px;
+  border-radius: var(--radius);
   border: 1px solid rgba(255, 255, 255, .1);
   background: rgba(255, 255, 255, .06);
-  color: rgba(255, 255, 255, .7);
-  font-size: 12px;
+  color: rgba(255, 255, 255, .6);
+  font-size: 11.5px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: all .15s ease;
-  white-space: nowrap
+  transition: all .15s;
+  white-space: nowrap;
 }
 
-.hbtn:hover {
+.top-btn:hover {
   background: rgba(255, 255, 255, .12);
-  color: #fff
+  color: #fff;
 }
 
-.hbtn-primary {
-  background: rgba(199, 80, 0, .25);
-  border-color: rgba(199, 80, 0, .4);
-  color: #ffb74d
+.top-btn-accent {
+  background: rgba(184, 72, 0, .28);
+  border-color: rgba(184, 72, 0, .45);
+  color: #ffa050;
 }
 
-.hbtn-primary:hover {
-  background: rgba(199, 80, 0, .38);
-  color: #ffd54f
+.top-btn-accent:hover {
+  background: rgba(184, 72, 0, .42);
+  color: #ffc880;
 }
 
-nav {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+
+/* === LAYOUT === */
+.layout {
   display: flex;
-  overflow-x: auto;
-  padding: 0 24px;
+  min-height: calc(100vh - var(--topbar-h));
+}
+
+
+/* === SIDEBAR === */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--c-surf);
+  border-right: 1px solid var(--c-border);
+  padding: 16px 10px;
   position: sticky;
-  top: var(--header-h);
-  z-index: 190;
-  scrollbar-width: none;
-  height: var(--nav-h);
+  top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h));
+  overflow-y: auto;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidenav {
+  display: flex;
   align-items: center;
-  gap: 2px
-}
-
-nav::-webkit-scrollbar {
-  display: none
-}
-
-.nav-btn {
-  height: 36px;
-  padding: 0 14px;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--ink-3);
-  border-radius: var(--r);
-  white-space: nowrap;
+  color: var(--c-ink3);
+  border-radius: var(--radius);
+  font-family: inherit;
+  text-align: left;
   transition: color .15s, background .15s;
-  font-family: inherit
 }
 
-.nav-btn:hover:not(.active) {
-  color: var(--ink-2);
-  background: var(--bg-2)
+.sidenav svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  flex-shrink: 0;
 }
 
-.nav-btn.active {
-  color: var(--brand);
-  background: var(--brand-l);
-  font-weight: 600
+.sidenav:hover:not(.active) {
+  color: var(--c-ink2);
+  background: var(--c-bg2);
 }
 
-main {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 28px 24px 80px
+.sidenav.active {
+  color: var(--c-brand);
+  background: var(--c-brand-l);
+  font-weight: 600;
 }
 
-.section {
-  display: none
+
+/* === BOTTOM NAV (mobile) === */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--c-surf);
+  border-top: 1px solid var(--c-border);
+  height: var(--botnav-h);
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 2px;
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-.section.active {
+.botnav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  padding: 7px 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--c-ink4);
+  font-family: inherit;
+  transition: color .15s;
+}
+
+.botnav svg {
+  width: 19px;
+  height: 19px;
+  stroke: currentColor;
+}
+
+.botnav.active {
+  color: var(--c-brand);
+}
+
+
+/* === MAIN CONTENT === */
+.main-content {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 26px 48px;
+  max-width: 880px;
+}
+
+.page {
+  display: none;
+}
+
+.page.active {
   display: block;
-  animation: fadeUp .25s ease both
+  animation: pageIn .2s ease both;
 }
 
-@keyframes fadeUp {
+@keyframes pageIn {
   from {
     opacity: 0;
-    transform: translateY(8px)
+    transform: translateY(8px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0)
+    transform: none;
   }
 }
 
-.card {
-  background: var(--surface);
-  border-radius: var(--r-lg);
-  border: 1px solid var(--border);
-  box-shadow: var(--sh);
-  padding: 24px;
-  margin-bottom: 16px
+.page-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--c-ink);
+  letter-spacing: -.02em;
+  margin-bottom: 18px;
 }
 
-.card-head {
+
+/* === CARDS === */
+.card {
+  background: var(--c-surf);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin-bottom: 14px;
+}
+
+.card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 20px
+  margin-bottom: 16px;
 }
 
 .card-title {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -.01em
+  color: var(--c-ink);
+  letter-spacing: -.01em;
 }
 
 .card-desc {
   font-size: 12px;
-  color: var(--ink-4);
+  color: var(--c-ink4);
   margin-top: 3px;
+  font-weight: 400;
   line-height: 1.5;
-  font-weight: 400
 }
 
-.mode-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 20px;
-  flex-wrap: wrap
-}
 
-.mtab {
-  padding: 6px 14px;
-  border-radius: var(--r);
-  border: 1px solid var(--border);
-  background: var(--bg);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-3);
-  transition: all .15s ease;
-  font-family: inherit
-}
-
-.mtab:hover:not(.active) {
-  border-color: var(--ink-5);
-  color: var(--ink-2);
-  background: var(--bg-2)
-}
-
-.mtab.active.reguler {
-  background: var(--brand);
-  color: #fff;
-  border-color: var(--brand)
-}
-
-.mtab.active.ramadhan {
-  background: #d97706;
-  color: #fff;
-  border-color: #d97706
-}
-
-.mtab.active.pts {
-  background: var(--violet);
-  color: #fff;
-  border-color: var(--violet)
-}
-
-.mtab.active.pas {
-  background: var(--rose);
-  color: #fff;
-  border-color: var(--rose)
-}
-
-.hari-tabs {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-2)
-}
-
-.hari-tab {
-  padding: 5px 13px;
-  border-radius: var(--r);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-2);
-  transition: all .15s ease;
-  font-family: inherit
-}
-
-.hari-tab:hover:not(.active) {
-  border-color: var(--brand-b);
-  color: var(--brand);
-  background: var(--brand-l)
-}
-
-.hari-tab.active {
-  background: var(--brand);
-  color: #fff;
-  border-color: var(--brand)
-}
-
-.mode-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-bottom: 20px
-}
-
-@media(max-width:560px) {
-  .mode-grid {
-    grid-template-columns: 1fr 1fr
-  }
-}
-
-.mode-opt {
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 18px 14px;
-  cursor: pointer;
-  text-align: center;
-  transition: all .18s ease;
-  background: var(--bg)
-}
-
-.mode-opt:hover {
-  border-color: var(--brand-b);
-  background: var(--brand-l)
-}
-
-.mode-opt.active {
-  border-color: var(--brand);
-  background: var(--brand-l);
-  box-shadow: 0 0 0 3px rgba(199, 80, 0, .08)
-}
-
-.mode-opt.active.ramadhan {
-  border-color: #d97706;
-  background: var(--amber-l);
-  box-shadow: 0 0 0 3px rgba(217, 119, 6, .08)
-}
-
-.mode-opt.active.pts {
-  border-color: var(--violet);
-  background: var(--violet-l);
-  box-shadow: 0 0 0 3px rgba(74, 28, 138, .08)
-}
-
-.mode-opt.active.pas {
-  border-color: var(--rose);
-  background: var(--rose-l);
-  box-shadow: 0 0 0 3px rgba(138, 10, 46, .08)
-}
-
-.mode-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--border);
-  margin: 0 auto 10px;
-  transition: background .18s
-}
-
-.mode-opt.active .mode-indicator {
-  background: var(--brand)
-}
-
-.mode-opt.active.ramadhan .mode-indicator {
-  background: #d97706
-}
-
-.mode-opt.active.pts .mode-indicator {
-  background: var(--violet)
-}
-
-.mode-opt.active.pas .mode-indicator {
-  background: var(--rose)
-}
-
-.mode-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -.01em
-}
-
-.mode-hint {
-  font-size: 11px;
-  color: var(--ink-4);
-  margin-top: 3px;
-  line-height: 1.4;
-  font-weight: 400
-}
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 0 0;
-  border-top: 1px solid var(--border-2);
-  gap: 16px;
-  margin-top: 6px
-}
-
-.toggle-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink)
-}
-
-.toggle-hint {
-  font-size: 11.5px;
-  color: var(--ink-4);
-  margin-top: 2px;
-  font-weight: 400
-}
-
-.switch {
-  position: relative;
-  width: 42px;
-  height: 24px;
-  flex-shrink: 0
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0
-}
-
-.track {
-  position: absolute;
-  inset: 0;
-  background: var(--ink-5);
-  border-radius: 24px;
-  cursor: pointer;
-  transition: background .25s
-}
-
-.track::before {
-  content: '';
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  left: 3px;
-  top: 3px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform .25s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .2)
-}
-
-input:checked+.track {
-  background: var(--brand)
-}
-
-input:checked+.track::before {
-  transform: translateX(18px)
-}
-
-.row-form {
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
-  flex-wrap: wrap
-}
-
-.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px
-}
-
-@media(max-width:480px) {
-  .two-col {
-    grid-template-columns: 1fr
-  }
-}
-
-.fg {
+/* === FORM ELEMENTS === */
+.field-group {
   display: flex;
   flex-direction: column;
-  gap: 6px
-}
-
-.fg-grow {
-  flex: 1;
-  min-width: 140px
+  gap: 6px;
 }
 
 label {
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--ink-3);
+  color: var(--c-ink3);
   text-transform: uppercase;
-  letter-spacing: .06em
+  letter-spacing: .07em;
 }
 
 input[type=text],
@@ -3896,221 +3987,487 @@ input[type=time],
 select {
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--radius);
   font-size: 13px;
-  color: var(--ink);
-  background: var(--surface);
+  color: var(--c-ink);
+  background: var(--c-surf);
   outline: none;
   font-family: inherit;
   transition: border-color .15s, box-shadow .15s;
-  -webkit-appearance: none
+  -webkit-appearance: none;
 }
 
 input::placeholder {
-  color: var(--ink-5)
+  color: var(--c-ink5);
 }
 
 input:focus,
 select:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(199, 80, 0, .1)
+  border-color: var(--c-brand);
+  box-shadow: 0 0 0 3px rgba(184, 72, 0, .1);
 }
 
+.add-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.add-row .field-group {
+  flex: 1;
+  min-width: 140px;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+
+/* === BUTTONS === */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-radius: var(--r);
+  border-radius: var(--radius);
   border: 1px solid transparent;
   cursor: pointer;
   font-size: 12.5px;
   font-weight: 600;
   font-family: inherit;
-  transition: all .15s ease;
+  transition: all .15s;
   white-space: nowrap;
-  line-height: 1.2
+  line-height: 1.2;
 }
 
 .btn:active {
-  transform: scale(.97)
+  transform: scale(.97);
 }
 
-.btn.primary {
-  background: var(--brand);
+.btn-primary {
+  background: var(--c-brand);
   color: #fff;
-  border-color: var(--brand);
-  box-shadow: 0 1px 4px rgba(199, 80, 0, .3)
+  border-color: var(--c-brand);
+  box-shadow: 0 2px 8px rgba(184, 72, 0, .3);
 }
 
-.btn.primary:hover {
-  background: var(--brand-d)
+.btn-primary:hover {
+  background: var(--c-brand-d);
 }
 
-.btn.ghost {
-  background: var(--surface);
-  color: var(--ink-2);
-  border-color: var(--border)
+.btn-ghost {
+  background: var(--c-surf);
+  color: var(--c-ink2);
+  border-color: var(--c-border);
 }
 
-.btn.ghost:hover {
-  background: var(--bg-2);
-  border-color: var(--ink-5)
+.btn-ghost:hover {
+  background: var(--c-bg2);
+  border-color: var(--c-ink5);
 }
 
-.btn.danger {
-  background: var(--red-l);
-  color: var(--red);
-  border-color: var(--red-b)
+.btn-danger {
+  background: var(--c-red-l);
+  color: var(--c-red);
+  border-color: var(--c-red-b);
 }
 
-.btn.danger:hover {
-  background: var(--red-m)
+.btn-danger:hover {
+  background: var(--c-red-m);
 }
 
-.btn.success {
-  background: var(--green-l);
-  color: var(--green);
-  border-color: var(--green-b)
+.btn-success {
+  background: var(--c-green-l);
+  color: var(--c-green);
+  border-color: var(--c-green-b);
 }
 
-.btn.success:hover {
-  background: var(--green-m)
+.btn-success:hover {
+  background: var(--c-green-m);
 }
 
-.btn.warning {
-  background: var(--amber-l);
-  color: var(--amber);
-  border-color: var(--amber-b)
+.btn-warn {
+  background: var(--c-amber-l);
+  color: var(--c-amber);
+  border-color: var(--c-amber-b);
 }
 
-.btn.warning:hover {
-  background: var(--amber-m)
+.btn-warn:hover {
+  background: var(--c-amber-m);
 }
 
-.btn.sm {
+.btn-sm {
   padding: 5px 11px;
-  font-size: 11.5px
+  font-size: 11.5px;
 }
 
-.btn-row {
+.btn-group {
   display: flex;
   gap: 6px;
   align-items: center;
-  flex-wrap: wrap
+  flex-wrap: wrap;
 }
 
+
+/* === TAB STRIPS === */
+.tab-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.mode-tab {
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--c-border);
+  background: var(--c-bg);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-ink3);
+  font-family: inherit;
+  transition: all .15s;
+}
+
+.mode-tab:hover:not(.active) {
+  border-color: var(--c-ink5);
+  color: var(--c-ink2);
+  background: var(--c-bg2);
+}
+
+.mode-tab.active[data-mode=reguler] {
+  background: var(--c-brand);
+  color: #fff;
+  border-color: var(--c-brand);
+}
+
+.mode-tab.active[data-mode=ramadhan] {
+  background: #b87000;
+  color: #fff;
+  border-color: #b87000;
+}
+
+.mode-tab.active[data-mode=pts] {
+  background: var(--c-violet);
+  color: #fff;
+  border-color: var(--c-violet);
+}
+
+.mode-tab.active[data-mode=pas] {
+  background: var(--c-rose);
+  color: #fff;
+  border-color: var(--c-rose);
+}
+
+.hari-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--c-border2);
+}
+
+.hari-tab {
+  padding: 5px 13px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--c-border);
+  background: var(--c-surf);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-ink2);
+  font-family: inherit;
+  transition: all .15s;
+}
+
+.hari-tab:hover:not(.active) {
+  border-color: var(--c-brand-m);
+  color: var(--c-brand);
+  background: var(--c-brand-l);
+}
+
+.hari-tab.active {
+  background: var(--c-brand);
+  color: #fff;
+  border-color: var(--c-brand);
+}
+
+
+/* === MODE CARDS === */
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.mode-card {
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--radius-md);
+  padding: 16px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: all .18s;
+  background: var(--c-bg);
+}
+
+.mode-card:hover {
+  border-color: var(--c-brand-m);
+  background: var(--c-brand-l);
+}
+
+.mode-card.active[data-mode=reguler] {
+  border-color: var(--c-brand);
+  background: var(--c-brand-l);
+  box-shadow: 0 0 0 3px rgba(184, 72, 0, .1);
+}
+
+.mode-card.active[data-mode=ramadhan] {
+  border-color: #b87000;
+  background: var(--c-amber-l);
+  box-shadow: 0 0 0 3px rgba(184, 112, 0, .1);
+}
+
+.mode-card.active[data-mode=pts] {
+  border-color: var(--c-violet);
+  background: var(--c-violet-l);
+  box-shadow: 0 0 0 3px rgba(67, 13, 140, .1);
+}
+
+.mode-card.active[data-mode=pas] {
+  border-color: var(--c-rose);
+  background: var(--c-rose-l);
+  box-shadow: 0 0 0 3px rgba(128, 8, 38, .1);
+}
+
+.mode-card-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-border);
+  margin: 0 auto 10px;
+  transition: background .18s;
+}
+
+.mode-card.active[data-mode=reguler] .mode-card-dot {
+  background: var(--c-brand);
+}
+
+.mode-card.active[data-mode=ramadhan] .mode-card-dot {
+  background: #b87000;
+}
+
+.mode-card.active[data-mode=pts] .mode-card-dot {
+  background: var(--c-violet);
+}
+
+.mode-card.active[data-mode=pas] .mode-card-dot {
+  background: var(--c-rose);
+}
+
+.mode-card-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--c-ink);
+  letter-spacing: -.01em;
+}
+
+.mode-card-hint {
+  font-size: 10.5px;
+  color: var(--c-ink4);
+  margin-top: 3px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+
+/* === TOGGLE === */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid var(--c-border2);
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.toggle-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+.toggle-hint {
+  font-size: 11.5px;
+  color: var(--c-ink4);
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-track {
+  position: absolute;
+  inset: 0;
+  background: var(--c-ink5);
+  border-radius: 22px;
+  cursor: pointer;
+  transition: background .25s;
+}
+
+.switch-track::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform .25s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+}
+
+input:checked+.switch-track {
+  background: var(--c-brand);
+}
+
+input:checked+.switch-track::before {
+  transform: translateX(18px);
+}
+
+
+/* === TABLE === */
 .table-wrap {
   overflow-x: auto;
-  border-radius: var(--r);
-  border: 1px solid var(--border-2)
+  border-radius: var(--radius);
+  border: 1px solid var(--c-border2);
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px
+  font-size: 13px;
 }
 
 th {
   text-align: left;
-  padding: 9px 14px;
-  background: var(--bg-2);
-  color: var(--ink-3);
+  padding: 9px 13px;
+  background: var(--c-bg2);
+  color: var(--c-ink3);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .07em;
-  border-bottom: 1px solid var(--border)
+  border-bottom: 1px solid var(--c-border);
 }
 
 td {
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border-2);
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--c-border2);
   vertical-align: middle;
-  color: var(--ink-2)
+  color: var(--c-ink2);
 }
 
 tr:last-child td {
-  border-bottom: none
+  border-bottom: none;
 }
 
 tbody tr {
-  transition: background .1s
+  transition: background .1s;
 }
 
 tbody tr:hover td {
-  background: var(--bg)
+  background: var(--c-bg);
 }
 
-.t-time {
-  font-weight: 700;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -.01em
-}
-
-.t-audio {
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 400
-}
-
-.t-num {
-  color: var(--ink-5);
+.td-num {
+  color: var(--c-ink5);
   font-size: 11px;
-  width: 32px
+  width: 32px;
 }
 
+.td-time {
+  font-weight: 700;
+  color: var(--c-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.td-audio {
+  color: var(--c-ink3);
+  font-size: 12px;
+}
+
+
+/* === NOTICE === */
 .notice {
-  border-radius: var(--r);
-  padding: 12px 14px;
+  border-radius: var(--radius);
+  padding: 11px 14px;
   font-size: 12.5px;
   border: 1px solid;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   line-height: 1.5;
-  font-weight: 400
+  font-weight: 400;
 }
 
-.notice.warning {
-  background: var(--amber-l);
-  border-color: var(--amber-b);
-  color: var(--amber-d)
+.notice-warn {
+  background: var(--c-amber-l);
+  border-color: var(--c-amber-b);
+  color: var(--c-amber);
 }
 
-.notice.info {
-  background: var(--brand-l);
-  border-color: var(--brand-b);
-  color: var(--brand-d)
+.notice-info {
+  background: var(--c-brand-l);
+  border-color: var(--c-brand-m);
+  color: var(--c-brand-d);
 }
 
+
+/* === LIBUR LIST === */
 .libur-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  margin-bottom: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  margin-bottom: 7px;
   gap: 10px;
   flex-wrap: wrap;
-  transition: border-color .15s
+  transition: border-color .15s;
 }
 
 .libur-item:last-child {
-  margin-bottom: 0
+  margin-bottom: 0;
 }
 
 .libur-item.today {
-  border-color: var(--amber-b);
-  background: var(--amber-l)
+  border-color: var(--c-amber-b);
+  background: var(--c-amber-l);
 }
 
 .libur-date {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink)
+  color: var(--c-ink);
 }
 
 .today-tag {
@@ -4118,108 +4475,113 @@ tbody tr:hover td {
   align-items: center;
   margin-left: 8px;
   padding: 1px 7px;
-  background: var(--amber-m);
-  color: var(--amber-d);
+  background: var(--c-amber-m);
+  color: var(--c-amber);
   border-radius: 4px;
   font-size: 9.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .04em
+  letter-spacing: .04em;
 }
 
+
+/* === TONE LIST === */
 .tone-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 11px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  padding: 11px 13px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
   margin-bottom: 6px;
   gap: 10px;
   flex-wrap: wrap;
-  transition: border-color .15s
+  transition: border-color .15s;
 }
 
 .tone-item:hover {
-  border-color: var(--ink-5)
+  border-color: var(--c-ink5);
 }
 
 .tone-item:last-child {
-  margin-bottom: 0
+  margin-bottom: 0;
 }
 
 .tone-name {
   font-size: 12.5px;
-  color: var(--ink-2);
+  color: var(--c-ink2);
   word-break: break-all;
-  font-weight: 500
+  font-weight: 500;
 }
 
+
+/* === UPLOAD ZONE === */
 .upload-zone {
-  border: 1.5px dashed var(--border);
-  border-radius: var(--r-lg);
+  border: 1.5px dashed var(--c-border);
+  border-radius: var(--radius-lg);
   padding: 36px 24px;
   text-align: center;
   cursor: pointer;
-  background: var(--bg);
-  transition: all .2s ease
+  background: var(--c-bg);
+  transition: all .2s;
 }
 
 .upload-zone:hover,
 .upload-zone.over {
-  border-color: var(--brand);
-  background: var(--brand-l)
+  border-color: var(--c-brand);
+  background: var(--c-brand-l);
 }
 
-.upload-zone-icon {
+.upload-icon {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
+  background: var(--c-bg2);
+  border: 1px solid var(--c-border);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 14px;
-  transition: all .2s
+  transition: all .2s;
 }
 
-.upload-zone-icon svg {
+.upload-icon svg {
   width: 20px;
   height: 20px;
-  stroke: var(--ink-4);
-  transition: stroke .2s
+  stroke: var(--c-ink4);
+  transition: stroke .2s;
 }
 
-.upload-zone:hover .upload-zone-icon,
-.upload-zone.over .upload-zone-icon {
-  background: var(--brand-m);
-  border-color: var(--brand-b)
+.upload-zone:hover .upload-icon,
+.upload-zone.over .upload-icon {
+  background: var(--c-brand-m);
+  border-color: var(--c-brand);
 }
 
-.upload-zone:hover .upload-zone-icon svg,
-.upload-zone.over .upload-zone-icon svg {
-  stroke: var(--brand)
+.upload-zone:hover .upload-icon svg,
+.upload-zone.over .upload-icon svg {
+  stroke: var(--c-brand);
 }
 
 .upload-zone p {
-  color: var(--ink-2);
+  color: var(--c-ink2);
   font-size: 13px;
-  font-weight: 500
+  font-weight: 500;
 }
 
 .upload-zone small {
   font-size: 11.5px;
-  color: var(--ink-4);
+  color: var(--c-ink4);
   display: block;
   margin-top: 4px;
-  font-weight: 400
 }
 
 #fileInput {
-  display: none
+  display: none;
 }
 
+
+/* === LOG BADGES === */
 .log-badge {
   display: inline-flex;
   align-items: center;
@@ -4228,290 +4590,360 @@ tbody tr:hover td {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .05em
+  letter-spacing: .05em;
 }
 
 .log-badge.reguler {
-  background: var(--brand-l);
-  color: var(--brand-d)
+  background: var(--c-brand-l);
+  color: var(--c-brand-d);
 }
 
 .log-badge.ramadhan {
-  background: var(--amber-l);
-  color: var(--amber-d)
+  background: var(--c-amber-l);
+  color: var(--c-amber);
 }
 
 .log-badge.pts {
-  background: var(--violet-l);
-  color: var(--violet)
+  background: var(--c-violet-l);
+  color: var(--c-violet);
 }
 
 .log-badge.pas {
-  background: var(--rose-l);
-  color: var(--rose)
+  background: var(--c-rose-l);
+  color: var(--c-rose);
 }
 
-.count {
+
+/* === COUNT BADGE === */
+.count-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 22px;
   height: 22px;
   padding: 0 7px;
-  background: var(--bg);
-  color: var(--ink-3);
+  background: var(--c-bg);
+  color: var(--c-ink3);
   border-radius: 11px;
   font-size: 11px;
   font-weight: 700;
-  border: 1px solid var(--border)
+  border: 1px solid var(--c-border);
 }
 
-.empty {
+
+/* === EMPTY STATE === */
+.empty-state {
   text-align: center;
-  padding: 44px 20px;
-  color: var(--ink-4);
+  padding: 40px 20px;
+  color: var(--c-ink4);
   font-size: 13px;
-  font-weight: 400
+  font-weight: 400;
 }
 
-.overlay {
+
+/* === MODAL === */
+.modal-overlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(26, 15, 0, .6);
+  background: rgba(26, 10, 0, .6);
   z-index: 500;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(6px);
-  padding: 20px
+  backdrop-filter: blur(4px);
+  padding: 20px;
 }
 
-.overlay.open {
+.modal-overlay.open {
   display: flex;
-  animation: fadeIn .18s ease
+  animation: fadeIn .18s ease;
 }
 
 @keyframes fadeIn {
   from {
-    opacity: 0
-  }
-
-  to {
-    opacity: 1
-  }
-}
-
-.modal {
-  background: var(--surface);
-  border-radius: var(--r-xl);
-  padding: 28px;
-  width: min(440px, 100%);
-  box-shadow: var(--sh-xl);
-  border: 1px solid var(--border);
-  animation: popIn .2s cubic-bezier(.34, 1.56, .64, 1)
-}
-
-@keyframes popIn {
-  from {
     opacity: 0;
-    transform: scale(.95) translateY(8px)
   }
 
   to {
     opacity: 1;
-    transform: none
   }
 }
 
-.modal-head {
-  margin-bottom: 22px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-2)
+.modal {
+  background: var(--c-surf);
+  border-radius: var(--radius-xl);
+  width: min(440px, 100%);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--c-border);
+  animation: modalIn .2s cubic-bezier(.34, 1.56, .64, 1);
+  overflow: hidden;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(.95) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--c-border2);
+  gap: 12px;
 }
 
 .modal-title {
   font-size: 15px;
   font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -.01em
+  color: var(--c-ink);
+  letter-spacing: -.01em;
 }
 
-.modal-subtitle {
+.modal-sub {
   font-size: 12px;
-  color: var(--ink-4);
+  color: var(--c-ink4);
   margin-top: 3px;
-  font-weight: 400
 }
 
-.modal-foot {
+.modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all .15s;
+  padding: 0;
+}
+
+.modal-close svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--c-ink3);
+}
+
+.modal-close:hover {
+  background: var(--c-bg2);
+  border-color: var(--c-ink5);
+}
+
+.modal-body {
+  padding: 20px 22px;
+}
+
+.modal-footer {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-  margin-top: 22px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-2)
+  padding: 14px 22px 20px;
+  border-top: 1px solid var(--c-border2);
 }
 
+
+/* === TOAST === */
 .toast {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
-  left: 24px;
+  bottom: 22px;
+  right: 22px;
+  left: 22px;
   max-width: 340px;
   margin: 0 auto;
-  background: var(--ink);
+  background: var(--c-ink);
   color: #fff;
   padding: 12px 18px;
-  border-radius: var(--r-md);
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 500;
-  z-index: 600;
+  z-index: 700;
   pointer-events: none;
   opacity: 0;
   transform: translateY(10px);
-  transition: all .25s ease;
-  box-shadow: var(--sh-xl);
+  transition: all .25s;
+  box-shadow: var(--shadow-xl);
   line-height: 1.4;
-  font-family: 'Lexend', inherit
 }
 
 .toast.show {
   opacity: 1;
-  transform: translateY(0)
+  transform: none;
 }
 
 .toast.error {
-  background: #7a1500
+  background: #6e1000;
 }
 
-.toast.success {
-  background: #1a5c2a
+.toast.ok {
+  background: #1a5228;
 }
 
-@media(min-width:480px) {
-  .toast {
-    left: auto
-  }
-}
 
+/* === PWA BANNER === */
 .pwa-banner {
   position: fixed;
-  bottom: 20px;
+  bottom: 18px;
   left: 50%;
-  transform: translate(-50%, 140%);
+  transform: translate(-50%, 160%);
   width: min(420px, calc(100% - 32px));
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  box-shadow: var(--sh-xl);
-  padding: 16px 18px;
+  background: var(--c-surf);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  padding: 14px 16px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   z-index: 400;
-  transition: transform .4s cubic-bezier(.34, 1.56, .64, 1)
+  transition: transform .4s cubic-bezier(.34, 1.56, .64, 1);
 }
 
 .pwa-banner.show {
-  transform: translate(-50%, 0)
+  transform: translate(-50%, 0);
 }
 
 .pwa-icon {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
   flex-shrink: 0;
-  background: var(--brand-l);
-  border: 1px solid var(--brand-m);
+  border-radius: 11px;
+  background: var(--c-brand-l);
+  border: 1px solid var(--c-brand-m);
   display: flex;
   align-items: center;
-  justify-content: center
+  justify-content: center;
 }
 
 .pwa-icon svg {
   width: 18px;
   height: 18px;
-  stroke: var(--brand)
+  stroke: var(--c-brand);
 }
 
 .pwa-text {
   flex: 1;
-  min-width: 0
+  min-width: 0;
 }
 
 .pwa-title {
   font-size: 13px;
   font-weight: 700;
-  color: var(--ink)
+  color: var(--c-ink);
 }
 
 .pwa-desc {
   font-size: 11.5px;
-  color: var(--ink-4);
+  color: var(--c-ink4);
   margin-top: 2px;
-  font-weight: 400
 }
 
-.pwa-actions {
+.pwa-btns {
   display: flex;
   gap: 6px;
-  flex-shrink: 0
+  flex-shrink: 0;
 }
 
-@media(max-width:768px) {
-  main {
-    padding: 20px 16px 72px
+
+/* === RESPONSIVE === */
+@media (max-width: 780px) {
+  .sidebar {
+    display: none;
   }
 
-  header {
-    padding: 0 16px
+  .bottom-nav {
+    display: flex;
   }
 
-  .card {
-    padding: 18px
-  }
-}
-
-@media(max-width:600px) {
-  header {
-    height: auto;
-    flex-wrap: wrap;
-    padding: 12px 16px;
-    gap: 10px;
-    position: static
-  }
-
-  nav {
-    top: 0;
-    padding: 0 14px
-  }
-
-  .header-controls {
-    width: 100%;
-    justify-content: space-between
-  }
-
-  .brand-sub {
-    display: none
-  }
-}
-
-@media(max-width:460px) {
-  .row-form {
+  .layout {
     flex-direction: column;
-    align-items: stretch
   }
 
-  .row-form .btn {
-    justify-content: center
+  .main-content {
+    padding: 18px 16px calc(var(--botnav-h) + 20px);
+    max-width: 100%;
   }
 
-  .modal {
-    padding: 20px
+  .mode-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 10px 16px;
+    gap: 8px;
   }
 
-  .status-group .badge {
-    display: none
+  .topbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .topbar-sub {
+    display: none;
+  }
+
+  .status-cluster .mode-chip {
+    display: none;
+  }
+
+  .toast {
+    bottom: calc(var(--botnav-h) + 10px);
+    right: 14px;
+    left: 14px;
+  }
+
+  .pwa-banner {
+    bottom: calc(var(--botnav-h) + 10px);
+  }
+}
+
+@media (max-width: 480px) {
+  .add-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-row .btn {
+    justify-content: center;
+  }
+
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-body {
+    padding: 16px 18px;
+  }
+
+  .modal-header,
+  .modal-footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}
+
+@media (min-width: 480px) {
+  .toast {
+    left: auto;
+  }
+}
+
+@media (min-width: 1200px) {
+  .main-content {
+    padding: 28px 36px 56px;
   }
 }
 

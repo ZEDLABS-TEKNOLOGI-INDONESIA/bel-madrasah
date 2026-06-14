@@ -1,22 +1,26 @@
 (function () {
   var btn = document.getElementById("loginBtn");
-  var err = document.getElementById("errMsg");
+  var alert = document.getElementById("loginAlert");
 
-  function showErr(msg) {
-    err.textContent = msg;
-    err.style.display = "block";
+  function showAlert(msg) {
+    alert.textContent = msg;
+    alert.classList.add("show");
+  }
+
+  function hideAlert() {
+    alert.classList.remove("show");
   }
 
   async function login() {
     var u = document.getElementById("username").value.trim();
     var p = document.getElementById("password").value;
     if (!u || !p) {
-      showErr("Username dan password harus diisi");
+      showAlert("Username dan password harus diisi.");
       return;
     }
     btn.disabled = true;
     btn.textContent = "Memproses...";
-    err.style.display = "none";
+    hideAlert();
     try {
       var res = await fetch("/login", {
         method: "POST",
@@ -27,7 +31,7 @@
       if (!res.ok) throw new Error(data.error);
       window.location.href = "/";
     } catch (e) {
-      showErr(e.message);
+      showAlert(e.message);
       btn.disabled = false;
       btn.textContent = "Masuk";
     }
@@ -36,6 +40,9 @@
   btn.addEventListener("click", login);
   document.getElementById("password").addEventListener("keydown", function (e) {
     if (e.key === "Enter") login();
+  });
+  document.getElementById("username").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") document.getElementById("password").focus();
   });
 
   if ("serviceWorker" in navigator) {

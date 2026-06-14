@@ -1,84 +1,129 @@
-const MODE_LABELS = { reguler: "Reguler", ramadhan: "Ramadhan", pts: "PTS", pas: "PAS" };
-const DAY_ORDER = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+var MODE_LABELS = { reguler: "Reguler", ramadhan: "Ramadhan", pts: "PTS", pas: "PAS" };
+var DAY_ORDER = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 
-let currentJadwalMode = "reguler";
-let currentHari = null;
-let editIndex = -1;
-let allTones = [];
-let jadwalData = {};
-let configData = {};
-let deferredInstall = null;
+var jadwalMode = "reguler";
+var activeHari = null;
+var editIndex = -1;
+var allTones = [];
+var jadwalData = {};
+var configData = {};
+var deferredPWA = null;
 
-function toast(msg, type = "success") {
-  const el = document.getElementById("toast");
-  el.textContent = msg;
-  el.className = `toast show ${type}`;
-  clearTimeout(el._t);
-  el._t = setTimeout(() => (el.className = "toast"), 3000);
+var MON_ID = [
+  "",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "Mei",
+  "Jun",
+  "Jul",
+  "Agu",
+  "Sep",
+  "Okt",
+  "Nov",
+  "Des",
+];
+var DAY_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+function $(id) {
+  return document.getElementById(id);
 }
 
-async function api(url, method = "GET", body = null) {
-  const opts = { method, headers: { "Content-Type": "application/json" } };
+/* ─── TOAST ─── */
+function toast(msg, type) {
+  var el = $("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (type === "error" ? " error" : type === "ok" ? " ok" : "");
+  clearTimeout(el._t);
+  el._t = setTimeout(function () {
+    el.className = "toast";
+  }, 3000);
+}
+
+/* ─── API ─── */
+async function api(url, method, body) {
+  var opts = { method: method || "GET", headers: { "Content-Type": "application/json" } };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
-  const data = await res.json();
+  var res = await fetch(url, opts);
+  var data = await res.json();
   if (!res.ok) throw new Error(data.error || "Terjadi kesalahan");
   return data;
 }
 
+/* ─── NAV ─── */
 function switchTab(id) {
-  document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
-  document.querySelectorAll(".nav-btn, .bnav-btn").forEach((b) => b.classList.remove("active"));
-  document.getElementById("sec-" + id).classList.add("active");
-  document.querySelectorAll(`[data-tab="${id}"]`).forEach((b) => b.classList.add("active"));
+  document.querySelectorAll(".page").forEach(function (el) {
+    el.classList.remove("active");
+  });
+  document.querySelectorAll(".sidenav, .botnav").forEach(function (el) {
+    el.classList.remove("active");
+  });
+  $("page-" + id).classList.add("active");
+  document.querySelectorAll('[data-tab="' + id + '"]').forEach(function (el) {
+    el.classList.add("active");
+  });
   if (id === "audio") loadTones();
   if (id === "log") loadLog();
   if (id === "libur") loadLibur();
   if (id === "mode") renderModeUI();
 }
 
-function setupNavigation() {
-  document.querySelectorAll("[data-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+function setupNav() {
+  document.querySelectorAll("[data-tab]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      switchTab(btn.dataset.tab);
+    });
   });
-  document.querySelectorAll(".mtab").forEach((btn) => {
-    btn.addEventListener("click", () => switchJadwalMode(btn.dataset.mode, btn));
+  document.querySelectorAll(".mode-tab").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      jadwalMode = btn.dataset.mode;
+      activeHari = null;
+      document.querySelectorAll(".mode-tab").forEach(function (b) {
+        b.classList.remove("active");
+      });
+      btn.classList.add("active");
+      loadJadwal();
+    });
   });
-  document.querySelectorAll(".mode-opt").forEach((el) => {
-    el.addEventListener("click", () => selectMode(el.dataset.mode));
+  document.querySelectorAll(".mode-card").forEach(function (el) {
+    el.addEventListener("click", function () {
+      selectMode(el.dataset.mode);
+    });
   });
 }
 
+/* ─── STATUS ─── */
 async function loadStatus() {
   try {
-    const d = await api("/api/service/status");
-    const dot = document.getElementById("statusDot");
-    dot.className = "dot" + (d.running ? " on" : "");
-    document.getElementById("statusText").textContent = d.running ? "Aktif" : "Nonaktif";
-    document.getElementById("toggleBtn").textContent = d.running ? "Hentikan" : "Aktifkan";
-    const mode = d.active_mode || "reguler";
-    const badge = document.getElementById("modeBadge");
-    badge.textContent = MODE_LABELS[mode] || mode;
-    badge.className = "badge badge-mode " + mode;
-    document.getElementById("liburBadge").style.display = d.is_libur ? "" : "none";
+    var d = await api("/api/service/status");
+    var dot = $("statusDot");
+    dot.className = "status-dot" + (d.running ? " on" : "");
+    $("statusText").textContent = d.running ? "Aktif" : "Nonaktif";
+    $("toggleBtn").textContent = d.running ? "Hentikan" : "Aktifkan";
+    var mode = d.active_mode || "reguler";
+    var chip = $("modeChip");
+    chip.textContent = MODE_LABELS[mode] || mode;
+    chip.className = "mode-chip " + mode;
+    $("liburChip").className = "libur-chip" + (d.is_libur ? " show" : "");
   } catch (_) {}
 }
 
 async function toggleService() {
   try {
-    const d = await api("/api/service/toggle", "POST");
-    toast(d.message);
+    var d = await api("/api/service/toggle", "POST");
+    toast(d.message, "ok");
     loadStatus();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── CONFIG ─── */
 async function loadConfig() {
   try {
-    const d = await api("/api/config");
+    var d = await api("/api/config");
     configData = d.config;
-    return d;
   } catch (e) {
     toast(e.message, "error");
   }
@@ -86,25 +131,18 @@ async function loadConfig() {
 
 function renderModeUI() {
   if (!configData.mode) return;
-  const m = configData.mode;
-  const map = {
-    reguler: "modeOptReguler",
-    ramadhan: "modeOptRamadhan",
-    pts: "modeOptPTS",
-    pas: "modeOptPAS",
-  };
-  ["reguler", "ramadhan", "pts", "pas"].forEach((k) => {
-    const el = document.getElementById(map[k]);
-    el.className = k === "reguler" ? "mode-opt" : `mode-opt ${k}`;
-    if (m === k) el.classList.add("active");
+  var m = configData.mode;
+  ["reguler", "ramadhan", "pts", "pas"].forEach(function (k) {
+    var el = $("mcard-" + k);
+    el.className = "mode-card" + (m === k ? " active" : "");
   });
-  document.getElementById("overrideToggle").checked = configData.manual_override;
-  document.getElementById("ramadhanStart").value = configData.ramadhan_start || "";
-  document.getElementById("ramadhanEnd").value = configData.ramadhan_end || "";
-  document.getElementById("ptsStart").value = configData.pts_start || "";
-  document.getElementById("ptsEnd").value = configData.pts_end || "";
-  document.getElementById("pasStart").value = configData.pas_start || "";
-  document.getElementById("pasEnd").value = configData.pas_end || "";
+  $("overrideToggle").checked = configData.manual_override;
+  $("ramadhanStart").value = configData.ramadhan_start || "";
+  $("ramadhanEnd").value = configData.ramadhan_end || "";
+  $("ptsStart").value = configData.pts_start || "";
+  $("ptsEnd").value = configData.pts_end || "";
+  $("pasStart").value = configData.pas_start || "";
+  $("pasEnd").value = configData.pas_end || "";
 }
 
 function selectMode(mode) {
@@ -113,9 +151,9 @@ function selectMode(mode) {
 }
 
 async function saveConfig() {
-  const start = document.getElementById("ramadhanStart").value.trim();
-  const end = document.getElementById("ramadhanEnd").value.trim();
-  const mmdd = /^\d{2}-\d{2}$/;
+  var start = $("ramadhanStart").value.trim();
+  var end = $("ramadhanEnd").value.trim();
+  var mmdd = /^\d{2}-\d{2}$/;
   if (start && !mmdd.test(start)) {
     toast("Format Ramadhan harus MM-DD", "error");
     return;
@@ -127,15 +165,15 @@ async function saveConfig() {
   try {
     await api("/api/config", "POST", {
       mode: configData.mode,
-      manual_override: document.getElementById("overrideToggle").checked,
+      manual_override: $("overrideToggle").checked,
       ramadhan_start: start,
       ramadhan_end: end,
-      pts_start: document.getElementById("ptsStart").value,
-      pts_end: document.getElementById("ptsEnd").value,
-      pas_start: document.getElementById("pasStart").value,
-      pas_end: document.getElementById("pasEnd").value,
+      pts_start: $("ptsStart").value,
+      pts_end: $("ptsEnd").value,
+      pas_start: $("pasStart").value,
+      pas_end: $("pasEnd").value,
     });
-    toast("Pengaturan disimpan");
+    toast("Pengaturan disimpan", "ok");
     loadStatus();
     await loadConfig();
     renderModeUI();
@@ -144,24 +182,47 @@ async function saveConfig() {
   }
 }
 
+/* ─── LIBUR ─── */
+function fmtDate(d) {
+  var parts = d.split("-");
+  return (
+    DAY_ID[new Date(d).getDay()] +
+    ", " +
+    parseInt(parts[2]) +
+    " " +
+    MON_ID[parseInt(parts[1])] +
+    " " +
+    parts[0]
+  );
+}
+
 async function loadLibur() {
   try {
-    const d = await api("/api/libur");
-    const list = d.libur || [];
-    document.getElementById("liburCount").textContent = list.length;
-    const c = document.getElementById("liburList");
+    var d = await api("/api/libur");
+    var list = d.libur || [];
+    $("liburCount").textContent = list.length;
+    var c = $("liburList");
     if (!list.length) {
-      c.innerHTML = '<div class="empty">Belum ada hari libur terdaftar</div>';
+      c.innerHTML = '<div class="empty-state">Belum ada hari libur terdaftar</div>';
       return;
     }
-    const today = new Date().toISOString().slice(0, 10);
+    var today = new Date().toISOString().slice(0, 10);
     c.innerHTML = list
-      .map((date) => {
-        const isToday = date === today;
-        return `<div class="libur-item${isToday ? " today" : ""}">
-        <div class="libur-date">${formatDate(date)}${isToday ? '<span class="today-tag">Hari Ini</span>' : ""}</div>
-        <button class="btn danger sm" onclick="deleteLibur('${date}')">Hapus</button>
-      </div>`;
+      .map(function (date) {
+        var isTdy = date === today;
+        return (
+          '<div class="libur-item' +
+          (isTdy ? " today" : "") +
+          '">' +
+          '<div class="libur-date">' +
+          fmtDate(date) +
+          (isTdy ? '<span class="today-tag">Hari Ini</span>' : "") +
+          "</div>" +
+          '<button class="btn btn-danger btn-sm" onclick="deleteLibur(\'' +
+          date +
+          "')\">Hapus</button>" +
+          "</div>"
+        );
       })
       .join("");
   } catch (e) {
@@ -169,37 +230,16 @@ async function loadLibur() {
   }
 }
 
-function formatDate(d) {
-  const mon = [
-    "",
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "Mei",
-    "Jun",
-    "Jul",
-    "Agu",
-    "Sep",
-    "Okt",
-    "Nov",
-    "Des",
-  ];
-  const day = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-  const [y, m, dd] = d.split("-");
-  return `${day[new Date(d).getDay()]}, ${parseInt(dd)} ${mon[parseInt(m)]} ${y}`;
-}
-
 async function addLibur() {
-  const date = document.getElementById("newLiburDate").value;
+  var date = $("newLiburDate").value;
   if (!date) {
     toast("Pilih tanggal terlebih dahulu", "error");
     return;
   }
   try {
-    await api("/api/libur", "POST", { action: "add", date });
-    toast("Tanggal libur ditambahkan");
-    document.getElementById("newLiburDate").value = "";
+    await api("/api/libur", "POST", { action: "add", date: date });
+    toast("Tanggal libur ditambahkan", "ok");
+    $("newLiburDate").value = "";
     loadLibur();
     loadStatus();
   } catch (e) {
@@ -208,10 +248,10 @@ async function addLibur() {
 }
 
 async function deleteLibur(date) {
-  if (!confirm(`Hapus ${formatDate(date)} dari daftar libur?`)) return;
+  if (!confirm("Hapus " + fmtDate(date) + " dari daftar libur?")) return;
   try {
-    await api("/api/libur", "POST", { action: "delete", date });
-    toast("Tanggal libur dihapus");
+    await api("/api/libur", "POST", { action: "delete", date: date });
+    toast("Tanggal libur dihapus", "ok");
     loadLibur();
     loadStatus();
   } catch (e) {
@@ -219,102 +259,115 @@ async function deleteLibur(date) {
   }
 }
 
-function switchJadwalMode(mode, btn) {
-  currentJadwalMode = mode;
-  currentHari = null;
-  document.querySelectorAll(".mtab").forEach((b) => b.classList.remove("active"));
-  btn.classList.add("active");
-  loadJadwal();
-}
-
+/* ─── JADWAL ─── */
 async function loadJadwal() {
   try {
-    const d = await api("/api/jadwal?mode=" + currentJadwalMode);
+    var d = await api("/api/jadwal?mode=" + jadwalMode);
     jadwalData = d.jadwal || {};
-    renderHariTabs(Object.keys(jadwalData));
-    if (currentHari && jadwalData[currentHari]) {
-      renderJadwalTable(currentHari);
+    renderHariStrip(Object.keys(jadwalData));
+    if (activeHari && jadwalData[activeHari]) {
+      renderJadwalTable(activeHari);
     } else {
-      currentHari = null;
-      document.getElementById("jadwalTitle").textContent = "Pilih hari";
-      document.getElementById("hariInfo").textContent = "Pilih hari dari tab di atas";
-      document.getElementById("jadwalTable").innerHTML =
-        '<div class="empty">Pilih hari untuk melihat jadwal bel</div>';
-      document.getElementById("jadwalActions").style.display = "none";
+      activeHari = null;
+      $("jadwalTitle").textContent = "Pilih hari";
+      $("jadwalDesc").textContent = "Pilih hari dari tab di atas";
+      $("jadwalBody").innerHTML =
+        '<div class="empty-state">Pilih hari untuk melihat jadwal bel</div>';
+      $("jadwalActions").style.display = "none";
     }
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
-function renderHariTabs(days) {
-  const c = document.getElementById("hariTabs");
+function renderHariStrip(days) {
+  var c = $("hariStrip");
   if (!days.length) {
     c.innerHTML =
-      '<span style="font-size:12px;color:var(--ink-4)">Belum ada hari. Tambahkan di atas.</span>';
+      '<span style="font-size:12px;color:var(--c-ink4)">Belum ada hari. Tambahkan di atas.</span>';
     return;
   }
-  days.sort((a, b) => {
-    const ai = DAY_ORDER.indexOf(a),
+  days.sort(function (a, b) {
+    var ai = DAY_ORDER.indexOf(a),
       bi = DAY_ORDER.indexOf(b);
     return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
   });
   c.innerHTML = days
-    .map(
-      (h) =>
-        `<button class="hari-tab${h === currentHari ? " active" : ""}" onclick="selectHari('${h}')">${h}</button>`
-    )
+    .map(function (h) {
+      return (
+        '<button class="hari-tab' +
+        (h === activeHari ? " active" : "") +
+        '" onclick="selectHari(\'' +
+        h +
+        "')\">" +
+        h +
+        "</button>"
+      );
+    })
     .join("");
 }
 
 function selectHari(hari) {
-  currentHari = hari;
-  document
-    .querySelectorAll(".hari-tab")
-    .forEach((b) => b.classList.toggle("active", b.textContent === hari));
+  activeHari = hari;
+  document.querySelectorAll(".hari-tab").forEach(function (b) {
+    b.classList.toggle("active", b.textContent === hari);
+  });
   renderJadwalTable(hari);
-  document.getElementById("jadwalActions").style.display = "";
+  $("jadwalActions").style.display = "";
 }
 
 function renderJadwalTable(hari) {
-  document.getElementById("jadwalTitle").textContent =
-    `${hari} \u2014 ${MODE_LABELS[currentJadwalMode] || currentJadwalMode}`;
-  const entries = jadwalData[hari] || [];
-  document.getElementById("hariInfo").textContent = `${entries.length} entri bel`;
+  $("jadwalTitle").textContent = hari + " \u2014 " + (MODE_LABELS[jadwalMode] || jadwalMode);
+  var entries = jadwalData[hari] || [];
+  $("jadwalDesc").textContent = entries.length + " entri bel";
   if (!entries.length) {
-    document.getElementById("jadwalTable").innerHTML =
-      '<div class="empty">Belum ada jadwal bel untuk hari ini</div>';
+    $("jadwalBody").innerHTML =
+      '<div class="empty-state">Belum ada jadwal bel untuk hari ini</div>';
     return;
   }
-  let html = `<div class="table-wrap"><table><thead><tr>
-    <th style="width:32px">#</th><th>Waktu</th><th>Audio</th><th style="width:120px">Aksi</th>
-  </tr></thead><tbody>`;
-  entries.forEach((e, i) => {
-    const name = e.audio.split("/").pop();
-    html += `<tr>
-      <td class="t-num">${i + 1}</td>
-      <td class="t-time">${e.waktu}</td>
-      <td class="t-audio">${name}</td>
-      <td><div class="btn-row">
-        <button class="btn ghost sm" onclick="openEditEntry(${i})">Edit</button>
-        <button class="btn danger sm" onclick="deleteEntry(${i})">Hapus</button>
-      </div></td>
-    </tr>`;
-  });
-  html += "</tbody></table></div>";
-  document.getElementById("jadwalTable").innerHTML = html;
+  var rows = entries
+    .map(function (e, i) {
+      return (
+        "<tr>" +
+        '<td class="td-num">' +
+        (i + 1) +
+        "</td>" +
+        '<td class="td-time">' +
+        e.waktu +
+        "</td>" +
+        '<td class="td-audio">' +
+        e.audio.split("/").pop() +
+        "</td>" +
+        '<td><div class="btn-group">' +
+        '<button class="btn btn-ghost btn-sm" onclick="openEditEntry(' +
+        i +
+        ')">Edit</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteEntry(' +
+        i +
+        ')">Hapus</button>' +
+        "</div></td>" +
+        "</tr>"
+      );
+    })
+    .join("");
+  $("jadwalBody").innerHTML =
+    '<div class="table-wrap"><table>' +
+    '<thead><tr><th style="width:32px">#</th><th>Waktu</th><th>Audio</th><th style="width:130px">Aksi</th></tr></thead>' +
+    "<tbody>" +
+    rows +
+    "</tbody></table></div>";
 }
 
 async function addHari() {
-  const input = document.getElementById("newHariInput");
-  const hari = input.value.trim();
+  var input = $("newHariInput");
+  var hari = input.value.trim();
   if (!hari) {
     toast("Nama hari tidak boleh kosong", "error");
     return;
   }
   try {
-    await api("/api/jadwal/hari", "POST", { action: "add", mode: currentJadwalMode, hari });
-    toast(`Hari ${hari} ditambahkan`);
+    await api("/api/jadwal/hari", "POST", { action: "add", mode: jadwalMode, hari: hari });
+    toast("Hari " + hari + " ditambahkan", "ok");
     input.value = "";
     await loadJadwal();
     selectHari(hari);
@@ -324,60 +377,57 @@ async function addHari() {
 }
 
 async function deleteHari() {
-  if (!currentHari) return;
-  if (!confirm(`Hapus hari ${currentHari} beserta seluruh jadwalnya?`)) return;
+  if (!activeHari) return;
+  if (!confirm("Hapus hari " + activeHari + " beserta seluruh jadwalnya?")) return;
   try {
-    await api("/api/jadwal/hari", "POST", {
-      action: "delete",
-      mode: currentJadwalMode,
-      hari: currentHari,
-    });
-    toast(`Hari ${currentHari} dihapus`);
-    currentHari = null;
+    await api("/api/jadwal/hari", "POST", { action: "delete", mode: jadwalMode, hari: activeHari });
+    toast("Hari " + activeHari + " dihapus", "ok");
+    activeHari = null;
     await loadJadwal();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── ENTRY MODAL ─── */
 function openAddEntry() {
   editIndex = -1;
-  document.getElementById("modalTitle").textContent = "Tambah Bel";
-  document.getElementById("modalSubtitle").textContent =
-    `${currentHari} \u2014 ${MODE_LABELS[currentJadwalMode]}`;
-  document.getElementById("entryWaktu").value = "";
-  populateAudioSelect("");
-  document.getElementById("entryModal").classList.add("open");
+  $("modalTitle").textContent = "Tambah Bel";
+  $("modalSub").textContent = activeHari + " \u2014 " + (MODE_LABELS[jadwalMode] || jadwalMode);
+  $("entryWaktu").value = "";
+  fillAudioSelect("");
+  $("entryModal").classList.add("open");
 }
 
 function openEditEntry(idx) {
   editIndex = idx;
-  const entry = jadwalData[currentHari][idx];
-  document.getElementById("modalTitle").textContent = "Edit Bel";
-  document.getElementById("modalSubtitle").textContent =
-    `${currentHari} \u2014 ${MODE_LABELS[currentJadwalMode]}`;
-  document.getElementById("entryWaktu").value = entry.waktu;
-  populateAudioSelect(entry.audio);
-  document.getElementById("entryModal").classList.add("open");
+  var e = jadwalData[activeHari][idx];
+  $("modalTitle").textContent = "Edit Bel";
+  $("modalSub").textContent = activeHari + " \u2014 " + (MODE_LABELS[jadwalMode] || jadwalMode);
+  $("entryWaktu").value = e.waktu;
+  fillAudioSelect(e.audio);
+  $("entryModal").classList.add("open");
 }
 
-function populateAudioSelect(current) {
-  const sel = document.getElementById("entryAudio");
+function fillAudioSelect(current) {
+  var sel = $("entryAudio");
   sel.innerHTML = allTones
-    .map((t) => {
-      const fp = "/opt/bel-madrasah/tone/" + t;
-      return `<option value="${fp}"${current === fp ? " selected" : ""}>${t}</option>`;
+    .map(function (t) {
+      var fp = "/opt/bel-madrasah/tone/" + t;
+      return (
+        '<option value="' + fp + '"' + (current === fp ? " selected" : "") + ">" + t + "</option>"
+      );
     })
     .join("");
 }
 
 function closeModal() {
-  document.getElementById("entryModal").classList.remove("open");
+  $("entryModal").classList.remove("open");
 }
 
 async function saveEntry() {
-  const waktu = document.getElementById("entryWaktu").value;
-  const audio = document.getElementById("entryAudio").value;
+  var waktu = $("entryWaktu").value;
+  var audio = $("entryAudio").value;
   if (!waktu) {
     toast("Waktu harus diisi", "error");
     return;
@@ -386,16 +436,16 @@ async function saveEntry() {
     toast("Pilih file audio", "error");
     return;
   }
-  const action = editIndex === -1 ? "add" : "edit";
+  var action = editIndex === -1 ? "add" : "edit";
   try {
     await api("/api/jadwal/entry", "POST", {
-      action,
-      mode: currentJadwalMode,
-      hari: currentHari,
+      action: action,
+      mode: jadwalMode,
+      hari: activeHari,
       index: editIndex,
-      entry: { waktu, audio },
+      entry: { waktu: waktu, audio: audio },
     });
-    toast(action === "add" ? "Bel ditambahkan" : "Bel diperbarui");
+    toast(action === "add" ? "Bel ditambahkan" : "Bel diperbarui", "ok");
     closeModal();
     await loadJadwal();
   } catch (e) {
@@ -408,67 +458,92 @@ async function deleteEntry(idx) {
   try {
     await api("/api/jadwal/entry", "POST", {
       action: "delete",
-      mode: currentJadwalMode,
-      hari: currentHari,
+      mode: jadwalMode,
+      hari: activeHari,
       index: idx,
       entry: {},
     });
-    toast("Entri dihapus");
+    toast("Entri dihapus", "ok");
     await loadJadwal();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── LOG ─── */
 async function loadLog() {
-  const c = document.getElementById("logContainer");
+  var c = $("logBody");
   try {
-    const d = await api("/api/log");
-    const logs = d.logs || [];
+    var d = await api("/api/log");
+    var logs = d.logs || [];
     if (!logs.length) {
-      c.innerHTML = '<div class="empty">Belum ada aktivitas tercatat</div>';
+      c.innerHTML = '<div class="empty-state">Belum ada aktivitas tercatat</div>';
       return;
     }
-    let html = `<div class="table-wrap"><table><thead><tr>
-      <th>Waktu</th><th>Mode</th><th>Hari</th><th>Jam</th><th>Audio</th>
-    </tr></thead><tbody>`;
-    logs.forEach((l) => {
-      html += `<tr>
-        <td style="white-space:nowrap;color:var(--ink-4);font-size:11.5px">${l.time}</td>
-        <td><span class="log-badge ${l.mode}">${MODE_LABELS[l.mode] || l.mode}</span></td>
-        <td style="font-size:13px">${l.hari}</td>
-        <td class="t-time">${l.waktu}</td>
-        <td class="t-audio">${l.audio}</td>
-      </tr>`;
-    });
-    html += "</tbody></table></div>";
-    c.innerHTML = html;
+    var rows = logs
+      .map(function (l) {
+        return (
+          "<tr>" +
+          '<td style="white-space:nowrap;color:var(--c-ink4);font-size:11.5px">' +
+          l.time +
+          "</td>" +
+          '<td><span class="log-badge ' +
+          l.mode +
+          '">' +
+          (MODE_LABELS[l.mode] || l.mode) +
+          "</span></td>" +
+          '<td style="font-size:13px">' +
+          l.hari +
+          "</td>" +
+          '<td class="td-time">' +
+          l.waktu +
+          "</td>" +
+          '<td class="td-audio">' +
+          l.audio +
+          "</td>" +
+          "</tr>"
+        );
+      })
+      .join("");
+    c.innerHTML =
+      '<div class="table-wrap"><table>' +
+      "<thead><tr><th>Waktu</th><th>Mode</th><th>Hari</th><th>Jam</th><th>Audio</th></tr></thead>" +
+      "<tbody>" +
+      rows +
+      "</tbody></table></div>";
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── AUDIO / TONES ─── */
 async function loadTones() {
   try {
-    const d = await api("/api/tones");
+    var d = await api("/api/tones");
     allTones = d.tones || [];
-    document.getElementById("toneCount").textContent = allTones.length;
-    const list = document.getElementById("toneList");
+    $("toneCount").textContent = allTones.length;
+    var list = $("toneList");
     if (!allTones.length) {
-      list.innerHTML = '<div class="empty">Belum ada file audio</div>';
+      list.innerHTML = '<div class="empty-state">Belum ada file audio</div>';
       return;
     }
     list.innerHTML = allTones
-      .map(
-        (f) => `
-      <div class="tone-item">
-        <span class="tone-name">${f}</span>
-        <div class="btn-row">
-          <button class="btn success sm" onclick="previewTone('${f}')">Putar</button>
-          <button class="btn danger sm" onclick="deleteTone('${f}')">Hapus</button>
-        </div>
-      </div>`
-      )
+      .map(function (f) {
+        return (
+          '<div class="tone-item">' +
+          '<span class="tone-name">' +
+          f +
+          "</span>" +
+          '<div class="btn-group">' +
+          '<button class="btn btn-success btn-sm" onclick="previewTone(\'' +
+          f +
+          "')\">Putar</button>" +
+          '<button class="btn btn-danger btn-sm" onclick="deleteTone(\'' +
+          f +
+          "')\">Hapus</button>" +
+          "</div></div>"
+        );
+      })
       .join("");
   } catch (e) {
     toast(e.message, "error");
@@ -477,15 +552,15 @@ async function loadTones() {
 
 async function uploadFile(file) {
   if (!file) return;
-  const fd = new FormData();
+  var fd = new FormData();
   fd.append("file", file);
   try {
     toast("Mengunggah " + file.name + "...");
-    const res = await fetch("/api/tones/upload", { method: "POST", body: fd });
-    const data = await res.json();
+    var res = await fetch("/api/tones/upload", { method: "POST", body: fd });
+    var data = await res.json();
     if (!res.ok) throw new Error(data.error);
-    toast(data.message);
-    document.getElementById("fileInput").value = "";
+    toast(data.message, "ok");
+    $("fileInput").value = "";
     loadTones();
   } catch (e) {
     toast(e.message, "error");
@@ -494,24 +569,25 @@ async function uploadFile(file) {
 
 async function previewTone(filename) {
   try {
-    await api("/api/tones/preview", "POST", { filename });
-    toast("Memutar " + filename);
+    await api("/api/tones/preview", "POST", { filename: filename });
+    toast("Memutar " + filename, "ok");
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
 async function deleteTone(filename) {
-  if (!confirm(`Hapus file ${filename}?`)) return;
+  if (!confirm("Hapus file " + filename + "?")) return;
   try {
-    await api("/api/tones/delete", "POST", { filename });
-    toast(filename + " berhasil dihapus");
+    await api("/api/tones/delete", "POST", { filename: filename });
+    toast(filename + " berhasil dihapus", "ok");
     loadTones();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── BACKUP / RESTORE ─── */
 function downloadBackup() {
   window.location.href = "/api/backup";
 }
@@ -519,24 +595,25 @@ function downloadBackup() {
 async function restoreBackup(file) {
   if (!file) return;
   if (!confirm("Restore akan mengganti seluruh jadwal yang ada. Lanjutkan?")) return;
-  const fd = new FormData();
+  var fd = new FormData();
   fd.append("file", file);
   try {
     toast("Merestore jadwal...");
-    const res = await fetch("/api/restore", { method: "POST", body: fd });
-    const data = await res.json();
+    var res = await fetch("/api/restore", { method: "POST", body: fd });
+    var data = await res.json();
     if (!res.ok) throw new Error(data.error);
-    toast(data.message);
+    toast(data.message, "ok");
     await loadJadwal();
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── PASSWORD ─── */
 async function changePassword() {
-  const old = document.getElementById("oldPass").value;
-  const nw = document.getElementById("newPass").value;
-  const cf = document.getElementById("confirmPass").value;
+  var old = $("oldPass").value;
+  var nw = $("newPass").value;
+  var cf = $("confirmPass").value;
   if (nw !== cf) {
     toast("Konfirmasi password tidak cocok", "error");
     return;
@@ -546,37 +623,46 @@ async function changePassword() {
     return;
   }
   try {
-    const d = await api("/api/change-password", "POST", { old_password: old, new_password: nw });
-    toast(d.message);
-    ["oldPass", "newPass", "confirmPass"].forEach((id) => (document.getElementById(id).value = ""));
+    var d = await api("/api/change-password", "POST", { old_password: old, new_password: nw });
+    toast(d.message, "ok");
+    ["oldPass", "newPass", "confirmPass"].forEach(function (id) {
+      $(id).value = "";
+    });
   } catch (e) {
     toast(e.message, "error");
   }
 }
 
+/* ─── OFFLINE ─── */
 function setupOffline() {
-  const bar = document.getElementById("offlineBar");
-  const update = () => bar.classList.toggle("show", !navigator.onLine);
+  var bar = $("offlineBar");
+  function update() {
+    bar.classList.toggle("show", !navigator.onLine);
+  }
   window.addEventListener("online", update);
   window.addEventListener("offline", update);
   update();
 }
 
+/* ─── PWA ─── */
 function setupPWA() {
-  const banner = document.getElementById("pwaBanner");
-  const btn = document.getElementById("installAppBtn");
-  const info = document.getElementById("installInfo");
-  window.addEventListener("beforeinstallprompt", (e) => {
+  var banner = $("pwaBanner");
+  var btn = $("installAppBtn");
+  var info = $("installInfo");
+  window.addEventListener("beforeinstallprompt", function (e) {
     e.preventDefault();
-    deferredInstall = e;
+    deferredPWA = e;
     if (btn) {
       btn.style.display = "";
       if (info) info.style.display = "none";
     }
-    if (banner) setTimeout(() => banner.classList.add("show"), 1800);
+    if (banner)
+      setTimeout(function () {
+        banner.classList.add("show");
+      }, 2000);
   });
-  window.addEventListener("appinstalled", () => {
-    deferredInstall = null;
+  window.addEventListener("appinstalled", function () {
+    deferredPWA = null;
     if (banner) banner.classList.remove("show");
     if (btn) btn.style.display = "none";
     if (info) {
@@ -587,82 +673,94 @@ function setupPWA() {
 }
 
 function dismissBanner() {
-  document.getElementById("pwaBanner")?.classList.remove("show");
+  $("pwaBanner").classList.remove("show");
 }
 
 async function promptInstall() {
   dismissBanner();
-  if (!deferredInstall) {
+  if (!deferredPWA) {
     toast("Instalasi tidak tersedia di perangkat ini", "error");
     return;
   }
-  deferredInstall.prompt();
-  await deferredInstall.userChoice;
-  deferredInstall = null;
+  deferredPWA.prompt();
+  await deferredPWA.userChoice;
+  deferredPWA = null;
 }
 
-function setupEventListeners() {
-  document.getElementById("toggleBtn").addEventListener("click", toggleService);
-  document.getElementById("logoutBtn").addEventListener("click", () => {
+/* ─── EVENTS ─── */
+function bindEvents() {
+  $("toggleBtn").addEventListener("click", toggleService);
+  $("logoutBtn").addEventListener("click", function () {
     window.location.href = "/logout";
   });
-  document.getElementById("addHariBtn").addEventListener("click", addHari);
-  document.getElementById("newHariInput").addEventListener("keydown", (e) => {
+
+  $("addHariBtn").addEventListener("click", addHari);
+  $("newHariInput").addEventListener("keydown", function (e) {
     if (e.key === "Enter") addHari();
   });
-  document.getElementById("deleteHariBtn").addEventListener("click", deleteHari);
-  document.getElementById("addEntryBtn").addEventListener("click", openAddEntry);
-  document.getElementById("saveEntryBtn").addEventListener("click", saveEntry);
-  document.getElementById("cancelModalBtn").addEventListener("click", closeModal);
-  document.getElementById("overrideToggle").addEventListener("change", () => {
-    configData.manual_override = document.getElementById("overrideToggle").checked;
+  $("deleteHariBtn").addEventListener("click", deleteHari);
+  $("addEntryBtn").addEventListener("click", openAddEntry);
+
+  $("saveEntryBtn").addEventListener("click", saveEntry);
+  $("cancelModalBtn").addEventListener("click", closeModal);
+  $("cancelModalBtn2").addEventListener("click", closeModal);
+  $("entryModal").addEventListener("click", function (e) {
+    if (e.target === $("entryModal")) closeModal();
   });
-  document.getElementById("saveConfigBtn").addEventListener("click", saveConfig);
-  document.getElementById("addLiburBtn").addEventListener("click", addLibur);
-  document.getElementById("refreshLogBtn").addEventListener("click", loadLog);
-  document.getElementById("backupBtn").addEventListener("click", downloadBackup);
-  document.getElementById("changePassBtn").addEventListener("click", changePassword);
-  document.getElementById("installAppBtn").addEventListener("click", promptInstall);
-  document.getElementById("dismissBannerBtn").addEventListener("click", dismissBanner);
-  document.getElementById("installBannerBtn").addEventListener("click", promptInstall);
 
-  document
-    .getElementById("restoreInput")
-    .addEventListener("change", (e) => restoreBackup(e.target.files[0]));
-  document
-    .getElementById("fileInput")
-    .addEventListener("change", (e) => uploadFile(e.target.files[0]));
+  $("overrideToggle").addEventListener("change", function () {
+    configData.manual_override = $("overrideToggle").checked;
+  });
+  $("saveConfigBtn").addEventListener("click", saveConfig);
 
-  const zone = document.getElementById("uploadZone");
-  zone.addEventListener("click", () => document.getElementById("fileInput").click());
-  zone.addEventListener("dragover", (e) => {
+  $("addLiburBtn").addEventListener("click", addLibur);
+  $("refreshLogBtn").addEventListener("click", loadLog);
+  $("backupBtn").addEventListener("click", downloadBackup);
+  $("changePassBtn").addEventListener("click", changePassword);
+
+  $("installAppBtn").addEventListener("click", promptInstall);
+  $("dismissBannerBtn").addEventListener("click", dismissBanner);
+  $("installBannerBtn").addEventListener("click", promptInstall);
+
+  $("restoreInput").addEventListener("change", function (e) {
+    restoreBackup(e.target.files[0]);
+  });
+  $("fileInput").addEventListener("change", function (e) {
+    uploadFile(e.target.files[0]);
+  });
+
+  var zone = $("uploadZone");
+  zone.addEventListener("click", function () {
+    $("fileInput").click();
+  });
+  zone.addEventListener("dragover", function (e) {
     e.preventDefault();
     zone.classList.add("over");
   });
-  zone.addEventListener("dragleave", () => zone.classList.remove("over"));
-  zone.addEventListener("drop", (e) => {
+  zone.addEventListener("dragleave", function () {
+    zone.classList.remove("over");
+  });
+  zone.addEventListener("drop", function (e) {
     e.preventDefault();
     zone.classList.remove("over");
-    const file = e.dataTransfer.files[0];
-    if (file) uploadFile(file);
-  });
-
-  document.getElementById("entryModal").addEventListener("click", (e) => {
-    if (e.target === document.getElementById("entryModal")) closeModal();
+    var f = e.dataTransfer.files[0];
+    if (f) uploadFile(f);
   });
 }
 
-(async () => {
+/* ─── INIT ─── */
+(async function () {
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () =>
-      navigator.serviceWorker.register("/sw.js").catch(() => {})
-    );
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js").catch(function () {});
+    });
   }
-  setupNavigation();
-  setupEventListeners();
+  setupNav();
+  bindEvents();
   setupOffline();
   setupPWA();
   await Promise.all([loadStatus(), loadJadwal(), loadTones(), loadConfig()]);
   setInterval(loadStatus, 10000);
-  document.getElementById("splash")?.classList.add("gone");
+  var splash = $("splash");
+  if (splash) splash.classList.add("gone");
 })();
