@@ -72,7 +72,7 @@ func playSound(filePath string) {
 		"-hide_banner", "-loglevel", "error",
 		"-i", filePath,
 		"-filter:a", "volume="+volume,
-		"-f", "alsa", "default",
+		"-f", "alsa", "hw:1,0",
 	)
 	if err := cmd.Start(); err != nil {
 		logMsg("gagal memutar audio: " + err.Error())
