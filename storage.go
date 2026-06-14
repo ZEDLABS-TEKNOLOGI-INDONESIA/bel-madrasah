@@ -309,6 +309,7 @@ func defaultJadwal() ModeJadwal {
 	return ModeJadwal{
 		"reguler": {
 			"Senin": {
+				{Waktu: "06:40", Audio: b + "/sholawat.mp3"},
 				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
 				{Waktu: "07:00", Audio: b + "/upacara.mp3"},
 				{Waktu: "08:10", Audio: b + "/pelajaran-2.mp3"},
@@ -330,6 +331,7 @@ func defaultJadwal() ModeJadwal {
 				{Waktu: "16:30", Audio: b + "/hymne-madrasah.mp3"},
 			},
 			"Selasa": {
+				{Waktu: "06:40", Audio: b + "/sholawat.mp3"},
 				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
 				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
 				{Waktu: "08:10", Audio: b + "/pelajaran-2.mp3"},
@@ -350,6 +352,7 @@ func defaultJadwal() ModeJadwal {
 				{Waktu: "16:30", Audio: b + "/hymne-madrasah.mp3"},
 			},
 			"Rabu": {
+				{Waktu: "06:40", Audio: b + "/sholawat.mp3"},
 				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
 				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
 				{Waktu: "08:10", Audio: b + "/pelajaran-2.mp3"},
@@ -370,6 +373,7 @@ func defaultJadwal() ModeJadwal {
 				{Waktu: "16:30", Audio: b + "/hymne-madrasah.mp3"},
 			},
 			"Kamis": {
+				{Waktu: "06:40", Audio: b + "/sholawat.mp3"},
 				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
 				{Waktu: "07:00", Audio: b + "/literasi.mp3"},
 				{Waktu: "08:10", Audio: b + "/pelajaran-2.mp3"},
@@ -391,6 +395,7 @@ func defaultJadwal() ModeJadwal {
 				{Waktu: "16:30", Audio: b + "/hymne-madrasah.mp3"},
 			},
 			"Jumat": {
+				{Waktu: "06:40", Audio: b + "/sholawat.mp3"},
 				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
 				{Waktu: "07:00", Audio: b + "/rohani.mp3"},
 				{Waktu: "08:10", Audio: b + "/pelajaran-3.mp3"},
@@ -470,11 +475,45 @@ func defaultJadwal() ModeJadwal {
 			},
 		},
 		"pts": {
-			"Senin":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
-			"Selasa": {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
-			"Rabu":   {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
-			"Kamis":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
-			"Jumat":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "09:31", Audio: b + "/tanah-airku.mp3"}},
+			"Senin": {
+				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
+				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
+				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
+				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}
+			},
+			"Selasa": {
+				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
+				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
+				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
+				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}
+			},
+			"Rabu": {
+				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
+				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
+				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
+				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}
+			},
+			"Kamis": {
+				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
+				{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
+				{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
+				{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}
+			},
+			"Jumat": {
+				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
+				{Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"},
+				{Waktu: "09:31", Audio: b + "/tanah-airku.mp3"}
+			},
 		},
 		"pas": {
 			"Senin":  {{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"}, {Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"}, {Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"}, {Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"}, {Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"}, {Waktu: "10:31", Audio: b + "/tanah-airku.mp3"}},
