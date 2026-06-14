@@ -70,11 +70,24 @@ install_package() {
 
 install_go() {
     local GO_VERSION="1.24.4"
-    local GO_ARCH="amd64"
+    local GO_ARCH=""
+
+    # Deteksi arsitektur secara otomatis
+    local CPU_ARCH=$(uname -m)
+    case "${CPU_ARCH}" in
+        x86_64)       GO_ARCH="amd64" ;;
+        aarch64)      GO_ARCH="arm64" ;;  # Raspberry Pi OS 64-bit
+        armv7l|armv6l) GO_ARCH="armv6l" ;; # Raspberry Pi OS 32-bit (RPi 3)
+        *)
+            error "Arsitektur tidak didukung: ${CPU_ARCH}"
+            exit 1
+            ;;
+    esac
+
     local GO_TAR="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
     local GO_URL="https://go.dev/dl/${GO_TAR}"
 
-    info "Mengunduh Go ${GO_VERSION}..."
+    info "Mengunduh Go ${GO_VERSION} untuk ${GO_ARCH}..."
     curl -fL --progress-bar -o "/tmp/${GO_TAR}" "${GO_URL}"
     if [ $? -ne 0 ]; then
         error "Gagal mengunduh Go."
@@ -82,10 +95,12 @@ install_go() {
     fi
 
     info "Menginstall Go ke /usr/local/go..."
-    rm -rf /usr/local/go
-    tar -C /usr/local -xzf "/tmp/${GO_TAR}"
+    # Menggunakan sudo jika skrip tidak dijalankan sebagai root, karena /usr/local butuh akses root
+    sudo rm -rf /usr/local/go
+    sudo tar -C /usr/local -xzf "/tmp/${GO_TAR}"
     rm -f "/tmp/${GO_TAR}"
 
+    # Catatan penting mengenai PATH ada di bawah
     export PATH=$PATH:/usr/local/go/bin
 
     if ! cmd_exists go; then
