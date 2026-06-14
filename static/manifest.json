@@ -1,0 +1,101 @@
+{
+  "name": "Bel Madrasah Otomatis - MTsN 1 Pandeglang",
+  "short_name": "Bel Madrasah",
+  "description": "Aplikasi pengelolaan jadwal bel otomatis untuk MTsN 1 Pandeglang",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f5f2",
+  "theme_color": "#2c3e4f",
+  "lang": "id-ID",
+  "dir": "ltr",
+  "categories": [
+    "education",
+    "productivity",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "/static/icons/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Jadwal Bel",
+      "short_name": "Jadwal",
+      "url": "/?tab=jadwal",
+      "description": "Lihat dan kelola jadwal bel"
+    },
+    {
+      "name": "Log Aktivitas",
+      "short_name": "Log",
+      "url": "/?tab=log",
+      "description": "Lihat riwayat aktivitas bel"
+    },
+    {
+      "name": "Manajemen Audio",
+      "short_name": "Audio",
+      "url": "/?tab=tones",
+      "description": "Kelola file audio bel"
+    }
+  ]
+}

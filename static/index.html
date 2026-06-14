@@ -3,853 +3,398 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bel Madrasah - MTsN 1 Pandeglang</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0
-    }
-
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #f0f4f8;
-      color: #1a202c;
-      min-height: 100vh
-    }
-
-    header {
-      background: #1a56db;
-      color: #fff;
-      padding: 14px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 2px 8px #0003
-    }
-
-    header h1 {
-      font-size: 1.1rem;
-      font-weight: 700
-    }
-
-    header small {
-      font-size: .75rem;
-      opacity: .8;
-      display: block
-    }
-
-    .status-badge {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: .85rem
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #f87171
-    }
-
-    .dot.on {
-      background: #34d399
-    }
-
-    .toggle-btn {
-      background: #fff2;
-      border: 1px solid #fff4;
-      color: #fff;
-      padding: 6px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: .82rem;
-      transition: background .2s
-    }
-
-    .toggle-btn:hover {
-      background: #fff3
-    }
-
-    nav {
-      background: #fff;
-      border-bottom: 1px solid #e2e8f0;
-      display: flex;
-      gap: 0;
-      overflow-x: auto
-    }
-
-    nav button {
-      padding: 12px 20px;
-      border: none;
-      background: none;
-      cursor: pointer;
-      font-size: .9rem;
-      color: #64748b;
-      border-bottom: 3px solid transparent;
-      white-space: nowrap;
-      transition: all .2s
-    }
-
-    nav button.active {
-      color: #1a56db;
-      border-bottom-color: #1a56db;
-      font-weight: 600
-    }
-
-    nav button:hover:not(.active) {
-      background: #f8fafc;
-      color: #1a56db
-    }
-
-    main {
-      max-width: 960px;
-      margin: 24px auto;
-      padding: 0 16px
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 1px 4px #0001;
-      padding: 20px;
-      margin-bottom: 20px
-    }
-
-    .card h2 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: #1a202c;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px
-    }
-
-    .section {
-      display: none
-    }
-
-    .section.active {
-      display: block
-    }
-
-    /* Jadwal */
-    .hari-tabs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 16px
-    }
-
-    .hari-tab {
-      padding: 7px 16px;
-      border-radius: 20px;
-      border: 1px solid #e2e8f0;
-      background: #f8fafc;
-      cursor: pointer;
-      font-size: .85rem;
-      color: #475569;
-      transition: all .15s
-    }
-
-    .hari-tab.active {
-      background: #1a56db;
-      color: #fff;
-      border-color: #1a56db
-    }
-
-    .hari-tab:hover:not(.active) {
-      background: #e0eaff;
-      border-color: #93c5fd
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: .88rem
-    }
-
-    th {
-      text-align: left;
-      padding: 10px 12px;
-      background: #f8fafc;
-      color: #64748b;
-      font-weight: 600;
-      border-bottom: 2px solid #e2e8f0
-    }
-
-    td {
-      padding: 10px 12px;
-      border-bottom: 1px solid #f1f5f9;
-      vertical-align: middle
-    }
-
-    tr:last-child td {
-      border-bottom: none
-    }
-
-    tr:hover td {
-      background: #fafbff
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 6px 13px;
-      border-radius: 7px;
-      border: none;
-      cursor: pointer;
-      font-size: .82rem;
-      font-weight: 500;
-      transition: all .15s
-    }
-
-    .btn-primary {
-      background: #1a56db;
-      color: #fff
-    }
-
-    .btn-primary:hover {
-      background: #1e40af
-    }
-
-    .btn-danger {
-      background: #fee2e2;
-      color: #dc2626
-    }
-
-    .btn-danger:hover {
-      background: #fecaca
-    }
-
-    .btn-success {
-      background: #dcfce7;
-      color: #16a34a
-    }
-
-    .btn-success:hover {
-      background: #bbf7d0
-    }
-
-    .btn-ghost {
-      background: #f1f5f9;
-      color: #475569
-    }
-
-    .btn-ghost:hover {
-      background: #e2e8f0
-    }
-
-    .btn-sm {
-      padding: 4px 10px;
-      font-size: .78rem
-    }
-
-    .row-actions {
-      display: flex;
-      gap: 6px
-    }
-
-    .add-hari {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-      flex-wrap: wrap
-    }
-
-    .add-hari input {
-      flex: 1;
-      min-width: 140px;
-      padding: 8px 12px;
-      border: 1px solid #e2e8f0;
-      border-radius: 7px;
-      font-size: .88rem;
-      outline: none
-    }
-
-    .add-hari input:focus {
-      border-color: #1a56db
-    }
-
-    /* Modal */
-    .overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: #0006;
-      z-index: 100;
-      align-items: center;
-      justify-content: center
-    }
-
-    .overlay.open {
-      display: flex
-    }
-
-    .modal {
-      background: #fff;
-      border-radius: 14px;
-      padding: 24px;
-      width: min(420px, 92vw);
-      box-shadow: 0 8px 32px #0003
-    }
-
-    .modal h3 {
-      font-size: 1rem;
-      font-weight: 700;
-      margin-bottom: 18px
-    }
-
-    .form-group {
-      margin-bottom: 14px
-    }
-
-    label {
-      display: block;
-      font-size: .83rem;
-      font-weight: 600;
-      color: #374151;
-      margin-bottom: 5px
-    }
-
-    input[type=time],
-    select,
-    input[type=text],
-    input[type=password] {
-      width: 100%;
-      padding: 9px 12px;
-      border: 1px solid #e2e8f0;
-      border-radius: 7px;
-      font-size: .9rem;
-      outline: none;
-      transition: border .15s
-    }
-
-    input[type=time]:focus,
-    select:focus,
-    input[type=text]:focus,
-    input[type=password]:focus {
-      border-color: #1a56db
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-      margin-top: 18px
-    }
-
-    /* Tones */
-    .tone-grid {
-      display: grid;
-      gap: 10px
-    }
-
-    .tone-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 14px;
-      border: 1px solid #e2e8f0;
-      border-radius: 9px;
-      background: #fafafa;
-      transition: background .15s
-    }
-
-    .tone-item:hover {
-      background: #f0f6ff
-    }
-
-    .tone-name {
-      font-size: .88rem;
-      font-weight: 500;
-      color: #1a202c;
-      word-break: break-all
-    }
-
-    .tone-actions {
-      display: flex;
-      gap: 6px;
-      flex-shrink: 0
-    }
-
-    .upload-area {
-      border: 2px dashed #93c5fd;
-      border-radius: 10px;
-      padding: 28px;
-      text-align: center;
-      cursor: pointer;
-      transition: all .2s;
-      margin-bottom: 16px
-    }
-
-    .upload-area:hover,
-    .upload-area.drag {
-      background: #eff6ff;
-      border-color: #3b82f6
-    }
-
-    .upload-area p {
-      color: #64748b;
-      font-size: .88rem;
-      margin-top: 6px
-    }
-
-    #fileInput {
-      display: none
-    }
-
-    /* Settings */
-    .setting-item {
-      margin-bottom: 16px
-    }
-
-    /* Toast */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: #1a202c;
-      color: #fff;
-      padding: 12px 20px;
-      border-radius: 9px;
-      font-size: .88rem;
-      z-index: 200;
-      opacity: 0;
-      transform: translateY(8px);
-      transition: all .25s;
-      pointer-events: none
-    }
-
-    .toast.show {
-      opacity: 1;
-      transform: translateY(0)
-    }
-
-    .toast.error {
-      background: #dc2626
-    }
-
-    .toast.success {
-      background: #16a34a
-    }
-
-    /* empty state */
-    .empty {
-      text-align: center;
-      padding: 32px;
-      color: #94a3b8;
-      font-size: .9rem
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Bel Madrasah — MTsN 1 Pandeglang</title>
+  <meta name="description" content="Sistem bel otomatis MTsN 1 Pandeglang">
+  <meta name="theme-color" content="#0c1a17">
+  <meta name="color-scheme" content="light">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bel Madrasah">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body>
 
-  <header>
-    <div>
-      <h1>Bel Madrasah Otomatis</h1>
-      <small>MTsN 1 Pandeglang</small>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px">
-      <div class="status-badge">
-        <div class="dot" id="statusDot"></div>
-        <span id="statusText">Memuat...</span>
+  <div class="splash" id="splash">
+    <div class="splash-inner">
+      <div class="splash-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
       </div>
-      <button class="toggle-btn" id="toggleBtn" onclick="toggleService()">--</button>
-      <button class="toggle-btn" onclick="logout()">Keluar</button>
+      <div class="splash-label">Bel Madrasah</div>
+      <div class="splash-ring"></div>
+    </div>
+  </div>
+
+  <div class="offline-bar" id="offlineBar">Tidak ada koneksi ke server</div>
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+      </div>
+      <div>
+        <span class="brand-name">Bel Madrasah</span>
+        <span class="brand-sub">MTsN 1 Pandeglang</span>
+      </div>
+    </div>
+    <div class="header-controls">
+      <div class="status-group">
+        <span class="badge badge-mode reguler" id="modeBadge">Reguler</span>
+        <span class="badge badge-libur" id="liburBadge" style="display:none">Libur</span>
+        <div class="status-pill">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">—</span>
+        </div>
+      </div>
+      <button class="hbtn hbtn-primary" id="toggleBtn" onclick="toggleService()">—</button>
+      <button class="hbtn" onclick="logout()">Keluar</button>
     </div>
   </header>
 
   <nav>
-    <button class="active" onclick="switchTab('jadwal',this)">Jadwal</button>
-    <button onclick="switchTab('tones',this)">Audio</button>
-    <button onclick="switchTab('settings',this)">Pengaturan</button>
+    <button class="nav-btn active" onclick="switchTab('jadwal',this)">Jadwal</button>
+    <button class="nav-btn" onclick="switchTab('mode',this)">Mode Bel</button>
+    <button class="nav-btn" onclick="switchTab('libur',this)">Hari Libur</button>
+    <button class="nav-btn" onclick="switchTab('log',this)">Log</button>
+    <button class="nav-btn" onclick="switchTab('audio',this)">Audio</button>
+    <button class="nav-btn" onclick="switchTab('settings',this)">Pengaturan</button>
   </nav>
 
   <main>
 
-    <!-- JADWAL -->
     <div class="section active" id="sec-jadwal">
       <div class="card">
-        <h2>Kelola Hari</h2>
-        <div class="add-hari">
-          <input type="text" id="newHariInput" placeholder="Nama hari baru (mis: Sabtu)">
-          <button class="btn btn-primary" onclick="addHari()">+ Tambah Hari</button>
+        <div class="card-head">
+          <div>
+            <div class="card-title">Jadwal Bel</div>
+            <div class="card-desc">Kelola entri bel per hari dan mode pembelajaran</div>
+          </div>
+        </div>
+        <div class="mode-tabs">
+          <button class="mtab active reguler" onclick="switchJadwalMode('reguler',this)">Reguler</button>
+          <button class="mtab ramadhan" onclick="switchJadwalMode('ramadhan',this)">Ramadhan</button>
+          <button class="mtab pts" onclick="switchJadwalMode('pts',this)">PTS</button>
+          <button class="mtab pas" onclick="switchJadwalMode('pas',this)">PAS</button>
+        </div>
+        <div class="row-form">
+          <div class="fg fg-grow">
+            <label>Tambah Hari</label>
+            <input type="text" id="newHariInput" placeholder="Contoh: Sabtu">
+          </div>
+          <button class="btn primary" onclick="addHari()">Tambah Hari</button>
         </div>
         <div class="hari-tabs" id="hariTabs"></div>
       </div>
-      <div class="card">
-        <h2 id="jadwalTitle">Pilih hari di atas</h2>
-        <div
-          style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-          <span id="hariInfo" style="font-size:.83rem;color:#64748b"></span>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-danger btn-sm" id="deleteHariBtn" onclick="deleteHari()" style="display:none">Hapus
-              Hari Ini</button>
-            <button class="btn btn-primary btn-sm" id="addEntryBtn" onclick="openAddEntry()" style="display:none">+
-              Tambah Bel</button>
+
+      <div class="card" id="jadwalCard">
+        <div class="card-head">
+          <div>
+            <div class="card-title" id="jadwalTitle">Pilih hari</div>
+            <div class="card-desc" id="hariInfo"></div>
+          </div>
+          <div class="btn-row" id="jadwalActions" style="display:none">
+            <button class="btn ghost sm" onclick="deleteHari()">Hapus Hari</button>
+            <button class="btn primary sm" onclick="openAddEntry()">Tambah Bel</button>
           </div>
         </div>
         <div id="jadwalTable">
-          <div class="empty">Pilih hari untuk melihat jadwal</div>
+          <div class="empty">Pilih hari dari daftar di atas</div>
         </div>
       </div>
     </div>
 
-    <!-- TONES -->
-    <div class="section" id="sec-tones">
+    <div class="section" id="sec-mode">
       <div class="card">
-        <h2>Upload Audio</h2>
-        <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()"
-          ondragover="e=event;e.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')"
-          ondrop="handleDrop(event)">
-          <svg width="36" height="36" fill="none" stroke="#93c5fd" stroke-width="1.5" viewBox="0 0 24 24">
-            <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
-          </svg>
-          <p>Klik atau seret file audio ke sini<br><small>Format: mp3, wav, ogg — Maks 32MB</small></p>
+        <div class="card-head">
+          <div>
+            <div class="card-title">Mode Aktif</div>
+            <div class="card-desc">Pilih mode yang digunakan saat override manual diaktifkan</div>
+          </div>
         </div>
-        <input type="file" id="fileInput" accept=".mp3,.wav,.ogg" onchange="uploadFile(this.files[0])">
+        <div class="mode-grid">
+          <div class="mode-opt" id="modeOptReguler" onclick="selectMode('reguler')">
+            <div class="mode-indicator"></div>
+            <div class="mode-name">Reguler</div>
+            <div class="mode-hint">Jadwal harian normal</div>
+          </div>
+          <div class="mode-opt ramadhan" id="modeOptRamadhan" onclick="selectMode('ramadhan')">
+            <div class="mode-indicator"></div>
+            <div class="mode-name">Ramadhan</div>
+            <div class="mode-hint">Jadwal bulan Ramadhan</div>
+          </div>
+          <div class="mode-opt pts" id="modeOptPTS" onclick="selectMode('pts')">
+            <div class="mode-indicator"></div>
+            <div class="mode-name">PTS</div>
+            <div class="mode-hint">Penilaian Tengah Semester</div>
+          </div>
+          <div class="mode-opt pas" id="modeOptPAS" onclick="selectMode('pas')">
+            <div class="mode-indicator"></div>
+            <div class="mode-name">PAS</div>
+            <div class="mode-hint">Penilaian Akhir Semester</div>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Override Manual</div>
+            <div class="toggle-hint">Paksa mode di atas, abaikan jadwal otomatis berbasis tanggal</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="overrideToggle" onchange="onOverrideChange()">
+            <span class="track"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Jadwal Otomatis Ramadhan</div>
+            <div class="card-desc">Format MM-DD, berlaku setiap tahun</div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="fg">
+            <label>Mulai</label>
+            <input type="text" id="ramadhanStart" placeholder="03-01" maxlength="5">
+          </div>
+          <div class="fg">
+            <label>Akhir</label>
+            <input type="text" id="ramadhanEnd" placeholder="03-31" maxlength="5">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Jadwal Otomatis PTS</div>
+            <div class="card-desc">Diprioritaskan di atas mode Ramadhan jika tanggal bertumpang tindih</div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="fg">
+            <label>Mulai PTS</label>
+            <input type="date" id="ptsStart">
+          </div>
+          <div class="fg">
+            <label>Akhir PTS</label>
+            <input type="date" id="ptsEnd">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Jadwal Otomatis PAS</div>
+            <div class="card-desc">Diprioritaskan di atas mode Ramadhan jika tanggal bertumpang tindih</div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="fg">
+            <label>Mulai PAS</label>
+            <input type="date" id="pasStart">
+          </div>
+          <div class="fg">
+            <label>Akhir PAS</label>
+            <input type="date" id="pasEnd">
+          </div>
+        </div>
+        <div style="margin-top:22px">
+          <button class="btn primary" onclick="saveConfig()">Simpan Pengaturan</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="sec-libur">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Tambah Hari Libur</div>
+            <div class="card-desc">Bel tidak akan berbunyi pada tanggal yang terdaftar</div>
+          </div>
+        </div>
+        <div class="notice warning">Scheduler akan melewati seluruh entri jadwal pada tanggal yang ditandai sebagai hari
+          libur.</div>
+        <div class="row-form">
+          <div class="fg fg-grow">
+            <label>Tanggal</label>
+            <input type="date" id="newLiburDate">
+          </div>
+          <button class="btn primary" onclick="addLibur()">Tambah</button>
+        </div>
       </div>
       <div class="card">
-        <h2>Daftar Audio <span id="toneCount" style="font-weight:400;font-size:.85rem;color:#64748b"></span></h2>
-        <div class="tone-grid" id="toneList">
+        <div class="card-head">
+          <div class="card-title">Daftar Hari Libur</div>
+          <span class="count" id="liburCount">0</span>
+        </div>
+        <div id="liburList">
           <div class="empty">Memuat...</div>
         </div>
       </div>
     </div>
 
-    <!-- SETTINGS -->
+    <div class="section" id="sec-log">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Log Aktivitas</div>
+            <div class="card-desc">Riwayat bel yang telah diputar</div>
+          </div>
+          <button class="btn ghost sm" onclick="loadLog()">Perbarui</button>
+        </div>
+        <div id="logContainer">
+          <div class="empty">Memuat...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="sec-audio">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Unggah File Audio</div>
+            <div class="card-desc">Format yang didukung: MP3, WAV, OGG — Maks. 32 MB</div>
+          </div>
+        </div>
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()"
+          ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
+          ondrop="handleDrop(event)">
+          <div class="upload-zone-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+              <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
+            </svg>
+          </div>
+          <p>Klik atau seret file audio ke sini</p>
+          <small>MP3, WAV, OGG — Maks. 32 MB</small>
+        </div>
+        <input type="file" id="fileInput" accept=".mp3,.wav,.ogg" onchange="uploadFile(this.files[0])">
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Daftar File Audio</div>
+          <span class="count" id="toneCount">0</span>
+        </div>
+        <div id="toneList">
+          <div class="empty">Memuat...</div>
+        </div>
+      </div>
+    </div>
+
     <div class="section" id="sec-settings">
       <div class="card">
-        <h2>Ganti Password</h2>
-        <div class="setting-item">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Pasang Aplikasi</div>
+            <div class="card-desc">Tambahkan ke layar utama untuk akses cepat tanpa browser</div>
+          </div>
+        </div>
+        <button class="btn primary" id="installAppBtn" onclick="promptInstall()" style="display:none">Pasang
+          Aplikasi</button>
+        <span class="card-desc" id="installInfo">Aplikasi sudah terpasang atau tidak didukung di perangkat ini.</span>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Backup dan Restore</div>
+            <div class="card-desc">Ekspor atau impor seluruh data jadwal dalam format JSON</div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn success" onclick="downloadBackup()">Unduh Backup</button>
+          <label class="btn warning" style="cursor:pointer">
+            Restore dari File
+            <input type="file" accept=".json" style="display:none" onchange="restoreBackup(this.files[0])">
+          </label>
+        </div>
+        <div class="card-desc" style="margin-top:14px">Mencakup jadwal reguler, Ramadhan, PTS, dan PAS.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Ganti Password</div>
+            <div class="card-desc">Minimal 6 karakter</div>
+          </div>
+        </div>
+        <div class="fg" style="margin-bottom:14px">
           <label>Password Lama</label>
-          <input type="password" id="oldPass" placeholder="••••••••">
+          <input type="password" id="oldPass" placeholder="Password saat ini">
         </div>
-        <div class="setting-item">
-          <label>Password Baru</label>
-          <input type="password" id="newPass" placeholder="Minimal 6 karakter">
+        <div class="two-col" style="margin-bottom:18px">
+          <div class="fg">
+            <label>Password Baru</label>
+            <input type="password" id="newPass" placeholder="Min. 6 karakter">
+          </div>
+          <div class="fg">
+            <label>Konfirmasi</label>
+            <input type="password" id="confirmPass" placeholder="Ulangi password baru">
+          </div>
         </div>
-        <div class="setting-item">
-          <label>Konfirmasi Password Baru</label>
-          <input type="password" id="confirmPass" placeholder="Ulangi password baru">
-        </div>
-        <button class="btn btn-primary" onclick="changePassword()">Simpan Password</button>
+        <button class="btn primary" onclick="changePassword()">Perbarui Password</button>
       </div>
     </div>
 
   </main>
 
-  <!-- Modal Entry -->
   <div class="overlay" id="entryModal">
     <div class="modal">
-      <h3 id="modalTitle">Tambah Bel</h3>
-      <div class="form-group">
+      <div class="modal-head">
+        <div class="modal-title" id="modalTitle">Tambah Bel</div>
+        <div class="modal-subtitle" id="modalSubtitle"></div>
+      </div>
+      <div class="fg" style="margin-bottom:14px">
         <label>Waktu</label>
         <input type="time" id="entryWaktu">
       </div>
-      <div class="form-group">
+      <div class="fg">
         <label>File Audio</label>
         <select id="entryAudio"></select>
       </div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeModal()">Batal</button>
-        <button class="btn btn-primary" id="modalSaveBtn" onclick="saveEntry()">Simpan</button>
+      <div class="modal-foot">
+        <button class="btn ghost" onclick="closeModal()">Batal</button>
+        <button class="btn primary" onclick="saveEntry()">Simpan</button>
       </div>
+    </div>
+  </div>
+
+  <div class="pwa-banner" id="pwaBanner">
+    <div class="pwa-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+        <path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />
+      </svg>
+    </div>
+    <div class="pwa-text">
+      <div class="pwa-title">Pasang Bel Madrasah</div>
+      <div class="pwa-desc">Tambahkan ke layar utama untuk akses cepat</div>
+    </div>
+    <div class="pwa-actions">
+      <button class="btn ghost sm" onclick="dismissBanner()">Nanti</button>
+      <button class="btn primary sm" onclick="promptInstall()">Pasang</button>
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
 
-  <script>
-    let currentHari = null;
-    let editIndex = -1;
-    let allTones = [];
-    let jadwalData = {};
-
-    // ── UTILS ──
-    function toast(msg, type = 'success') {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.className = `toast show ${type}`;
-      setTimeout(() => el.className = 'toast', 2800);
-    }
-
-    async function api(url, method = 'GET', body = null) {
-      const opts = { method, headers: { 'Content-Type': 'application/json' } };
-      if (body) opts.body = JSON.stringify(body);
-      const res = await fetch(url, opts);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Terjadi kesalahan');
-      return data;
-    }
-
-    function switchTab(id, btn) {
-      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-      document.getElementById('sec-' + id).classList.add('active');
-      btn.classList.add('active');
-      if (id === 'tones') loadTones();
-    }
-
-    function logout() {
-      window.location.href = '/logout';
-    }
-
-    // ── SERVICE ──
-    async function loadStatus() {
-      try {
-        const d = await api('/api/service/status');
-        const dot = document.getElementById('statusDot');
-        const txt = document.getElementById('statusText');
-        const btn = document.getElementById('toggleBtn');
-        dot.className = 'dot' + (d.running ? ' on' : '');
-        txt.textContent = d.running ? 'Aktif' : 'Nonaktif';
-        btn.textContent = d.running ? 'Hentikan' : 'Aktifkan';
-      } catch (e) { }
-    }
-
-    async function toggleService() {
-      try {
-        const d = await api('/api/service/toggle', 'POST');
-        toast(d.message);
-        loadStatus();
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    // ── JADWAL ──
-    async function loadJadwal() {
-      try {
-        const d = await api('/api/jadwal');
-        jadwalData = d.jadwal || {};
-        renderHariTabs(Object.keys(jadwalData));
-        if (currentHari && jadwalData[currentHari]) {
-          renderJadwalTable(currentHari);
-        } else {
-          currentHari = null;
-          document.getElementById('jadwalTitle').textContent = 'Pilih hari di atas';
-          document.getElementById('jadwalTable').innerHTML = '<div class="empty">Pilih hari untuk melihat jadwal</div>';
-          document.getElementById('addEntryBtn').style.display = 'none';
-          document.getElementById('deleteHariBtn').style.display = 'none';
-        }
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    function renderHariTabs(days) {
-      const container = document.getElementById('hariTabs');
-      container.innerHTML = '';
-      if (!days.length) {
-        container.innerHTML = '<span style="color:#94a3b8;font-size:.85rem">Belum ada hari. Tambahkan di atas.</span>';
-        return;
-      }
-      days.forEach(h => {
-        const btn = document.createElement('button');
-        btn.className = 'hari-tab' + (h === currentHari ? ' active' : '');
-        btn.textContent = h;
-        btn.onclick = () => selectHari(h);
-        container.appendChild(btn);
-      });
-    }
-
-    function selectHari(hari) {
-      currentHari = hari;
-      document.querySelectorAll('.hari-tab').forEach(b => b.classList.toggle('active', b.textContent === hari));
-      renderJadwalTable(hari);
-      document.getElementById('addEntryBtn').style.display = '';
-      document.getElementById('deleteHariBtn').style.display = '';
-    }
-
-    function renderJadwalTable(hari) {
-      document.getElementById('jadwalTitle').textContent = 'Jadwal ' + hari;
-      const entries = jadwalData[hari] || [];
-      document.getElementById('hariInfo').textContent = entries.length + ' entri';
-      if (!entries.length) {
-        document.getElementById('jadwalTable').innerHTML = '<div class="empty">Belum ada jadwal untuk hari ini</div>';
-        return;
-      }
-      let html = '<table><thead><tr><th>#</th><th>Waktu</th><th>File Audio</th><th>Aksi</th></tr></thead><tbody>';
-      entries.forEach((e, i) => {
-        const fname = e.audio.split('/').pop();
-        html += `<tr>
-      <td style="color:#94a3b8">${i + 1}</td>
-      <td><strong>${e.waktu}</strong></td>
-      <td>${fname}</td>
-      <td><div class="row-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openEditEntry(${i})">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteEntry(${i})">Hapus</button>
-      </div></td>
-    </tr>`;
-      });
-      html += '</tbody></table>';
-      document.getElementById('jadwalTable').innerHTML = html;
-    }
-
-    async function addHari() {
-      const input = document.getElementById('newHariInput');
-      const hari = input.value.trim();
-      if (!hari) { toast('Nama hari tidak boleh kosong', 'error'); return; }
-      try {
-        await api('/api/jadwal/hari', 'POST', { action: 'add', hari });
-        toast('Hari ' + hari + ' ditambahkan');
-        input.value = '';
-        await loadJadwal();
-        selectHari(hari);
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    async function deleteHari() {
-      if (!currentHari) return;
-      if (!confirm(`Hapus hari ${currentHari} beserta seluruh jadwalnya?`)) return;
-      try {
-        await api('/api/jadwal/hari', 'POST', { action: 'delete', hari: currentHari });
-        toast('Hari ' + currentHari + ' dihapus');
-        currentHari = null;
-        await loadJadwal();
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    function openAddEntry() {
-      editIndex = -1;
-      document.getElementById('modalTitle').textContent = 'Tambah Bel - ' + currentHari;
-      document.getElementById('entryWaktu').value = '';
-      populateAudioSelect('');
-      document.getElementById('entryModal').classList.add('open');
-    }
-
-    function openEditEntry(idx) {
-      editIndex = idx;
-      const entry = jadwalData[currentHari][idx];
-      document.getElementById('modalTitle').textContent = 'Edit Bel - ' + currentHari;
-      document.getElementById('entryWaktu').value = entry.waktu;
-      populateAudioSelect(entry.audio);
-      document.getElementById('entryModal').classList.add('open');
-    }
-
-    function populateAudioSelect(current) {
-      const sel = document.getElementById('entryAudio');
-      sel.innerHTML = allTones.map(t => {
-        const fullPath = '/opt/bel-madrasah/tone/' + t;
-        return `<option value="${fullPath}" ${current === fullPath ? 'selected' : ''}>${t}</option>`;
-      }).join('');
-    }
-
-    function closeModal() {
-      document.getElementById('entryModal').classList.remove('open');
-    }
-
-    async function saveEntry() {
-      const waktu = document.getElementById('entryWaktu').value;
-      const audio = document.getElementById('entryAudio').value;
-      if (!waktu) { toast('Waktu harus diisi', 'error'); return; }
-      if (!audio) { toast('Pilih file audio', 'error'); return; }
-      const action = editIndex === -1 ? 'add' : 'edit';
-      try {
-        await api('/api/jadwal/entry', 'POST', { action, hari: currentHari, index: editIndex, entry: { waktu, audio } });
-        toast(action === 'add' ? 'Bel ditambahkan' : 'Bel diperbarui');
-        closeModal();
-        await loadJadwal();
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    async function deleteEntry(idx) {
-      if (!confirm('Hapus entri ini?')) return;
-      try {
-        await api('/api/jadwal/entry', 'POST', { action: 'delete', hari: currentHari, index: idx, entry: {} });
-        toast('Entri dihapus');
-        await loadJadwal();
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    // ── TONES ──
-    async function loadTones() {
-      try {
-        const d = await api('/api/tones');
-        allTones = d.tones || [];
-        const count = document.getElementById('toneCount');
-        count.textContent = `(${allTones.length} file)`;
-        const list = document.getElementById('toneList');
-        if (!allTones.length) {
-          list.innerHTML = '<div class="empty">Belum ada file audio</div>';
-          return;
-        }
-        list.innerHTML = allTones.map(f => `
-      <div class="tone-item">
-        <span class="tone-name">${f}</span>
-        <div class="tone-actions">
-          <button class="btn btn-success btn-sm" onclick="previewTone('${f}')">▶ Test</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteTone('${f}')">Hapus</button>
-        </div>
-      </div>`).join('');
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    async function uploadFile(file) {
-      if (!file) return;
-      const fd = new FormData();
-      fd.append('file', file);
-      try {
-        toast('Mengupload ' + file.name + '...');
-        const res = await fetch('/api/tones/upload', { method: 'POST', body: fd });
-        const d = await res.json();
-        if (!res.ok) throw new Error(d.error);
-        toast(d.message);
-        document.getElementById('fileInput').value = '';
-        loadTones();
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    function handleDrop(e) {
-      e.preventDefault();
-      document.getElementById('uploadArea').classList.remove('drag');
-      const file = e.dataTransfer.files[0];
-      if (file) uploadFile(file);
-    }
-
-    async function previewTone(filename) {
-      try {
-        await api('/api/tones/preview', 'POST', { filename });
-        toast('Memutar ' + filename);
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    async function deleteTone(filename) {
-      if (!confirm(`Hapus file ${filename}?`)) return;
-      try {
-        await api('/api/tones/delete', 'POST', { filename });
-        toast(filename + ' dihapus');
-        loadTones();
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    // ── SETTINGS ──
-    async function changePassword() {
-      const old = document.getElementById('oldPass').value;
-      const nw = document.getElementById('newPass').value;
-      const cf = document.getElementById('confirmPass').value;
-      if (nw !== cf) { toast('Konfirmasi password tidak cocok', 'error'); return; }
-      if (nw.length < 6) { toast('Password baru minimal 6 karakter', 'error'); return; }
-      try {
-        const d = await api('/api/change-password', 'POST', { old_password: old, new_password: nw });
-        toast(d.message);
-        ['oldPass', 'newPass', 'confirmPass'].forEach(id => document.getElementById(id).value = '');
-      } catch (e) { toast(e.message, 'error'); }
-    }
-
-    // ── INIT ──
-    window.addEventListener('click', e => {
-      if (e.target === document.getElementById('entryModal')) closeModal();
-    });
-
-    (async () => {
-      await Promise.all([loadStatus(), loadJadwal(), loadTones()]);
-      setInterval(loadStatus, 10000);
-    })();
-  </script>
+  <script src="/static/script.js"></script>
 </body>
 
 </html>
