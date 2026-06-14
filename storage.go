@@ -55,8 +55,8 @@ var (
 func defaultConfig() Config {
 	return Config{
 		Mode:          "reguler",
-		RamadhanStart: "2000-03-01",
-		RamadhanEnd:   "2000-03-31",
+		RamadhanStart: "",
+		RamadhanEnd:   "",
 		LiburDates:    []string{},
 	}
 }

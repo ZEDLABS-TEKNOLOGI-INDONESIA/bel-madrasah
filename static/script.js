@@ -166,8 +166,8 @@ async function saveConfig() {
     await api("/api/config", "POST", {
       mode: configData.mode,
       manual_override: $("overrideToggle").checked,
-      ramadhan_start: start,
-      ramadhan_end: end,
+      ramadhan_start: $("ramadhanStart").value,
+      ramadhan_end: $("ramadhanEnd").value,
       pts_start: $("ptsStart").value,
       pts_end: $("ptsEnd").value,
       pas_start: $("pasStart").value,
