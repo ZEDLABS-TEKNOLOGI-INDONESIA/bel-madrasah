@@ -86,6 +86,7 @@ func cleanupSessions() {
 	defer ticker.Stop()
 	for range ticker.C {
 		now := time.Now()
+
 		sessionsMu.Lock()
 		for token, s := range sessions {
 			if now.After(s.ExpiresAt) {
@@ -93,9 +94,11 @@ func cleanupSessions() {
 			}
 		}
 		sessionsMu.Unlock()
+
 		loginAttemptsMu.Lock()
 		for ip, a := range loginAttempts {
-			if now.After(a.lockUntil) && a.count < maxLoginFails {
+
+			if now.After(a.lockUntil) {
 				delete(loginAttempts, ip)
 			}
 		}
@@ -137,7 +140,10 @@ func createSession(username string) (string, error) {
 		return "", err
 	}
 	sessionsMu.Lock()
-	sessions[token] = &Session{Username: username, ExpiresAt: time.Now().Add(sessionTimeout)}
+	sessions[token] = &Session{
+		Username:  username,
+		ExpiresAt: time.Now().Add(sessionTimeout),
+	}
 	sessionsMu.Unlock()
 	return token, nil
 }
@@ -157,9 +163,16 @@ func getSession(r *http.Request) *Session {
 }
 
 func clientIP(r *http.Request) string {
-	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
-		parts := strings.Split(xf, ",")
-		return strings.TrimSpace(parts[0])
+	if os.Getenv("BEL_TRUST_PROXY") == "1" {
+		if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+			parts := strings.Split(xf, ",")
+			if ip := strings.TrimSpace(parts[0]); ip != "" {
+				return ip
+			}
+		}
+		if xr := r.Header.Get("X-Real-IP"); xr != "" {
+			return strings.TrimSpace(xr)
+		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

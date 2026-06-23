@@ -82,6 +82,41 @@ install_go() {
     success "Go $(go version)"
 }
 
+install_node() {
+    if cmd_exists node && node -e "process.exit(parseInt(process.versions.node) >= 18 ? 0 : 1)" 2>/dev/null; then
+        success "Node.js: $(node -v)"
+        return
+    fi
+    info "Menginstall Node.js LTS..."
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+    install_package nodejs
+    cmd_exists node || error "Gagal menginstall Node.js."
+    success "Node.js: $(node -v)"
+}
+
+install_pnpm() {
+    if cmd_exists pnpm; then
+        success "pnpm: $(pnpm -v)"
+        return
+    fi
+    info "Menginstall pnpm..."
+    npm install -g pnpm
+    cmd_exists pnpm || error "Gagal menginstall pnpm."
+    success "pnpm: $(pnpm -v)"
+}
+
+build_frontend() {
+    info "Membangun frontend..."
+    [ -f "${BUILD_DIR}/package.json" ] || { warning "package.json tidak ditemukan, lewati build FE."; return; }
+    (
+        cd "$BUILD_DIR"
+        pnpm install --frozen-lockfile
+        pnpm build
+    ) || error "Gagal build frontend."
+    [ -d "${BUILD_DIR}/dist" ] || error "Output dist/ tidak ditemukan setelah build."
+    success "Frontend berhasil dibangun."
+}
+
 check_requirements() {
     info "Memeriksa persyaratan sistem..."
     require_root
@@ -226,11 +261,14 @@ build_binary() {
 
 copy_static() {
     info "Menyalin file static..."
-    if [ -d "${BUILD_DIR}/static" ]; then
+    if [ -d "${BUILD_DIR}/dist" ]; then
+        cp -r "${BUILD_DIR}/dist/." "${PROJECT_DIR}/static/"
+        success "Static files (dist) disalin."
+    elif [ -d "${BUILD_DIR}/static" ]; then
         cp -r "${BUILD_DIR}/static/." "${PROJECT_DIR}/static/"
         success "Static files disalin."
     else
-        warning "Direktori static tidak ditemukan."
+        warning "Tidak ada direktori dist/ maupun static/."
     fi
     mkdir -p "${PROJECT_DIR}/static/icons"
 }
@@ -297,7 +335,7 @@ server {
     server_name ${server_name};
     client_max_body_size 32M;
     location /static/ {
-        proxy_pass         http://127.0.0.1:8081;
+        proxy_pass         http://127.0.0.1:8082;
         proxy_http_version 1.1;
         proxy_set_header   Host              \$host;
         proxy_set_header   X-Real-IP         \$remote_addr;
@@ -307,7 +345,7 @@ server {
         add_header         Cache-Control "public, immutable";
     }
     location /sw.js {
-        proxy_pass         http://127.0.0.1:8081;
+        proxy_pass         http://127.0.0.1:8082;
         proxy_http_version 1.1;
         proxy_set_header   Host              \$host;
         proxy_set_header   X-Real-IP         \$remote_addr;
@@ -316,7 +354,7 @@ server {
         add_header         Cache-Control "no-cache";
     }
     location / {
-        proxy_pass         http://127.0.0.1:8081;
+        proxy_pass         http://127.0.0.1:8082;
         proxy_http_version 1.1;
         proxy_set_header   Host              \$host;
         proxy_set_header   X-Real-IP         \$remote_addr;
@@ -520,6 +558,9 @@ main() {
     detect_alsa_device
     detect_audio_backend
     clone_repo
+    install_node
+    install_pnpm
+    build_frontend
     prepare_dirs
     patch_alsa_device
     build_binary
