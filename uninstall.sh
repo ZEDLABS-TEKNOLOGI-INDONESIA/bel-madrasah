@@ -9,8 +9,8 @@ NC='\033[0m'
 
 PROJECT_DIR="/opt/bel-madrasah"
 SERVICE_NAME="bel-madrasah"
+SERVICE_USER="bel-madrasah"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-SERVICE_USER=$(grep '^User=' "$SERVICE_FILE" 2>/dev/null | cut -d= -f2 || echo "bel-madrasah")
 NGINX_CONF="/etc/nginx/sites-available/bel-madrasah"
 NGINX_ENABLED="/etc/nginx/sites-enabled/bel-madrasah"
 

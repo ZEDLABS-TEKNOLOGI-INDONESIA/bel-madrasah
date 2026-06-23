@@ -1,5 +1,7 @@
 const BASE = import.meta.env.PUBLIC_API_URL ?? "";
 
+let redirectingToLogin = false;
+
 async function request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   const isFormData = body instanceof FormData;
   const res = await fetch(BASE + path, {
@@ -9,8 +11,11 @@ async function request<T = unknown>(method: string, path: string, body?: unknown
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
-    window.location.href = "/login";
-    return undefined as T;
+    if (!redirectingToLogin && window.location.pathname !== "/login") {
+      redirectingToLogin = true;
+      window.location.href = "/login";
+    }
+    return new Promise<T>(() => {});
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Terjadi kesalahan" }));

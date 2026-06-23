@@ -30,19 +30,6 @@ EXCLUDE_FILES=(
   "uninstall.sh"
   "pnpm-lock.yaml"
   "API DOCUMENTATION.md"
-  "CONTRIBUTING.md"
-  "CODE_OF_CONDUCT.md"
-  "SECURITY.md"
-  "CHANGELOG.md"
-  "CLAUDE.md"
-  "AGENTS.md"
-  "go.sum"
-  "go.mod"
-  "pwa.go"
-  "storage.go"
-  "main.go"
-  "middleware.go"
-  "auth.go"
 )
 
 # Ekstensi biner yang dikecualikan

@@ -38,12 +38,282 @@ export default defineConfig({
 ```
 ---
 
+## auth.go
+```go
+package main
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+const (
+	usersFile       = dataDir + "/users.json"
+	sessionTimeout  = 8 * time.Hour
+	cookieName      = "bel_session"
+	maxLoginFails   = 5
+	loginLockout    = 15 * time.Minute
+	bcryptCost      = bcrypt.DefaultCost
+	sessionCleanInt = 30 * time.Minute
+)
+
+type User struct {
+	Username     string `json:"username"`
+	PasswordHash string `json:"password_hash"`
+}
+
+type Session struct {
+	Username  string
+	ExpiresAt time.Time
+}
+
+type loginAttempt struct {
+	count     int
+	lockUntil time.Time
+}
+
+var (
+	sessions   = make(map[string]*Session)
+	sessionsMu sync.RWMutex
+
+	loginAttempts   = make(map[string]*loginAttempt)
+	loginAttemptsMu sync.Mutex
+)
+
+func hashPassword(p string) (string, error) {
+	h, err := bcrypt.GenerateFromPassword([]byte(p), bcryptCost)
+	if err != nil {
+		return "", err
+	}
+	return string(h), nil
+}
+
+func verifyPassword(hash, p string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(p)) == nil
+}
+
+func initAuth() error {
+	if _, err := os.Stat(usersFile); os.IsNotExist(err) {
+		hash, err := hashPassword("P@ssw0rd")
+		if err != nil {
+			return err
+		}
+		u := User{Username: "administrator", PasswordHash: hash}
+		data, err := json.MarshalIndent(u, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(usersFile, data, 0600); err != nil {
+			return err
+		}
+		logMsg("akun administrator default dibuat — username: administrator | password: P@ssw0rd")
+		logMsg("segera ganti password melalui halaman pengaturan")
+	}
+	go cleanupSessions()
+	return nil
+}
+
+func cleanupSessions() {
+	ticker := time.NewTicker(sessionCleanInt)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+
+		sessionsMu.Lock()
+		for token, s := range sessions {
+			if now.After(s.ExpiresAt) {
+				delete(sessions, token)
+			}
+		}
+		sessionsMu.Unlock()
+
+		loginAttemptsMu.Lock()
+		for ip, a := range loginAttempts {
+
+			if now.After(a.lockUntil) {
+				delete(loginAttempts, ip)
+			}
+		}
+		loginAttemptsMu.Unlock()
+	}
+}
+
+func loadUser() (*User, error) {
+	data, err := os.ReadFile(usersFile)
+	if err != nil {
+		return nil, err
+	}
+	var u User
+	if err := json.Unmarshal(data, &u); err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func saveUser(u *User) error {
+	data, err := json.MarshalIndent(u, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(usersFile, data, 0600)
+}
+
+func generateToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func createSession(username string) (string, error) {
+	token, err := generateToken()
+	if err != nil {
+		return "", err
+	}
+	sessionsMu.Lock()
+	sessions[token] = &Session{
+		Username:  username,
+		ExpiresAt: time.Now().Add(sessionTimeout),
+	}
+	sessionsMu.Unlock()
+	return token, nil
+}
+
+func getSession(r *http.Request) *Session {
+	c, err := r.Cookie(cookieName)
+	if err != nil {
+		return nil
+	}
+	sessionsMu.RLock()
+	s, ok := sessions[c.Value]
+	sessionsMu.RUnlock()
+	if !ok || time.Now().After(s.ExpiresAt) {
+		return nil
+	}
+	return s
+}
+
+func clientIP(r *http.Request) string {
+	if os.Getenv("BEL_TRUST_PROXY") == "1" {
+		if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+			parts := strings.Split(xf, ",")
+			if ip := strings.TrimSpace(parts[0]); ip != "" {
+				return ip
+			}
+		}
+		if xr := r.Header.Get("X-Real-IP"); xr != "" {
+			return strings.TrimSpace(xr)
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+func isLoginLocked(ip string) (bool, time.Duration) {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	a, ok := loginAttempts[ip]
+	if !ok {
+		return false, 0
+	}
+	if a.count >= maxLoginFails && time.Now().Before(a.lockUntil) {
+		return true, time.Until(a.lockUntil)
+	}
+	return false, 0
+}
+
+func recordLoginFailure(ip string) {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	a, ok := loginAttempts[ip]
+	if !ok {
+		a = &loginAttempt{}
+		loginAttempts[ip] = a
+	}
+	a.count++
+	if a.count >= maxLoginFails {
+		a.lockUntil = time.Now().Add(loginLockout)
+	}
+}
+
+func resetLoginFailures(ip string) {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	delete(loginAttempts, ip)
+}
+
+func isJSONRequest(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/json") ||
+		strings.Contains(r.Header.Get("Content-Type"), "application/json")
+}
+
+func requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if getSession(r) == nil {
+			if isJSONRequest(r) {
+				jsonError(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func jsonError(w http.ResponseWriter, msg string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	fmt.Fprintf(w, `{"error":%q}`, msg)
+}
+
+func jsonOK(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+```
+---
+
 ## .env
 ```bash
 BEL_TLS=0 # Set 1 jika pakai HTTPS
 BEL_TRUST_PROXY=0 # Set 1 jika di balik reverse proxy (nginx)
-BEL_ORIGINS=localhost:4321,localhost:3000 # Allowed CORS origins
+BEL_ORIGINS=localhost:4321,localhost:3000,0.0.0.0:4321 # Allowed CORS origins
 BEL_ALSA_DEVICE=hw:1,0 # Set ALSA device for audio output (e.g., hw:1,0 for USB sound card)
+
+```
+---
+
+## go.mod
+```go
+module bel-madrasah
+
+go 1.21
+
+require golang.org/x/crypto v0.33.0
+
+```
+---
+
+## go.sum
+```text
+golang.org/x/crypto v0.33.0 h1:IOBPskki6Lysi0lo9qQvbxiQ+FvsCC/YWOecCHAixus=
+golang.org/x/crypto v0.33.0/go.mod h1:bVdXmD7IV/4GdElGPozy6U7lWdRXA4qyRVGJV57uQ5M=
 
 ```
 ---
@@ -95,7 +365,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/tones/delete", requireAuth(handleTonesDelete))
 	mux.HandleFunc("/api/tones/preview", requireAuth(handleTonesPreview))
 	mux.HandleFunc("/api/tones/stop", requireAuth(handleTonesStop))
-	mux.HandleFunc("/api/tones/file/", requireAuth(handleTonesFile))
+	mux.HandleFunc("/api/tones/", requireAuth(handleTonesFile))
 
 	mux.HandleFunc("/api/config", requireAuth(handleConfig))
 	mux.HandleFunc("/api/volume", requireAuth(handleVolume))
@@ -436,7 +706,7 @@ func handleLiburNasional(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := "https://api-harilibur.vercel.app/api?year=" + year
+	url := "https://libur.deno.dev/api?year=" + year
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -656,7 +926,7 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]string{
 			"message":  "memutar " + name,
 			"filename": name,
-			"url":      "/api/tones/file/" + name,
+			"url":      "/api/tones/" + name,
 		})
 		return
 
@@ -734,7 +1004,7 @@ func handleTonesFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := strings.TrimPrefix(r.URL.Path, "/api/tones/file/")
+	name := strings.TrimPrefix(r.URL.Path, "/api/tones/")
 	filename, ok := safeFilename(name)
 	if !ok {
 		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
@@ -871,7 +1141,7 @@ func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{
 		"message":  "memutar " + filename,
 		"filename": filename,
-		"url":      "/api/tones/file/" + filename,
+		"url":      "/api/tones/" + filename,
 	})
 }
 
@@ -1052,6 +1322,449 @@ func handleServiceToggle(w http.ResponseWriter, r *http.Request) {
 ```
 ---
 
+## main.go
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"sync"
+	"syscall"
+	"time"
+)
+
+const (
+	port      = ":8082"
+	toneDir   = "/opt/bel-madrasah/tone"
+	dataDir   = "/opt/bel-madrasah/data"
+	staticDir = "/opt/bel-madrasah/static"
+	sleepSec  = 20 * time.Second
+)
+
+var (
+	ffmpegPath string
+
+	activeProcs  []*exec.Cmd
+	procMu       sync.Mutex
+	nowPlaying   string
+	nowPlayingMu sync.Mutex
+
+	schedulerRunning = true
+	schedulerMu      sync.Mutex
+)
+
+func logMsg(msg string) {
+	fmt.Printf("[%s] %s\n", time.Now().Format("2006-01-02 15:04:05"), msg)
+}
+
+func getHari() string {
+	days := map[time.Weekday]string{
+		time.Monday:    "Senin",
+		time.Tuesday:   "Selasa",
+		time.Wednesday: "Rabu",
+		time.Thursday:  "Kamis",
+		time.Friday:    "Jumat",
+		time.Saturday:  "Sabtu",
+		time.Sunday:    "Minggu",
+	}
+	return days[time.Now().Weekday()]
+}
+
+func stopAllProcs() {
+	procMu.Lock()
+	procs := make([]*exec.Cmd, len(activeProcs))
+	copy(procs, activeProcs)
+	activeProcs = nil
+	procMu.Unlock()
+
+	nowPlayingMu.Lock()
+	nowPlaying = ""
+	nowPlayingMu.Unlock()
+
+	for _, p := range procs {
+		if p != nil && p.Process != nil && p.ProcessState == nil {
+			_ = p.Process.Kill()
+			_ = p.Wait()
+		}
+	}
+	time.Sleep(150 * time.Millisecond)
+}
+
+func alsaDevice() string {
+	if d := os.Getenv("BEL_ALSA_DEVICE"); d != "" {
+		return d
+	}
+	return "hw:1,0"
+}
+
+func volumeString() string {
+	cfg, err := loadConfig()
+	if err != nil || cfg.Volume == 0 {
+		return "0.85"
+	}
+	return fmt.Sprintf("%.2f", cfg.Volume)
+}
+
+func playSound(filePath string) {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		logMsg("file tidak ditemukan: " + filePath)
+		return
+	}
+	stopAllProcs()
+
+	nowPlayingMu.Lock()
+	nowPlaying = filePath
+	nowPlayingMu.Unlock()
+
+	vol := volumeString()
+	cmd := exec.Command(ffmpegPath,
+		"-hide_banner", "-loglevel", "error",
+		"-i", filePath,
+		"-filter:a", "volume="+vol,
+		"-f", "alsa", alsaDevice(),
+	)
+	if err := cmd.Start(); err != nil {
+		logMsg("gagal memutar audio: " + err.Error())
+		nowPlayingMu.Lock()
+		nowPlaying = ""
+		nowPlayingMu.Unlock()
+		return
+	}
+
+	procMu.Lock()
+	activeProcs = append(activeProcs, cmd)
+	procMu.Unlock()
+
+	go func() {
+		_ = cmd.Wait()
+		nowPlayingMu.Lock()
+		if nowPlaying == filePath {
+			nowPlaying = ""
+		}
+		nowPlayingMu.Unlock()
+
+		procMu.Lock()
+		alive := activeProcs[:0]
+		for _, p := range activeProcs {
+			if p != nil && p.ProcessState == nil {
+				alive = append(alive, p)
+			}
+		}
+		activeProcs = alive
+		procMu.Unlock()
+	}()
+}
+
+func isAudioPlaying() bool {
+	procMu.Lock()
+	defer procMu.Unlock()
+	for _, p := range activeProcs {
+		if p != nil && p.ProcessState == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func getNowPlaying() string {
+	nowPlayingMu.Lock()
+	defer nowPlayingMu.Unlock()
+	if nowPlaying == "" {
+		return ""
+	}
+	return filepath.Base(nowPlaying)
+}
+
+func sleepOrStop(stop <-chan struct{}, d time.Duration) bool {
+	select {
+	case <-stop:
+		return false
+	case <-time.After(d):
+		return true
+	}
+}
+
+func runScheduler(stop <-chan struct{}) {
+	logMsg("scheduler dimulai")
+	played := make(map[string]bool)
+	lastDay := ""
+	lastWeeklyClean := time.Now()
+
+	for {
+		select {
+		case <-stop:
+			logMsg("scheduler dihentikan")
+			return
+		default:
+		}
+
+		if time.Since(lastWeeklyClean) >= 7*24*time.Hour {
+			if err := resetLog(); err != nil {
+				logMsg("gagal auto-cleanup log: " + err.Error())
+			} else {
+				logMsg("auto-cleanup log mingguan selesai")
+			}
+			lastWeeklyClean = time.Now()
+		}
+
+		schedulerMu.Lock()
+		running := schedulerRunning
+		schedulerMu.Unlock()
+
+		if !running {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
+
+		now := time.Now()
+		hari := getHari()
+
+		if hari != lastDay {
+			if lastDay != "" {
+				played = make(map[string]bool)
+			}
+			lastDay = hari
+		}
+
+		cfg, err := loadConfig()
+		if err != nil {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
+
+		if isLibur(cfg) {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
+
+		mode := resolveMode(cfg)
+
+		if mode == "lainnya" || mode == "pesantren" {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
+
+		if isDayDisabled(cfg, mode, hari) {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
+
+		jadwal, err := loadJadwal()
+		if err != nil {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
+
+		mj, ok := jadwal[mode]
+		if !ok {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
+
+		entries, ok := mj[hari]
+		if !ok {
+			if !sleepOrStop(stop, sleepSec) {
+				return
+			}
+			continue
+		}
+
+		waktu := now.Format("15:04")
+		for _, e := range entries {
+			key := mode + "|" + hari + "|" + e.Waktu
+			if waktu == e.Waktu && !played[key] {
+				logMsg(fmt.Sprintf("[%s] %s [%s]", mode, filepath.Base(e.Audio), e.Waktu))
+				go playSound(e.Audio)
+				played[key] = true
+				writeLog(ActivityLog{
+					Time:  now.Format("2006-01-02 15:04:05"),
+					Mode:  mode,
+					Hari:  hari,
+					Waktu: e.Waktu,
+					Audio: filepath.Base(e.Audio),
+				})
+			}
+		}
+
+		if !sleepOrStop(stop, sleepSec) {
+			return
+		}
+	}
+}
+
+func resolveFfmpeg() string {
+	for _, p := range []string{
+		"/usr/bin/ffmpeg",
+		"/usr/local/bin/ffmpeg",
+		"/bin/ffmpeg",
+	} {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	if p, err := exec.LookPath("ffmpeg"); err == nil {
+		return p
+	}
+	return ""
+}
+
+func main() {
+	ffmpegPath = resolveFfmpeg()
+	if ffmpegPath == "" {
+		log.Fatal("ffmpeg tidak ditemukan di sistem")
+	}
+	logMsg("ffmpeg: " + ffmpegPath)
+	logMsg("alsa device: " + alsaDevice())
+
+	for _, d := range []string{toneDir, dataDir, staticDir} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			log.Fatalf("gagal membuat direktori %s: %s", d, err)
+		}
+	}
+
+	if err := initStorage(); err != nil {
+		log.Fatalf("gagal inisialisasi storage: %s", err)
+	}
+	if err := initAuth(); err != nil {
+		log.Fatalf("gagal inisialisasi auth: %s", err)
+	}
+
+	stopScheduler := make(chan struct{})
+	go runScheduler(stopScheduler)
+
+	mux := http.NewServeMux()
+	registerRoutes(mux)
+
+	allowedOrigins := trustedOrigins()
+	handler := corsMiddleware(allowedOrigins, maxBodyMiddleware(mux))
+
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           handler,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		logMsg("server berjalan di port " + port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-serverErr:
+		log.Fatalf("server error: %s", err)
+	case sig := <-sigCh:
+		logMsg("menerima sinyal " + sig.String() + ", memulai shutdown")
+	}
+
+	close(stopScheduler)
+	stopAllProcs()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logMsg("gagal shutdown server: " + err.Error())
+	}
+	logMsg("server dihentikan")
+}
+
+```
+---
+
+## middleware.go
+```go
+package main
+
+import (
+	"net/http"
+	"os"
+	"strings"
+)
+
+func trustedOrigins() []string {
+	if v := os.Getenv("BEL_ORIGINS"); v != "" {
+		var origins []string
+		for _, o := range strings.Split(v, ",") {
+			o = strings.TrimSpace(o)
+			if o != "" {
+				origins = append(origins, o)
+			}
+		}
+		return origins
+	}
+	return []string{
+		"http://localhost:4321",
+		"http://localhost:3000",
+		"http://127.0.0.1:4321",
+	}
+}
+
+func corsMiddleware(allowed []string, next http.Handler) http.Handler {
+	isAllowed := func(origin string) bool {
+		for _, o := range allowed {
+			if o == origin {
+				return true
+			}
+		}
+		return false
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" && isAllowed(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+			w.Header().Set("Vary", "Origin")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func maxBodyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 35<<20)
+		next.ServeHTTP(w, r)
+	})
+}
+
+```
+---
+
 ## package.json
 ```json
 {
@@ -1101,10 +1814,33 @@ minimumReleaseAgeExclude:
 ```
 ---
 
+## pwa.go
+```go
+package main
+
+import (
+	"net/http"
+	"path/filepath"
+)
+
+func registerPWARoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/sw.js", handleServiceWorker)
+}
+
+func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Service-Worker-Allowed", "/")
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeFile(w, r, filepath.Join(staticDir, "sw.js"))
+}
+
+```
+---
+
 ## src/components/App.tsx
 ```tsx
-import React, { lazy, Suspense } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import React, { lazy, Suspense } from "react";
 import { Toaster } from "react-hot-toast";
 import { queryClient } from "../lib/queryClient";
 import { Shell } from "./layout/Shell";
@@ -1135,8 +1871,12 @@ const PAGE_MAP: Record<Page, React.ReactNode> = {
 
 export default function App({ page }: { page: Page }) {
   React.useEffect(() => {
-    if ("serviceWorker" in navigator) {
+    if (import.meta.env.PROD && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js");
+    } else if (import.meta.env.DEV && "serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => reg.unregister());
+      });
     }
   }, []);
 
@@ -1678,8 +2418,8 @@ export function VolumeSlider() {
 ```tsx
 import React, { useState } from "react";
 import { Music2 } from "lucide-react";
-import { api } from "../lib/api";
-import { Button } from "./ui/Button";
+import { api } from "../../lib/api";
+import { Button } from "../ui/Button";
 
 export function LoginPage() {
   const [username, setUsername] = useState("");
@@ -2538,16 +3278,16 @@ export function EntryRow({
 
 ## src/components/jadwal/HariSection.tsx
 ```tsx
-import React, { useState, useRef, useEffect } from "react";
-import { Plus, ChevronDown } from "lucide-react";
-import { EntryRow } from "./EntryRow";
-import { EntryModal } from "./EntryModal";
-import { Button } from "../ui/Button";
-import { Toggle } from "../ui/Toggle";
-import { useJadwalEntry, useDayToggle } from "../../hooks/useJadwal";
+import { ChevronDown, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
+import { useDayToggle, useJadwalEntry } from "../../hooks/useJadwal";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { api } from "../../lib/api";
-import toast from "react-hot-toast";
+import { Button } from "../ui/Button";
+import { Toggle } from "../ui/Toggle";
+import { EntryModal } from "./EntryModal";
+import { EntryRow } from "./EntryRow";
 
 interface Entry {
   waktu: string;
@@ -2562,7 +3302,7 @@ interface HariSectionProps {
   toneDir: string;
 }
 
-export function HariSection({ mode, hari, entries, disabled }: HariSectionProps) {
+export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSectionProps) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -3634,19 +4374,17 @@ export function LiburModal({ open, onClose, onSave, loading }: LiburModalProps) 
 
 ## src/components/libur/LiburPage.tsx
 ```tsx
-import React, { useState } from "react";
-import { Plus, ExternalLink } from "lucide-react";
-import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
-import { Badge } from "../ui/Badge";
-import { SkeletonCard } from "../ui/Skeleton";
-import { LiburList } from "./LiburList";
-import { useLiburNasional, useMutateLibur } from "../../hooks/useLibur";
+import { ExternalLink, Plus } from "lucide-react";
+import { useState } from "react";
 import toast from "react-hot-toast";
+import { useLiburNasional, useMutateLibur } from "../../hooks/useLibur";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { LiburList } from "./LiburList";
 
 interface NasionalItem {
-  holiday_date: string;
-  holiday_name: string;
+  date: string;
+  name: string;
   is_national_holiday: boolean;
 }
 
@@ -3668,10 +4406,10 @@ function LiburNasionalPanel() {
     try {
       await mutate.mutateAsync({
         action: "add",
-        date: item.holiday_date,
-        keterangan: item.holiday_name,
+        date: item.date,
+        keterangan: item.name,
       });
-      toast.success(`${item.holiday_name} ditambahkan`);
+      toast.success(`${item.name} ditambahkan`);
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -3743,7 +4481,7 @@ function LiburNasionalPanel() {
         >
           {nationals.map((item) => (
             <div
-              key={item.holiday_date}
+              key={item.date}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -3754,9 +4492,9 @@ function LiburNasionalPanel() {
               }}
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{item.holiday_name}</span>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</span>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {formatDate(item.holiday_date)}
+                  {formatDate(item.date)}
                 </span>
               </div>
               <Button
@@ -3784,7 +4522,7 @@ function LiburNasionalPanel() {
         }}
       >
         <ExternalLink size={10} />
-        Sumber: api-harilibur.vercel.app
+        Sumber: libur.deno.dev
       </div>
     </Card>
   );
@@ -5219,6 +5957,8 @@ export function useStopTone() {
 ```ts
 const BASE = import.meta.env.PUBLIC_API_URL ?? "";
 
+let redirectingToLogin = false;
+
 async function request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   const isFormData = body instanceof FormData;
   const res = await fetch(BASE + path, {
@@ -5228,8 +5968,11 @@ async function request<T = unknown>(method: string, path: string, body?: unknown
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
-    window.location.href = "/login";
-    return undefined as T;
+    if (!redirectingToLogin && window.location.pathname !== "/login") {
+      redirectingToLogin = true;
+      window.location.href = "/login";
+    }
+    return new Promise<T>(() => {});
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Terjadi kesalahan" }));
@@ -5746,6 +6489,550 @@ button {
   -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--card-shadow);
   border-radius: var(--radius-lg);
+}
+
+```
+---
+
+## storage.go
+```go
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+	"sync"
+	"time"
+)
+
+const (
+	jadwalFile  = dataDir + "/jadwal.json"
+	logFile     = dataDir + "/activity.log"
+	configFile  = dataDir + "/config.json"
+	maxLogLines = 500
+	logRotateAt = maxLogLines * 2
+)
+
+type Entry struct {
+	Waktu string `json:"waktu"`
+	Audio string `json:"audio"`
+}
+
+type ModeJadwal map[string]map[string][]Entry
+
+type Config struct {
+	Mode           string              `json:"mode"`
+	ManualOverride bool                `json:"manual_override"`
+	RamadhanStart  string              `json:"ramadhan_start"`
+	RamadhanEnd    string              `json:"ramadhan_end"`
+	PTSStart       string              `json:"pts_start"`
+	PTSEnd         string              `json:"pts_end"`
+	PASStart       string              `json:"pas_start"`
+	PASEnd         string              `json:"pas_end"`
+	PesantrenStart string              `json:"pesantren_start"`
+	PesantrenEnd   string              `json:"pesantren_end"`
+	LiburDates     []LiburDate         `json:"libur_dates"`
+	Volume         float64             `json:"volume"`
+	DisabledDays   map[string][]string `json:"disabled_days"`
+}
+
+type LiburDate struct {
+	Date       string `json:"date"`
+	Keterangan string `json:"keterangan"`
+}
+
+type ActivityLog struct {
+	Time  string `json:"time"`
+	Mode  string `json:"mode"`
+	Hari  string `json:"hari"`
+	Waktu string `json:"waktu"`
+	Audio string `json:"audio"`
+}
+
+var (
+	jadwalMu sync.RWMutex
+	configMu sync.RWMutex
+	logMu    sync.Mutex
+	logCount int
+)
+
+var AllHari = []string{"Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"}
+var AllModes = []string{"reguler", "ramadhan", "pts", "pas", "pesantren", "lainnya"}
+
+func defaultConfig() Config {
+	return Config{
+		Mode:         "reguler",
+		Volume:       0.85,
+		LiburDates:   []LiburDate{},
+		DisabledDays: map[string][]string{},
+	}
+}
+
+func loadConfig() (Config, error) {
+	configMu.RLock()
+	defer configMu.RUnlock()
+
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return defaultConfig(), nil
+	}
+	var c Config
+	if err := json.Unmarshal(data, &c); err != nil {
+		return defaultConfig(), nil
+	}
+	if c.LiburDates == nil {
+		c.LiburDates = []LiburDate{}
+	}
+	if c.DisabledDays == nil {
+		c.DisabledDays = map[string][]string{}
+	}
+	if c.Volume == 0 {
+		c.Volume = 0.85
+	}
+	return c, nil
+}
+
+func saveConfig(c Config) error {
+	configMu.Lock()
+	defer configMu.Unlock()
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicWrite(configFile, data, 0644)
+}
+
+func resolveMode(c Config) string {
+	if c.ManualOverride {
+		return c.Mode
+	}
+	today := time.Now().Format("2006-01-02")
+	if c.PTSStart != "" && c.PTSEnd != "" && today >= c.PTSStart && today <= c.PTSEnd {
+		return "pts"
+	}
+	if c.PASStart != "" && c.PASEnd != "" && today >= c.PASStart && today <= c.PASEnd {
+		return "pas"
+	}
+	if c.PesantrenStart != "" && c.PesantrenEnd != "" && today >= c.PesantrenStart && today <= c.PesantrenEnd {
+		return "pesantren"
+	}
+	if c.RamadhanStart != "" && c.RamadhanEnd != "" && today >= c.RamadhanStart && today <= c.RamadhanEnd {
+		return "ramadhan"
+	}
+	return "reguler"
+}
+
+func isLibur(c Config) bool {
+	today := time.Now().Format("2006-01-02")
+	for _, d := range c.LiburDates {
+		if d.Date == today {
+			return true
+		}
+	}
+	return false
+}
+
+func isDayDisabled(c Config, mode, hari string) bool {
+	days, ok := c.DisabledDays[mode]
+	if !ok {
+		return false
+	}
+	for _, d := range days {
+		if d == hari {
+			return true
+		}
+	}
+	return false
+}
+
+func loadJadwal() (ModeJadwal, error) {
+	jadwalMu.RLock()
+	defer jadwalMu.RUnlock()
+
+	data, err := os.ReadFile(jadwalFile)
+	if err != nil {
+		return nil, err
+	}
+	var j ModeJadwal
+	if err := json.Unmarshal(data, &j); err != nil {
+		return nil, err
+	}
+	if j == nil {
+		j = make(ModeJadwal)
+	}
+	for _, m := range AllModes {
+		if j[m] == nil {
+			j[m] = map[string][]Entry{}
+		}
+		for _, h := range AllHari {
+			if j[m][h] == nil {
+				j[m][h] = []Entry{}
+			}
+		}
+	}
+	return j, nil
+}
+
+func saveJadwal(j ModeJadwal) error {
+	jadwalMu.Lock()
+	defer jadwalMu.Unlock()
+	data, err := json.MarshalIndent(j, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicWrite(jadwalFile, data, 0644)
+}
+
+func atomicWrite(path string, data []byte, perm os.FileMode) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, perm); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func initStorage() error {
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		if err := saveConfig(defaultConfig()); err != nil {
+			return err
+		}
+	}
+	initLogCount()
+
+	dj := defaultJadwal()
+	data, err := os.ReadFile(jadwalFile)
+	if err != nil {
+		logMsg("jadwal.json tidak ditemukan, membuat default")
+		return saveJadwal(dj)
+	}
+	var j ModeJadwal
+	if err := json.Unmarshal(data, &j); err != nil || j == nil {
+		logMsg("jadwal.json tidak valid, menulis ulang")
+		return saveJadwal(dj)
+	}
+
+	changed := false
+	for _, m := range AllModes {
+		if j[m] == nil {
+			j[m] = dj[m]
+			changed = true
+		}
+		for _, h := range AllHari {
+			if j[m][h] == nil {
+				j[m][h] = []Entry{}
+				changed = true
+			}
+		}
+	}
+	if changed {
+		return saveJadwal(j)
+	}
+	return nil
+}
+
+func listTones() ([]string, error) {
+	entries, err := os.ReadDir(toneDir)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(e.Name())
+		if ext == ".mp3" || ext == ".wav" || ext == ".ogg" {
+			files = append(files, e.Name())
+		}
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+func splitLogLines(data []byte) [][]byte {
+	var lines [][]byte
+	start := 0
+	for i, b := range data {
+		if b == '\n' {
+			if line := data[start:i]; len(line) > 0 {
+				lines = append(lines, line)
+			}
+			start = i + 1
+		}
+	}
+	if start < len(data) {
+		if line := data[start:]; len(line) > 0 {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func initLogCount() {
+	logMu.Lock()
+	defer logMu.Unlock()
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		logCount = 0
+		return
+	}
+	lines := splitLogLines(data)
+	logCount = len(lines)
+	if logCount > logRotateAt {
+		rotateLogLocked(lines)
+	}
+}
+
+func rotateLogLocked(lines [][]byte) {
+	if len(lines) <= maxLogLines {
+		logCount = len(lines)
+		return
+	}
+	trimmed := lines[len(lines)-maxLogLines:]
+	var buf bytes.Buffer
+	for _, l := range trimmed {
+		buf.Write(l)
+		buf.WriteByte('\n')
+	}
+	if err := atomicWrite(logFile, buf.Bytes(), 0644); err != nil {
+		logMsg("gagal rotasi log: " + err.Error())
+		return
+	}
+	logCount = maxLogLines
+}
+
+func writeLog(entry ActivityLog) {
+	logMu.Lock()
+	defer logMu.Unlock()
+
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	line, _ := json.Marshal(entry)
+	_, _ = f.Write(append(line, '\n'))
+	_ = f.Close()
+
+	logCount++
+	if logCount > logRotateAt {
+		data, err := os.ReadFile(logFile)
+		if err != nil {
+			return
+		}
+		rotateLogLocked(splitLogLines(data))
+	}
+}
+
+func resetLog() error {
+	logMu.Lock()
+	defer logMu.Unlock()
+	if err := os.WriteFile(logFile, []byte{}, 0644); err != nil {
+		return err
+	}
+	logCount = 0
+	return nil
+}
+
+func readLog() ([]ActivityLog, error) {
+	logMu.Lock()
+	defer logMu.Unlock()
+
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []ActivityLog{}, nil
+		}
+		return nil, err
+	}
+
+	lines := splitLogLines(data)
+	var logs []ActivityLog
+	for _, line := range lines {
+		var l ActivityLog
+		if json.Unmarshal(line, &l) == nil {
+			logs = append(logs, l)
+		}
+	}
+
+	if len(logs) > maxLogLines {
+		logs = logs[len(logs)-maxLogLines:]
+	}
+	for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
+		logs[i], logs[j] = logs[j], logs[i]
+	}
+	return logs, nil
+}
+
+func defaultJadwal() ModeJadwal {
+	b := toneDir
+	j := make(ModeJadwal)
+	for _, m := range AllModes {
+		j[m] = map[string][]Entry{}
+		for _, h := range AllHari {
+			j[m][h] = []Entry{}
+		}
+	}
+	j["reguler"]["Senin"] = []Entry{
+		{Waktu: "06:44", Audio: b + "/sholawat.mp3"},
+		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+		{Waktu: "07:00", Audio: b + "/upacara.mp3"},
+		{Waktu: "08:10", Audio: b + "/pelajaran-2.mp3"},
+		{Waktu: "08:50", Audio: b + "/pelajaran-3.mp3"},
+		{Waktu: "09:30", Audio: b + "/pelajaran-4.mp3"},
+		{Waktu: "10:00", Audio: b + "/indonesia-raya.mp3"},
+		{Waktu: "10:10", Audio: b + "/istirahat-1.mp3"},
+		{Waktu: "10:20", Audio: b + "/kebersihan.mp3"},
+		{Waktu: "10:30", Audio: b + "/pelajaran-5.mp3"},
+		{Waktu: "11:10", Audio: b + "/pelajaran-6.mp3"},
+		{Waktu: "11:50", Audio: b + "/istirahat-2.mp3"},
+		{Waktu: "12:30", Audio: b + "/kebersihan.mp3"},
+		{Waktu: "12:40", Audio: b + "/pelajaran-7.mp3"},
+		{Waktu: "13:20", Audio: b + "/pelajaran-8.mp3"},
+		{Waktu: "14:00", Audio: b + "/pelajaran-9.mp3"},
+		{Waktu: "14:40", Audio: b + "/pelajaran-10.mp3"},
+		{Waktu: "15:20", Audio: b + "/pelajaran-selesai.mp3"},
+		{Waktu: "15:21", Audio: b + "/tanah-airku.mp3"},
+		{Waktu: "16:30", Audio: b + "/hymne-madrasah.mp3"},
+	}
+	j["reguler"]["Selasa"] = []Entry{
+		{Waktu: "06:44", Audio: b + "/sholawat.mp3"},
+		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+		{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+		{Waktu: "08:10", Audio: b + "/pelajaran-2.mp3"},
+		{Waktu: "08:50", Audio: b + "/pelajaran-3.mp3"},
+		{Waktu: "09:30", Audio: b + "/pelajaran-4.mp3"},
+		{Waktu: "10:10", Audio: b + "/istirahat-1.mp3"},
+		{Waktu: "10:20", Audio: b + "/kebersihan.mp3"},
+		{Waktu: "10:30", Audio: b + "/pelajaran-5.mp3"},
+		{Waktu: "11:10", Audio: b + "/pelajaran-6.mp3"},
+		{Waktu: "11:50", Audio: b + "/istirahat-2.mp3"},
+		{Waktu: "12:30", Audio: b + "/kebersihan.mp3"},
+		{Waktu: "12:40", Audio: b + "/pelajaran-7.mp3"},
+		{Waktu: "13:20", Audio: b + "/pelajaran-8.mp3"},
+		{Waktu: "14:00", Audio: b + "/pelajaran-9.mp3"},
+		{Waktu: "14:40", Audio: b + "/pelajaran-10.mp3"},
+		{Waktu: "15:20", Audio: b + "/pelajaran-selesai.mp3"},
+		{Waktu: "15:21", Audio: b + "/tanah-airku.mp3"},
+		{Waktu: "16:30", Audio: b + "/hymne-madrasah.mp3"},
+	}
+	j["reguler"]["Rabu"] = j["reguler"]["Selasa"]
+	j["reguler"]["Kamis"] = []Entry{
+		{Waktu: "06:44", Audio: b + "/sholawat.mp3"},
+		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+		{Waktu: "07:00", Audio: b + "/literasi.mp3"},
+		{Waktu: "08:10", Audio: b + "/pelajaran-2.mp3"},
+		{Waktu: "08:50", Audio: b + "/pelajaran-3.mp3"},
+		{Waktu: "09:30", Audio: b + "/pelajaran-4.mp3"},
+		{Waktu: "10:00", Audio: b + "/indonesia-raya.mp3"},
+		{Waktu: "10:10", Audio: b + "/istirahat-1.mp3"},
+		{Waktu: "10:20", Audio: b + "/kebersihan.mp3"},
+		{Waktu: "10:30", Audio: b + "/pelajaran-5.mp3"},
+		{Waktu: "11:10", Audio: b + "/pelajaran-6.mp3"},
+		{Waktu: "11:50", Audio: b + "/istirahat-2.mp3"},
+		{Waktu: "12:30", Audio: b + "/kebersihan.mp3"},
+		{Waktu: "12:40", Audio: b + "/pelajaran-7.mp3"},
+		{Waktu: "13:20", Audio: b + "/pelajaran-8.mp3"},
+		{Waktu: "14:00", Audio: b + "/pelajaran-9.mp3"},
+		{Waktu: "14:40", Audio: b + "/pelajaran-10.mp3"},
+		{Waktu: "15:20", Audio: b + "/pelajaran-selesai.mp3"},
+		{Waktu: "15:21", Audio: b + "/tanah-airku.mp3"},
+		{Waktu: "16:30", Audio: b + "/hymne-madrasah.mp3"},
+	}
+	j["reguler"]["Jumat"] = []Entry{
+		{Waktu: "06:44", Audio: b + "/sholawat.mp3"},
+		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+		{Waktu: "07:00", Audio: b + "/rohani.mp3"},
+		{Waktu: "08:10", Audio: b + "/pelajaran-3.mp3"},
+		{Waktu: "08:50", Audio: b + "/pelajaran-4.mp3"},
+		{Waktu: "09:30", Audio: b + "/istirahat-1.mp3"},
+		{Waktu: "09:40", Audio: b + "/kebersihan.mp3"},
+		{Waktu: "10:10", Audio: b + "/pelajaran-5.mp3"},
+		{Waktu: "10:40", Audio: b + "/pelajaran-6.mp3"},
+		{Waktu: "11:20", Audio: b + "/istirahat-2.mp3"},
+		{Waktu: "12:50", Audio: b + "/pelajaran-7.mp3"},
+		{Waktu: "13:30", Audio: b + "/pelajaran-8.mp3"},
+		{Waktu: "14:10", Audio: b + "/akhir-pekan.mp3"},
+		{Waktu: "14:11", Audio: b + "/tanah-airku.mp3"},
+		{Waktu: "14:12", Audio: b + "/pramuka.mp3"},
+		{Waktu: "16:00", Audio: b + "/hymne-madrasah.mp3"},
+	}
+	j["ramadhan"]["Senin"] = []Entry{
+		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+		{Waktu: "07:00", Audio: b + "/upacara.mp3"},
+		{Waktu: "07:40", Audio: b + "/pelajaran-2.mp3"},
+		{Waktu: "08:20", Audio: b + "/pelajaran-3.mp3"},
+		{Waktu: "09:00", Audio: b + "/pelajaran-4.mp3"},
+		{Waktu: "09:30", Audio: b + "/istirahat-1.mp3"},
+		{Waktu: "09:40", Audio: b + "/pelajaran-5.mp3"},
+		{Waktu: "10:20", Audio: b + "/pelajaran-6.mp3"},
+		{Waktu: "11:00", Audio: b + "/pelajaran-selesai.mp3"},
+		{Waktu: "11:01", Audio: b + "/tanah-airku.mp3"},
+	}
+	j["ramadhan"]["Selasa"] = []Entry{
+		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+		{Waktu: "07:10", Audio: b + "/pelajaran-1.mp3"},
+		{Waktu: "07:50", Audio: b + "/pelajaran-2.mp3"},
+		{Waktu: "08:30", Audio: b + "/pelajaran-3.mp3"},
+		{Waktu: "09:10", Audio: b + "/pelajaran-4.mp3"},
+		{Waktu: "09:40", Audio: b + "/istirahat-1.mp3"},
+		{Waktu: "09:50", Audio: b + "/pelajaran-5.mp3"},
+		{Waktu: "10:30", Audio: b + "/pelajaran-6.mp3"},
+		{Waktu: "11:00", Audio: b + "/pelajaran-selesai.mp3"},
+		{Waktu: "11:01", Audio: b + "/tanah-airku.mp3"},
+	}
+	j["ramadhan"]["Rabu"] = j["ramadhan"]["Selasa"]
+	j["ramadhan"]["Kamis"] = []Entry{
+		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+		{Waktu: "07:00", Audio: b + "/literasi.mp3"},
+		{Waktu: "07:40", Audio: b + "/pelajaran-2.mp3"},
+		{Waktu: "08:20", Audio: b + "/pelajaran-3.mp3"},
+		{Waktu: "09:00", Audio: b + "/pelajaran-4.mp3"},
+		{Waktu: "09:30", Audio: b + "/istirahat-1.mp3"},
+		{Waktu: "09:40", Audio: b + "/pelajaran-5.mp3"},
+		{Waktu: "10:20", Audio: b + "/pelajaran-6.mp3"},
+		{Waktu: "11:00", Audio: b + "/pelajaran-selesai.mp3"},
+		{Waktu: "11:01", Audio: b + "/tanah-airku.mp3"},
+	}
+	j["ramadhan"]["Jumat"] = []Entry{
+		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+		{Waktu: "07:00", Audio: b + "/rohani.mp3"},
+		{Waktu: "07:40", Audio: b + "/pelajaran-3.mp3"},
+		{Waktu: "08:20", Audio: b + "/pelajaran-4.mp3"},
+		{Waktu: "09:00", Audio: b + "/istirahat-1.mp3"},
+		{Waktu: "09:10", Audio: b + "/pelajaran-5.mp3"},
+		{Waktu: "09:50", Audio: b + "/pelajaran-6.mp3"},
+		{Waktu: "10:20", Audio: b + "/akhir-pekan.mp3"},
+		{Waktu: "10:21", Audio: b + "/tanah-airku.mp3"},
+	}
+
+	ptsEntry := func(hari string) []Entry {
+		e := []Entry{
+			{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+			{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+			{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
+			{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
+			{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
+			{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
+		}
+		if hari == "Jumat" {
+			return []Entry{
+				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+				{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+				{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
+				{Waktu: "09:30", Audio: b + "/pelajaran-selesai.mp3"},
+				{Waktu: "09:31", Audio: b + "/tanah-airku.mp3"},
+			}
+		}
+		return e
+	}
+	for _, h := range []string{"Senin", "Selasa", "Rabu", "Kamis", "Jumat"} {
+		j["pts"][h] = ptsEntry(h)
+		j["pas"][h] = ptsEntry(h)
+	}
+	return j
 }
 
 ```
