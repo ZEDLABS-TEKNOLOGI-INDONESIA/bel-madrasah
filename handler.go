@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,14 +26,38 @@ var validModes = map[string]bool{
 
 var secureCookie = os.Getenv("BEL_TLS") == "1"
 
+var pageRoutes = map[string]string{
+	"/":         "index.html",
+	"/jadwal":   "jadwal.html",
+	"/audio":    "audio.html",
+	"/libur":    "libur.html",
+	"/log":      "log.html",
+	"/settings": "settings.html",
+}
+
+func isValidAudioPath(p string) bool {
+	clean := filepath.Clean(p)
+	sep := string(filepath.Separator)
+	return clean == toneDir || strings.HasPrefix(clean, toneDir+sep)
+}
+
 func registerRoutes(mux *http.ServeMux) {
 	registerPWARoutes(mux)
+
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	mux.Handle("/_astro/", http.FileServer(http.Dir(staticDir)))
+
+	for _, name := range []string{"favicon.svg", "favicon.ico", "manifest.json", "robots.txt"} {
+		serveFile := filepath.Join(staticDir, name)
+		mux.HandleFunc("/"+name, func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, serveFile)
+		})
+	}
 
 	mux.HandleFunc("/healthz", handleHealth)
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
-	mux.HandleFunc("/", requireAuth(handleIndex))
+	mux.HandleFunc("/", requireAuth(handlePages))
 
 	mux.HandleFunc("/api/jadwal", requireAuth(handleJadwal))
 	mux.HandleFunc("/api/jadwal/entry", requireAuth(handleJadwalEntry))
@@ -71,6 +96,21 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+func handlePages(w http.ResponseWriter, r *http.Request) {
+	if file, ok := pageRoutes[r.URL.Path]; ok {
+		http.ServeFile(w, r, filepath.Join(staticDir, file))
+		return
+	}
+	notFoundPath := filepath.Join(staticDir, "404.html")
+	if data, err := os.ReadFile(notFoundPath); err == nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write(data)
+		return
+	}
+	http.NotFound(w, r)
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -191,14 +231,6 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	logMsg("password administrator diubah")
 	jsonOK(w, map[string]string{"message": "password berhasil diubah"})
-}
-
-func handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-	http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
 }
 
 func handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -384,9 +416,9 @@ func handleLiburNasional(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := "https://libur.deno.dev/api?year=" + year
+	apiURL := "https://libur.deno.dev/api?year=" + year
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := client.Get(apiURL)
 	if err != nil {
 		jsonError(w, "gagal mengambil data libur nasional", http.StatusBadGateway)
 		return
@@ -549,9 +581,8 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, "audio tidak boleh kosong", http.StatusBadRequest)
 			return
 		}
-
 		cleanAudio := filepath.Clean(body.Entry.Audio)
-		if !strings.HasPrefix(cleanAudio, toneDir) {
+		if !isValidAudioPath(cleanAudio) {
 			jsonError(w, "path audio tidak valid", http.StatusBadRequest)
 			return
 		}
@@ -604,7 +635,7 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]string{
 			"message":  "memutar " + name,
 			"filename": name,
-			"url":      "/api/tones/" + name,
+			"url":      "/api/tones/" + url.PathEscape(name),
 		})
 		return
 
@@ -639,7 +670,7 @@ func handleTones(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if pp := r.URL.Query().Get("per_page"); pp != "" {
-		if n, err := strconv.Atoi(pp); err == nil && n > 0 && n <= 100 {
+		if n, err := strconv.Atoi(pp); err == nil && n > 0 && n <= 500 {
 			perPage = n
 		}
 	}
@@ -682,8 +713,13 @@ func handleTonesFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := strings.TrimPrefix(r.URL.Path, "/api/tones/")
-	filename, ok := safeFilename(name)
+	raw := strings.TrimPrefix(r.URL.Path, "/api/tones/")
+	decoded, err := url.PathUnescape(raw)
+	if err != nil {
+		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
+		return
+	}
+	filename, ok := safeFilename(decoded)
 	if !ok {
 		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
 		return
@@ -819,7 +855,7 @@ func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{
 		"message":  "memutar " + filename,
 		"filename": filename,
-		"url":      "/api/tones/" + filename,
+		"url":      "/api/tones/" + url.PathEscape(filename),
 	})
 }
 
@@ -926,7 +962,7 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				clean := filepath.Clean(e.Audio)
-				if !strings.HasPrefix(clean, toneDir) {
+				if !isValidAudioPath(clean) {
 					jsonError(w, fmt.Sprintf("path audio tidak valid pada %s/%s[%d]", mode, hari, i), http.StatusBadRequest)
 					return
 				}

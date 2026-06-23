@@ -1,50 +1,47 @@
-const CACHE = "bel-v2";
-const STATIC = ["/", "/jadwal", "/audio", "/libur", "/log", "/settings"];
+const CACHE = "bel-madrasah-v1";
+const PRECACHE_URLS = ["/", "/jadwal", "/audio", "/libur", "/log", "/settings"];
 
-self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)));
-  self.skipWaiting();
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting())
+  );
 });
 
-self.addEventListener("activate", (e) => {
-  e.waitUntil(
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-self.addEventListener("fetch", (e) => {
-  const url = new URL(e.request.url);
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
 
-  if (url.pathname.startsWith("/api/")) {
-    e.respondWith(
-      fetch(e.request).catch(
-        () =>
-          new Response('{"error":"offline"}', { headers: { "Content-Type": "application/json" } })
-      )
-    );
+  const url = new URL(request.url);
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname === "/login" ||
+    url.pathname === "/logout" ||
+    url.pathname === "/healthz"
+  ) {
     return;
   }
 
-  if (url.pathname === "/login" || url.pathname === "/logout") {
-    e.respondWith(fetch(e.request));
-    return;
-  }
-
-  if (e.request.mode === "navigate") {
-    e.respondWith(
-      fetch(e.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
-          return res;
-        })
-        .catch(() => caches.match(e.request))
-    );
-    return;
-  }
-
-  e.respondWith(caches.match(e.request).then((cached) => cached ?? fetch(e.request)));
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request))
+  );
 });
