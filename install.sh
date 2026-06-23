@@ -8,7 +8,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 REPO_URL="https://github.com/ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah.git"
-REPO_BRANCH="server"
+REPO_BRANCH="main"
 BUILD_DIR="/tmp/bel-madrasah-build"
 PROJECT_DIR="/opt/bel-madrasah"
 SERVICE_NAME="bel-madrasah"

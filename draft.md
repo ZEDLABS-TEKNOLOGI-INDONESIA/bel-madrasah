@@ -2,14 +2,17 @@
 
 ## astro.config.mjs
 ```js
-import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "astro/config";
 
 const BACKEND_URL = process.env.BEL_BACKEND_URL ?? "http://localhost:8082";
 
 export default defineConfig({
   integrations: [react()],
+  build: {
+    format: "file",
+  },
   vite: {
     plugins: [tailwindcss()],
     server: {
@@ -291,10 +294,10 @@ func jsonOK(w http.ResponseWriter, v any) {
 
 ## .env
 ```bash
-BEL_TLS=0 # Set 1 jika pakai HTTPS
-BEL_TRUST_PROXY=0 # Set 1 jika di balik reverse proxy (nginx)
-BEL_ORIGINS=localhost:4321,localhost:3000,0.0.0.0:4321 # Allowed CORS origins
-BEL_ALSA_DEVICE=hw:1,0 # Set ALSA device for audio output (e.g., hw:1,0 for USB sound card)
+BEL_TLS=0
+BEL_TRUST_PROXY=0
+BEL_ORIGINS=http://localhost:4321,http://localhost:3000,http://0.0.0.0:4321
+BEL_ALSA_DEVICE=hw:1,0
 
 ```
 ---
@@ -328,6 +331,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -347,14 +351,38 @@ var validModes = map[string]bool{
 
 var secureCookie = os.Getenv("BEL_TLS") == "1"
 
+var pageRoutes = map[string]string{
+	"/":         "index.html",
+	"/jadwal":   "jadwal.html",
+	"/audio":    "audio.html",
+	"/libur":    "libur.html",
+	"/log":      "log.html",
+	"/settings": "settings.html",
+}
+
+func isValidAudioPath(p string) bool {
+	clean := filepath.Clean(p)
+	sep := string(filepath.Separator)
+	return clean == toneDir || strings.HasPrefix(clean, toneDir+sep)
+}
+
 func registerRoutes(mux *http.ServeMux) {
 	registerPWARoutes(mux)
+
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	mux.Handle("/_astro/", http.FileServer(http.Dir(staticDir)))
+
+	for _, name := range []string{"favicon.svg", "favicon.ico", "manifest.json", "robots.txt"} {
+		serveFile := filepath.Join(staticDir, name)
+		mux.HandleFunc("/"+name, func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, serveFile)
+		})
+	}
 
 	mux.HandleFunc("/healthz", handleHealth)
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
-	mux.HandleFunc("/", requireAuth(handleIndex))
+	mux.HandleFunc("/", requireAuth(handlePages))
 
 	mux.HandleFunc("/api/jadwal", requireAuth(handleJadwal))
 	mux.HandleFunc("/api/jadwal/entry", requireAuth(handleJadwalEntry))
@@ -393,6 +421,21 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+func handlePages(w http.ResponseWriter, r *http.Request) {
+	if file, ok := pageRoutes[r.URL.Path]; ok {
+		http.ServeFile(w, r, filepath.Join(staticDir, file))
+		return
+	}
+	notFoundPath := filepath.Join(staticDir, "404.html")
+	if data, err := os.ReadFile(notFoundPath); err == nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write(data)
+		return
+	}
+	http.NotFound(w, r)
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -513,14 +556,6 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	logMsg("password administrator diubah")
 	jsonOK(w, map[string]string{"message": "password berhasil diubah"})
-}
-
-func handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-	http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
 }
 
 func handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -706,9 +741,9 @@ func handleLiburNasional(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := "https://libur.deno.dev/api?year=" + year
+	apiURL := "https://libur.deno.dev/api?year=" + year
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := client.Get(apiURL)
 	if err != nil {
 		jsonError(w, "gagal mengambil data libur nasional", http.StatusBadGateway)
 		return
@@ -871,9 +906,8 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, "audio tidak boleh kosong", http.StatusBadRequest)
 			return
 		}
-
 		cleanAudio := filepath.Clean(body.Entry.Audio)
-		if !strings.HasPrefix(cleanAudio, toneDir) {
+		if !isValidAudioPath(cleanAudio) {
 			jsonError(w, "path audio tidak valid", http.StatusBadRequest)
 			return
 		}
@@ -926,7 +960,7 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]string{
 			"message":  "memutar " + name,
 			"filename": name,
-			"url":      "/api/tones/" + name,
+			"url":      "/api/tones/" + url.PathEscape(name),
 		})
 		return
 
@@ -961,7 +995,7 @@ func handleTones(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if pp := r.URL.Query().Get("per_page"); pp != "" {
-		if n, err := strconv.Atoi(pp); err == nil && n > 0 && n <= 100 {
+		if n, err := strconv.Atoi(pp); err == nil && n > 0 && n <= 500 {
 			perPage = n
 		}
 	}
@@ -1004,8 +1038,13 @@ func handleTonesFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := strings.TrimPrefix(r.URL.Path, "/api/tones/")
-	filename, ok := safeFilename(name)
+	raw := strings.TrimPrefix(r.URL.Path, "/api/tones/")
+	decoded, err := url.PathUnescape(raw)
+	if err != nil {
+		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
+		return
+	}
+	filename, ok := safeFilename(decoded)
 	if !ok {
 		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
 		return
@@ -1141,7 +1180,7 @@ func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{
 		"message":  "memutar " + filename,
 		"filename": filename,
-		"url":      "/api/tones/" + filename,
+		"url":      "/api/tones/" + url.PathEscape(filename),
 	})
 }
 
@@ -1248,7 +1287,7 @@ func handleRestore(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				clean := filepath.Clean(e.Audio)
-				if !strings.HasPrefix(clean, toneDir) {
+				if !isValidAudioPath(clean) {
 					jsonError(w, fmt.Sprintf("path audio tidak valid pada %s/%s[%d]", mode, hari, i), http.StatusBadRequest)
 					return
 				}
@@ -1711,20 +1750,31 @@ import (
 )
 
 func trustedOrigins() []string {
+	scheme := "http"
+	if os.Getenv("BEL_TLS") == "1" {
+		scheme = "https"
+	}
+
 	if v := os.Getenv("BEL_ORIGINS"); v != "" {
 		var origins []string
 		for _, o := range strings.Split(v, ",") {
 			o = strings.TrimSpace(o)
-			if o != "" {
-				origins = append(origins, o)
+			if o == "" {
+				continue
 			}
+			if !strings.Contains(o, "://") {
+				o = scheme + "://" + o
+			}
+			origins = append(origins, o)
 		}
 		return origins
 	}
+
 	return []string{
-		"http://localhost:4321",
-		"http://localhost:3000",
-		"http://127.0.0.1:4321",
+		scheme + "://localhost:4321",
+		scheme + "://localhost:3000",
+		scheme + "://127.0.0.1:4321",
+		scheme + "://0.0.0.0:4321",
 	}
 }
 
@@ -1804,12 +1854,8 @@ func maxBodyMiddleware(next http.Handler) http.Handler {
 
 ## pnpm-workspace.yaml
 ```yaml
-allowBuilds:
-  esbuild: set this to true or false
-  sharp: set this to true or false
-minimumReleaseAgeExclude:
-  - '@astrojs/markdown-satteri@0.3.2'
-  - astro@7.0.2
+packages:
+  - "."
 
 ```
 ---
@@ -3030,10 +3076,10 @@ export function StatusCard() {
 
 ## src/components/jadwal/EntryModal.tsx
 ```tsx
-import React, { useState, useEffect } from "react";
-import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
+import { useEffect, useState } from "react";
 import { useTones } from "../../hooks/useTones";
+import { Button } from "../ui/Button";
+import { Modal } from "../ui/Modal";
 
 interface Entry {
   waktu: string;
@@ -3059,7 +3105,7 @@ export function EntryModal({
 }: EntryModalProps) {
   const [waktu, setWaktu] = useState("");
   const [selectedFilename, setSelectedFilename] = useState("");
-  const { data: tonesData } = useTones(1, 100);
+  const { data: tonesData } = useTones(1, 500);
 
   useEffect(() => {
     if (!open) return;
@@ -6694,6 +6740,12 @@ func atomicWrite(path string, data []byte, perm os.FileMode) error {
 	return os.Rename(tmp, path)
 }
 
+func copyEntries(src []Entry) []Entry {
+	dst := make([]Entry, len(src))
+	copy(dst, src)
+	return dst
+}
+
 func initStorage() error {
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		if err := saveConfig(defaultConfig()); err != nil {
@@ -6918,7 +6970,7 @@ func defaultJadwal() ModeJadwal {
 		{Waktu: "15:21", Audio: b + "/tanah-airku.mp3"},
 		{Waktu: "16:30", Audio: b + "/hymne-madrasah.mp3"},
 	}
-	j["reguler"]["Rabu"] = j["reguler"]["Selasa"]
+	j["reguler"]["Rabu"] = copyEntries(j["reguler"]["Selasa"])
 	j["reguler"]["Kamis"] = []Entry{
 		{Waktu: "06:44", Audio: b + "/sholawat.mp3"},
 		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
@@ -6983,7 +7035,7 @@ func defaultJadwal() ModeJadwal {
 		{Waktu: "11:00", Audio: b + "/pelajaran-selesai.mp3"},
 		{Waktu: "11:01", Audio: b + "/tanah-airku.mp3"},
 	}
-	j["ramadhan"]["Rabu"] = j["ramadhan"]["Selasa"]
+	j["ramadhan"]["Rabu"] = copyEntries(j["ramadhan"]["Selasa"])
 	j["ramadhan"]["Kamis"] = []Entry{
 		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
 		{Waktu: "07:00", Audio: b + "/literasi.mp3"},
@@ -7009,14 +7061,6 @@ func defaultJadwal() ModeJadwal {
 	}
 
 	ptsEntry := func(hari string) []Entry {
-		e := []Entry{
-			{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-			{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-			{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-			{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-			{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-			{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-		}
 		if hari == "Jumat" {
 			return []Entry{
 				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
@@ -7026,7 +7070,14 @@ func defaultJadwal() ModeJadwal {
 				{Waktu: "09:31", Audio: b + "/tanah-airku.mp3"},
 			}
 		}
-		return e
+		return []Entry{
+			{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+			{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+			{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
+			{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
+			{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
+			{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
+		}
 	}
 	for _, h := range []string{"Senin", "Selasa", "Rabu", "Kamis", "Jumat"} {
 		j["pts"][h] = ptsEntry(h)
