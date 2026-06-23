@@ -10,20 +10,31 @@ EXCLUDE_DIRS=(
   ".cache"
   "data"
   "tone"
-  "static"
+  "node_modules"
+  ".pnpm"
+  "dist"
+  ".astro"
 )
 
 # File spesifik yang dikecualikan
 EXCLUDE_FILES=(
   "generate.sh"
   "draft.md"
-  ".env"
+  ".env.example"
   ".gitignore"
   "README.md"
   "LICENSE"
   "issue.md"
   "install.sh"
   "uninstall.sh"
+  "pnpm-lock.yaml"
+  "API DOCUMENTATION.md"
+  "CONTRIBUTING.md"
+  "CODE_OF_CONDUCT.md"
+  "SECURITY.md"
+  "CHANGELOG.md"
+  "CLAUDE.md"
+  "AGENTS.md"
 )
 
 # Ekstensi biner yang dikecualikan
@@ -35,7 +46,7 @@ BINARY_EXTS=(
   xlsx xls doc docx ppt pptx
   exe bin so dll dylib
   db sqlite sqlite3
-  lock map pyc pyo
+  map pyc pyo
 )
 
 # Ekstensi teks yang dikenali beserta nama lang-nya untuk code fence
@@ -54,6 +65,13 @@ declare -A LANG_MAP=(
   [xml]="xml"
   [sql]="sql"
   [cfg]="ini"     [ini]="ini"
+  [ts]="ts"
+  [tsx]="tsx"
+  [js]="js"
+  [jsx]="jsx"
+  [astro]="astro"
+  [mjs]="js"
+  [cjs]="js"
 )
 
 # Build argumen -prune untuk find
