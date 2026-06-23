@@ -10,7 +10,7 @@ EXCLUDE_DIRS=(
   ".cache"
   "data"
   "tone"
-  # "static"
+  "static"
 )
 
 # File spesifik yang dikecualikan
@@ -21,7 +21,9 @@ EXCLUDE_FILES=(
   ".gitignore"
   "README.md"
   "LICENSE"
-  "konsep.md"
+  "issue.md"
+  "install.sh"
+  "uninstall.sh"
 )
 
 # Ekstensi biner yang dikecualikan
