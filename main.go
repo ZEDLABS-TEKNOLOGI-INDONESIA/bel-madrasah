@@ -80,10 +80,38 @@ func alsaDevice() string {
 
 func volumeString() string {
 	cfg, err := loadConfig()
-	if err != nil || cfg.Volume == 0 {
+	if err != nil {
 		return "0.85"
 	}
 	return fmt.Sprintf("%.2f", cfg.Volume)
+}
+
+func setLiveVolume(volume float64) {
+	pct := int(volume * 100)
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 200 {
+		pct = 200
+	}
+
+	controls := []string{"Master", "PCM", "Speaker", "Headphone", "Digital", "Playback"}
+	device := alsaDevice()
+
+	for _, ctrl := range controls {
+		cmd := exec.Command("amixer", "-D", device, "-q", "sset", ctrl, fmt.Sprintf("%d%%", pct))
+		if err := cmd.Run(); err == nil {
+			logMsg(fmt.Sprintf("volume live: %s@%s %d%%", ctrl, device, pct))
+			return
+		}
+
+		cmd = exec.Command("amixer", "-q", "sset", ctrl, fmt.Sprintf("%d%%", pct))
+		if err := cmd.Run(); err == nil {
+			logMsg(fmt.Sprintf("volume live: %s@default %d%%", ctrl, pct))
+			return
+		}
+	}
+	logMsg("amixer: tidak ada control yang cocok, volume berlaku di play berikutnya")
 }
 
 func playSound(filePath string) {
