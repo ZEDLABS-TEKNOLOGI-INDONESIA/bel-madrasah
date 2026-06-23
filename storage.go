@@ -196,6 +196,12 @@ func atomicWrite(path string, data []byte, perm os.FileMode) error {
 	return os.Rename(tmp, path)
 }
 
+func copyEntries(src []Entry) []Entry {
+	dst := make([]Entry, len(src))
+	copy(dst, src)
+	return dst
+}
+
 func initStorage() error {
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		if err := saveConfig(defaultConfig()); err != nil {
@@ -420,7 +426,7 @@ func defaultJadwal() ModeJadwal {
 		{Waktu: "15:21", Audio: b + "/tanah-airku.mp3"},
 		{Waktu: "16:30", Audio: b + "/hymne-madrasah.mp3"},
 	}
-	j["reguler"]["Rabu"] = j["reguler"]["Selasa"]
+	j["reguler"]["Rabu"] = copyEntries(j["reguler"]["Selasa"])
 	j["reguler"]["Kamis"] = []Entry{
 		{Waktu: "06:44", Audio: b + "/sholawat.mp3"},
 		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
@@ -485,7 +491,7 @@ func defaultJadwal() ModeJadwal {
 		{Waktu: "11:00", Audio: b + "/pelajaran-selesai.mp3"},
 		{Waktu: "11:01", Audio: b + "/tanah-airku.mp3"},
 	}
-	j["ramadhan"]["Rabu"] = j["ramadhan"]["Selasa"]
+	j["ramadhan"]["Rabu"] = copyEntries(j["ramadhan"]["Selasa"])
 	j["ramadhan"]["Kamis"] = []Entry{
 		{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
 		{Waktu: "07:00", Audio: b + "/literasi.mp3"},
@@ -511,14 +517,6 @@ func defaultJadwal() ModeJadwal {
 	}
 
 	ptsEntry := func(hari string) []Entry {
-		e := []Entry{
-			{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
-			{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
-			{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
-			{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
-			{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
-			{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
-		}
 		if hari == "Jumat" {
 			return []Entry{
 				{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
@@ -528,7 +526,14 @@ func defaultJadwal() ModeJadwal {
 				{Waktu: "09:31", Audio: b + "/tanah-airku.mp3"},
 			}
 		}
-		return e
+		return []Entry{
+			{Waktu: "06:50", Audio: b + "/mars-madrasah.mp3"},
+			{Waktu: "07:30", Audio: b + "/pelajaran-1.mp3"},
+			{Waktu: "08:30", Audio: b + "/pelajaran-2.mp3"},
+			{Waktu: "09:30", Audio: b + "/pelajaran-3.mp3"},
+			{Waktu: "10:30", Audio: b + "/pelajaran-selesai.mp3"},
+			{Waktu: "10:31", Audio: b + "/tanah-airku.mp3"},
+		}
 	}
 	for _, h := range []string{"Senin", "Selasa", "Rabu", "Kamis", "Jumat"} {
 		j["pts"][h] = ptsEntry(h)

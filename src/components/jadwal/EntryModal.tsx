@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
+import { useEffect, useState } from "react";
 import { useTones } from "../../hooks/useTones";
+import { Button } from "../ui/Button";
+import { Modal } from "../ui/Modal";
 
 interface Entry {
   waktu: string;
@@ -27,7 +27,7 @@ export function EntryModal({
 }: EntryModalProps) {
   const [waktu, setWaktu] = useState("");
   const [selectedFilename, setSelectedFilename] = useState("");
-  const { data: tonesData } = useTones(1, 100);
+  const { data: tonesData } = useTones(1, 500);
 
   useEffect(() => {
     if (!open) return;

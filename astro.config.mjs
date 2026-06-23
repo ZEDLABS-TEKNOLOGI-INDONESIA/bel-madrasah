@@ -1,11 +1,14 @@
-import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "astro/config";
 
 const BACKEND_URL = process.env.BEL_BACKEND_URL ?? "http://localhost:8082";
 
 export default defineConfig({
   integrations: [react()],
+  build: {
+    format: "file",
+  },
   vite: {
     plugins: [tailwindcss()],
     server: {

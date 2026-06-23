@@ -7,20 +7,31 @@ import (
 )
 
 func trustedOrigins() []string {
+	scheme := "http"
+	if os.Getenv("BEL_TLS") == "1" {
+		scheme = "https"
+	}
+
 	if v := os.Getenv("BEL_ORIGINS"); v != "" {
 		var origins []string
 		for _, o := range strings.Split(v, ",") {
 			o = strings.TrimSpace(o)
-			if o != "" {
-				origins = append(origins, o)
+			if o == "" {
+				continue
 			}
+			if !strings.Contains(o, "://") {
+				o = scheme + "://" + o
+			}
+			origins = append(origins, o)
 		}
 		return origins
 	}
+
 	return []string{
-		"http://localhost:4321",
-		"http://localhost:3000",
-		"http://127.0.0.1:4321",
+		scheme + "://localhost:4321",
+		scheme + "://localhost:3000",
+		scheme + "://127.0.0.1:4321",
+		scheme + "://0.0.0.0:4321",
 	}
 }
 
