@@ -165,7 +165,7 @@ Mode valid: `reguler` `ramadhan` `pts` `pas` `pesantren` `lainnya`
 {
   "message": "memutar sholawat.mp3",
   "filename": "sholawat.mp3",
-  "url": "/api/tones/file/sholawat.mp3"
+  "url": "/api/tones/sholawat.mp3"
 }
 ```
 
@@ -206,10 +206,10 @@ Mode valid: `reguler` `ramadhan` `pts` `pas` `pesantren` `lainnya`
 }
 ```
 
-### GET `/api/tones/file/{filename}`
+### GET `/api/tones/{filename}`
 Serve file audio ke browser untuk diputar langsung.
 ```
-GET /api/tones/file/sholawat.mp3
+GET /api/tones/sholawat.mp3
 Content-Type: audio/mpeg
 ```
 Gunakan URL ini sebagai `src` pada `<audio>` element di FE.
@@ -240,7 +240,7 @@ field: file — .mp3 / .wav / .ogg, maks 32MB
 {
   "message": "memutar sholawat.mp3",
   "filename": "sholawat.mp3",
-  "url": "/api/tones/file/sholawat.mp3"
+  "url": "/api/tones/sholawat.mp3"
 }
 ```
 

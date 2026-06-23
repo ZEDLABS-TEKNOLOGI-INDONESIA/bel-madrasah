@@ -10,6 +10,7 @@ EXCLUDE_DIRS=(
   ".cache"
   "data"
   "tone"
+  "public"
   "node_modules"
   ".pnpm"
   "dist"
@@ -35,6 +36,13 @@ EXCLUDE_FILES=(
   "CHANGELOG.md"
   "CLAUDE.md"
   "AGENTS.md"
+  "go.sum"
+  "go.mod"
+  "pwa.go"
+  "storage.go"
+  "main.go"
+  "middleware.go"
+  "auth.go"
 )
 
 # Ekstensi biner yang dikecualikan

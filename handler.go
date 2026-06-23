@@ -43,7 +43,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/tones/delete", requireAuth(handleTonesDelete))
 	mux.HandleFunc("/api/tones/preview", requireAuth(handleTonesPreview))
 	mux.HandleFunc("/api/tones/stop", requireAuth(handleTonesStop))
-	mux.HandleFunc("/api/tones/file/", requireAuth(handleTonesFile))
+	mux.HandleFunc("/api/tones/", requireAuth(handleTonesFile))
 
 	mux.HandleFunc("/api/config", requireAuth(handleConfig))
 	mux.HandleFunc("/api/volume", requireAuth(handleVolume))
@@ -384,7 +384,7 @@ func handleLiburNasional(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := "https://api-harilibur.vercel.app/api?year=" + year
+	url := "https://libur.deno.dev/api?year=" + year
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -604,7 +604,7 @@ func handleJadwalEntry(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]string{
 			"message":  "memutar " + name,
 			"filename": name,
-			"url":      "/api/tones/file/" + name,
+			"url":      "/api/tones/" + name,
 		})
 		return
 
@@ -682,7 +682,7 @@ func handleTonesFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := strings.TrimPrefix(r.URL.Path, "/api/tones/file/")
+	name := strings.TrimPrefix(r.URL.Path, "/api/tones/")
 	filename, ok := safeFilename(name)
 	if !ok {
 		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
@@ -819,7 +819,7 @@ func handleTonesPreview(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{
 		"message":  "memutar " + filename,
 		"filename": filename,
-		"url":      "/api/tones/file/" + filename,
+		"url":      "/api/tones/" + filename,
 	})
 }
 
