@@ -1,5 +1,5 @@
-import React, { lazy, Suspense } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import React, { lazy, Suspense } from "react";
 import { Toaster } from "react-hot-toast";
 import { queryClient } from "../lib/queryClient";
 import { Shell } from "./layout/Shell";
@@ -30,8 +30,12 @@ const PAGE_MAP: Record<Page, React.ReactNode> = {
 
 export default function App({ page }: { page: Page }) {
   React.useEffect(() => {
-    if ("serviceWorker" in navigator) {
+    if (import.meta.env.PROD && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js");
+    } else if (import.meta.env.DEV && "serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => reg.unregister());
+      });
     }
   }, []);
 
