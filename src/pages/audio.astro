@@ -1,6 +1,6 @@
 ---
 import "../styles/global.css";
-import { LoginPage } from "../components/auth/LoginPage";
+import App from "../components/App";
 ---
 
 <!doctype html>
@@ -12,9 +12,9 @@ import { LoginPage } from "../components/auth/LoginPage";
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0969da" />
     <link rel="manifest" href="/manifest.json" />
-    <title>Login — Bel Madrasah</title>
+    <title>Audio — Bel Madrasah</title>
   </head>
   <body>
-    <LoginPage client:only="react" />
+    <App page="audio" client:only="react" />
   </body>
 </html>
