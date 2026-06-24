@@ -1886,9 +1886,10 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 ## src/components/App.tsx
 ```tsx
 import { QueryClientProvider } from "@tanstack/react-query";
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";
 import { queryClient } from "../lib/queryClient";
+import { attachListeners, initRouter } from "../lib/router";
 import { Shell } from "./layout/Shell";
 
 const DashboardPage = lazy(() =>
@@ -1906,6 +1907,15 @@ const PengaturanPage = lazy(() =>
 
 type Page = "dashboard" | "jadwal" | "audio" | "libur" | "log" | "settings";
 
+const PATH_TO_PAGE: Record<string, Page> = {
+  "/": "dashboard",
+  "/jadwal": "jadwal",
+  "/audio": "audio",
+  "/libur": "libur",
+  "/log": "log",
+  "/settings": "settings",
+};
+
 const PAGE_MAP: Record<Page, React.ReactNode> = {
   dashboard: <DashboardPage />,
   jadwal: <JadwalPage />,
@@ -1915,8 +1925,10 @@ const PAGE_MAP: Record<Page, React.ReactNode> = {
   settings: <PengaturanPage />,
 };
 
-export default function App({ page }: { page: Page }) {
-  React.useEffect(() => {
+export default function App({ page: initialPage }: { page: Page }) {
+  const [page, setPage] = useState<Page>(initialPage);
+
+  useEffect(() => {
     if (import.meta.env.PROD && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js");
     } else if (import.meta.env.DEV && "serviceWorker" in navigator) {
@@ -1924,7 +1936,24 @@ export default function App({ page }: { page: Page }) {
         regs.forEach((reg) => reg.unregister());
       });
     }
+
+    // Init SPA router
+    initRouter();
+
+    // Listen untuk navigasi
+    const handler = (e: Event) => {
+      const path = (e as CustomEvent<{ path: string }>).detail.path;
+      const nextPage = PATH_TO_PAGE[path];
+      if (nextPage) setPage(nextPage);
+    };
+    window.addEventListener("spa-navigate", handler);
+    return () => window.removeEventListener("spa-navigate", handler);
   }, []);
+
+  // Re-attach listeners setiap render (link baru mungkin muncul)
+  useEffect(() => {
+    attachListeners();
+  });
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -3857,15 +3886,18 @@ export function InstallPrompt() {
 
 ## src/components/layout/Shell.tsx
 ```tsx
-import React, { useState, useEffect } from "react";
-import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
-import { BottomNav } from "./Sidebar";
-import { InstallPrompt } from "./InstallPrompt";
+import React, { useEffect, useState } from "react";
 import { initTheme } from "../../lib/theme";
+import { InstallPrompt } from "./InstallPrompt";
+import { BottomNav, Sidebar } from "./Sidebar";
+import { TopBar } from "./TopBar";
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => {
+    if (typeof localStorage === "undefined") return true;
+    const stored = localStorage.getItem("sidebar-expanded");
+    return stored === null ? true : stored === "true";
+  });
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -3877,9 +3909,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  function handleToggle() {
+    const next = !expanded;
+    setExpanded(next);
+    localStorage.setItem("sidebar-expanded", String(next));
+  }
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
-      {!isMobile && <Sidebar expanded={expanded} onToggle={() => setExpanded((v) => !v)} />}
+      {!isMobile && <Sidebar expanded={expanded} onToggle={handleToggle} />}
       <div
         style={{
           flex: 1,
@@ -3890,7 +3928,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           transition: "margin-left 0.25s",
         }}
       >
-        <TopBar onMenuToggle={() => setExpanded((v) => !v)} isMobile={isMobile} />
+        <TopBar isMobile={isMobile} />
         <main
           style={{
             flex: 1,
@@ -3912,15 +3950,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
 ## src/components/layout/Sidebar.tsx
 ```tsx
-import React from "react";
 import {
-  LayoutDashboard,
   CalendarDays,
-  Music2,
   CalendarOff,
+  ChevronRight,
+  LayoutDashboard,
+  Music2,
   ScrollText,
   Settings2,
-  ChevronRight,
 } from "lucide-react";
 
 const navItems = [
@@ -3964,6 +4001,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         overflow: "hidden",
       }}
     >
+      {/* Logo */}
       <div
         style={{
           height: 56,
@@ -3973,6 +4011,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
           gap: 10,
           borderBottom: "1px solid var(--border)",
           flexShrink: 0,
+          overflow: "hidden",
         }}
       >
         <div
@@ -3989,15 +4028,21 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         >
           <Music2 size={16} color="#fff" />
         </div>
-        {expanded && (
-          <span
-            style={{ fontWeight: 700, fontSize: 14, whiteSpace: "nowrap", color: "var(--text)" }}
-          >
-            Bel Madrasah
-          </span>
-        )}
+        <span
+          style={{
+            fontWeight: 700,
+            fontSize: 14,
+            whiteSpace: "nowrap",
+            color: "var(--text)",
+            opacity: expanded ? 1 : 0,
+            transition: "opacity 0.2s",
+          }}
+        >
+          Bel Madrasah
+        </span>
       </div>
 
+      {/* Nav */}
       <nav style={{ flex: 1, padding: "8px 0", display: "flex", flexDirection: "column", gap: 2 }}>
         {navItems.map(({ label, href, icon: Icon }) => {
           const active = isActive(href);
@@ -4023,12 +4068,20 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
               }}
             >
               <Icon size={18} style={{ flexShrink: 0 }} />
-              {expanded && label}
+              <span
+                style={{
+                  opacity: expanded ? 1 : 0,
+                  transition: "opacity 0.2s",
+                }}
+              >
+                {label}
+              </span>
             </a>
           );
         })}
       </nav>
 
+      {/* Toggle button */}
       <button
         onClick={onToggle}
         style={{
@@ -4041,11 +4094,15 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
           borderTop: "1px solid var(--border)",
           cursor: "pointer",
           color: "var(--text-muted)",
+          transition: "justify-content 0.25s",
         }}
       >
         <ChevronRight
           size={16}
-          style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.25s" }}
+          style={{
+            transform: expanded ? "rotate(180deg)" : "none",
+            transition: "transform 0.25s",
+          }}
         />
       </button>
     </div>
@@ -4101,16 +4158,15 @@ export function BottomNav() {
 
 ## src/components/layout/TopBar.tsx
 ```tsx
-import React, { useEffect, useState } from "react";
-import { Sun, Moon, Menu } from "lucide-react";
+import { Moon, Music2, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
 import { getTheme, toggleTheme } from "../../lib/theme";
 
 interface TopBarProps {
-  onMenuToggle: () => void;
   isMobile: boolean;
 }
 
-export function TopBar({ onMenuToggle, isMobile }: TopBarProps) {
+export function TopBar({ isMobile }: TopBarProps) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [title, setTitle] = useState("Dashboard");
 
@@ -4153,22 +4209,24 @@ export function TopBar({ onMenuToggle, isMobile }: TopBarProps) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {isMobile && (
-          <button
-            onClick={onMenuToggle}
+          <div
             style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "var(--text-muted)",
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: "var(--accent)",
               display: "flex",
-              padding: 4,
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
             }}
           >
-            <Menu size={20} />
-          </button>
+            <Music2 size={16} color="#fff" />
+          </div>
         )}
         <span style={{ fontWeight: 600, fontSize: 15 }}>{title}</span>
       </div>
+
       <button
         onClick={handleToggle}
         style={{
@@ -6062,6 +6120,116 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+```
+---
+
+## src/lib/router.ts
+```ts
+// src/lib/router.ts
+// SPA navigation: intercept <a> clicks, fetch page HTML, swap <body> content
+
+const pageCache = new Map<string, string>(); // in-memory cache
+
+const PAGE_MAP: Record<string, string> = {
+  "/": "dashboard",
+  "/jadwal": "jadwal",
+  "/audio": "audio",
+  "/libur": "libur",
+  "/log": "log",
+  "/settings": "settings",
+};
+
+async function fetchPage(url: string): Promise<string | null> {
+  if (pageCache.has(url)) return pageCache.get(url)!;
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return null;
+    }
+    if (!res.ok) return null;
+    const html = await res.text();
+    pageCache.set(url, html);
+    return html;
+  } catch {
+    return null;
+  }
+}
+
+function extractTitle(html: string): string {
+  const match = html.match(/<title>([^<]*)<\/title>/i);
+  return match ? match[1] : "Bel Madrasah";
+}
+
+let isNavigating = false;
+
+async function navigate(path: string, pushState = true) {
+  if (isNavigating || window.location.pathname === path) return;
+  isNavigating = true;
+
+  try {
+    const html = await fetchPage(path);
+    if (!html) {
+      window.location.href = path;
+      return;
+    }
+
+    if (pushState) {
+      window.history.pushState({}, "", path);
+    }
+
+    document.title = extractTitle(html);
+
+    // Dispatch custom event — App.tsx listen dan ganti page prop
+    window.dispatchEvent(new CustomEvent("spa-navigate", { detail: { path } }));
+
+    // Re-attach SPA listeners setelah React re-render
+    setTimeout(attachListeners, 50);
+  } finally {
+    isNavigating = false;
+  }
+}
+
+function prefetch(path: string) {
+  if (!pageCache.has(path) && PAGE_MAP[path]) {
+    fetchPage(path);
+  }
+}
+
+export function attachListeners() {
+  document.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
+    const href = a.getAttribute("href") ?? "";
+    if (!PAGE_MAP[href]) return;
+    if (a.dataset.spa === "1") return;
+    a.dataset.spa = "1";
+
+    // Prefetch on hover
+    a.addEventListener("mouseenter", () => prefetch(href), { once: true });
+
+    // Navigate on click
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      navigate(href);
+    });
+  });
+}
+
+export function initRouter() {
+  // Handle browser back/forward
+  window.addEventListener("popstate", () => {
+    navigate(window.location.pathname, false);
+  });
+
+  // Prefetch all known pages on idle
+  if ("requestIdleCallback" in window) {
+    requestIdleCallback(() => {
+      Object.keys(PAGE_MAP).forEach(prefetch);
+    });
+  }
+
+  attachListeners();
+}
 
 ```
 ---
