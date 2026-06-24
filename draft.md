@@ -4802,15 +4802,15 @@ export function LogPage() {
 
 ## src/components/pengaturan/PengaturanPage.tsx
 ```tsx
-import React, { useState, useEffect, useRef } from "react";
-import { Shield, Download, Upload, Activity, RefreshCw } from "lucide-react";
-import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
-import { Slider } from "../ui/Slider";
-import { Badge } from "../ui/Badge";
-import { useVolume, useUpdateVolume, useServiceStatus } from "../../hooks/useConfig";
-import { api } from "../../lib/api";
+import { Activity, Download, RefreshCw, Shield, Upload } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { useServiceStatus, useUpdateVolume, useVolume } from "../../hooks/useConfig";
+import { api } from "../../lib/api";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { Slider } from "../ui/Slider";
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -5204,11 +5204,21 @@ function InfoSection() {
 
 export function PengaturanPage() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 640 }}>
-      <VolumeSection />
-      <PasswordSection />
-      <BackupSection />
-      <InfoSection />
+    <div className="grid grid-cols-12 gap-4">
+      <div
+        className="col-span-12 md:col-span-6"
+        style={{ display: "flex", flexDirection: "column", gap: 16 }}
+      >
+        <VolumeSection />
+        <PasswordSection />
+      </div>
+      <div
+        className="col-span-12 md:col-span-6"
+        style={{ display: "flex", flexDirection: "column", gap: 16 }}
+      >
+        <BackupSection />
+        <InfoSection />
+      </div>
     </div>
   );
 }
