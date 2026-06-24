@@ -1,12 +1,11 @@
-import React from "react";
 import {
-  LayoutDashboard,
   CalendarDays,
-  Music2,
   CalendarOff,
+  ChevronRight,
+  LayoutDashboard,
+  Music2,
   ScrollText,
   Settings2,
-  ChevronRight,
 } from "lucide-react";
 
 const navItems = [
@@ -50,6 +49,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         overflow: "hidden",
       }}
     >
+      {/* Logo */}
       <div
         style={{
           height: 56,
@@ -59,6 +59,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
           gap: 10,
           borderBottom: "1px solid var(--border)",
           flexShrink: 0,
+          overflow: "hidden",
         }}
       >
         <div
@@ -75,15 +76,21 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         >
           <Music2 size={16} color="#fff" />
         </div>
-        {expanded && (
-          <span
-            style={{ fontWeight: 700, fontSize: 14, whiteSpace: "nowrap", color: "var(--text)" }}
-          >
-            Bel Madrasah
-          </span>
-        )}
+        <span
+          style={{
+            fontWeight: 700,
+            fontSize: 14,
+            whiteSpace: "nowrap",
+            color: "var(--text)",
+            opacity: expanded ? 1 : 0,
+            transition: "opacity 0.2s",
+          }}
+        >
+          Bel Madrasah
+        </span>
       </div>
 
+      {/* Nav */}
       <nav style={{ flex: 1, padding: "8px 0", display: "flex", flexDirection: "column", gap: 2 }}>
         {navItems.map(({ label, href, icon: Icon }) => {
           const active = isActive(href);
@@ -109,12 +116,20 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
               }}
             >
               <Icon size={18} style={{ flexShrink: 0 }} />
-              {expanded && label}
+              <span
+                style={{
+                  opacity: expanded ? 1 : 0,
+                  transition: "opacity 0.2s",
+                }}
+              >
+                {label}
+              </span>
             </a>
           );
         })}
       </nav>
 
+      {/* Toggle button */}
       <button
         onClick={onToggle}
         style={{
@@ -127,11 +142,15 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
           borderTop: "1px solid var(--border)",
           cursor: "pointer",
           color: "var(--text-muted)",
+          transition: "justify-content 0.25s",
         }}
       >
         <ChevronRight
           size={16}
-          style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.25s" }}
+          style={{
+            transform: expanded ? "rotate(180deg)" : "none",
+            transition: "transform 0.25s",
+          }}
         />
       </button>
     </div>

@@ -1,7 +1,8 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";
 import { queryClient } from "../lib/queryClient";
+import { attachListeners, initRouter } from "../lib/router";
 import { Shell } from "./layout/Shell";
 
 const DashboardPage = lazy(() =>
@@ -19,6 +20,15 @@ const PengaturanPage = lazy(() =>
 
 type Page = "dashboard" | "jadwal" | "audio" | "libur" | "log" | "settings";
 
+const PATH_TO_PAGE: Record<string, Page> = {
+  "/": "dashboard",
+  "/jadwal": "jadwal",
+  "/audio": "audio",
+  "/libur": "libur",
+  "/log": "log",
+  "/settings": "settings",
+};
+
 const PAGE_MAP: Record<Page, React.ReactNode> = {
   dashboard: <DashboardPage />,
   jadwal: <JadwalPage />,
@@ -28,8 +38,10 @@ const PAGE_MAP: Record<Page, React.ReactNode> = {
   settings: <PengaturanPage />,
 };
 
-export default function App({ page }: { page: Page }) {
-  React.useEffect(() => {
+export default function App({ page: initialPage }: { page: Page }) {
+  const [page, setPage] = useState<Page>(initialPage);
+
+  useEffect(() => {
     if (import.meta.env.PROD && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js");
     } else if (import.meta.env.DEV && "serviceWorker" in navigator) {
@@ -37,7 +49,24 @@ export default function App({ page }: { page: Page }) {
         regs.forEach((reg) => reg.unregister());
       });
     }
+
+    // Init SPA router
+    initRouter();
+
+    // Listen untuk navigasi
+    const handler = (e: Event) => {
+      const path = (e as CustomEvent<{ path: string }>).detail.path;
+      const nextPage = PATH_TO_PAGE[path];
+      if (nextPage) setPage(nextPage);
+    };
+    window.addEventListener("spa-navigate", handler);
+    return () => window.removeEventListener("spa-navigate", handler);
   }, []);
+
+  // Re-attach listeners setiap render (link baru mungkin muncul)
+  useEffect(() => {
+    attachListeners();
+  });
 
   return (
     <QueryClientProvider client={queryClient}>
