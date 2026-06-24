@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	port      = ":8082"
 	toneDir   = "/opt/bel-madrasah/tone"
 	dataDir   = "/opt/bel-madrasah/data"
 	staticDir = "/opt/bel-madrasah/static"
@@ -332,7 +331,12 @@ func main() {
 
 	allowedOrigins := trustedOrigins()
 	handler := corsMiddleware(allowedOrigins, maxBodyMiddleware(mux))
-
+	port := os.Getenv("BEL_PORT")
+	if port == "" {
+		port = ":8082"
+	} else if port[0] != ':' {
+		port = ":" + port
+	}
 	srv := &http.Server{
 		Addr:              port,
 		Handler:           handler,
