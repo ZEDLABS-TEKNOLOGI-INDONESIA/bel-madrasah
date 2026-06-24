@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from "react";
-import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
-import { BottomNav } from "./Sidebar";
-import { InstallPrompt } from "./InstallPrompt";
+import React, { useEffect, useState } from "react";
 import { initTheme } from "../../lib/theme";
+import { InstallPrompt } from "./InstallPrompt";
+import { BottomNav, Sidebar } from "./Sidebar";
+import { TopBar } from "./TopBar";
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => {
+    if (typeof localStorage === "undefined") return true;
+    const stored = localStorage.getItem("sidebar-expanded");
+    return stored === null ? true : stored === "true";
+  });
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -18,9 +21,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  function handleToggle() {
+    const next = !expanded;
+    setExpanded(next);
+    localStorage.setItem("sidebar-expanded", String(next));
+  }
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
-      {!isMobile && <Sidebar expanded={expanded} onToggle={() => setExpanded((v) => !v)} />}
+      {!isMobile && <Sidebar expanded={expanded} onToggle={handleToggle} />}
       <div
         style={{
           flex: 1,
@@ -31,7 +40,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           transition: "margin-left 0.25s",
         }}
       >
-        <TopBar onMenuToggle={() => setExpanded((v) => !v)} isMobile={isMobile} />
+        <TopBar isMobile={isMobile} />
         <main
           style={{
             flex: 1,

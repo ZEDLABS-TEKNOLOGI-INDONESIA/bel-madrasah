@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { Sun, Moon, Menu } from "lucide-react";
+import { Moon, Music2, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
 import { getTheme, toggleTheme } from "../../lib/theme";
 
 interface TopBarProps {
-  onMenuToggle: () => void;
   isMobile: boolean;
 }
 
-export function TopBar({ onMenuToggle, isMobile }: TopBarProps) {
+export function TopBar({ isMobile }: TopBarProps) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [title, setTitle] = useState("Dashboard");
 
@@ -50,22 +49,24 @@ export function TopBar({ onMenuToggle, isMobile }: TopBarProps) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {isMobile && (
-          <button
-            onClick={onMenuToggle}
+          <div
             style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "var(--text-muted)",
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: "var(--accent)",
               display: "flex",
-              padding: 4,
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
             }}
           >
-            <Menu size={20} />
-          </button>
+            <Music2 size={16} color="#fff" />
+          </div>
         )}
         <span style={{ fontWeight: 600, fontSize: 15 }}>{title}</span>
       </div>
+
       <button
         onClick={handleToggle}
         style={{
