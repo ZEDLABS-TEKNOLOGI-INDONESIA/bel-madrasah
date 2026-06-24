@@ -1856,6 +1856,12 @@ func maxBodyMiddleware(next http.Handler) http.Handler {
 ```yaml
 packages:
   - "."
+allowBuilds:
+  esbuild: true
+  sharp: true
+minimumReleaseAgeExclude:
+  - '@astrojs/markdown-satteri@0.3.2'
+  - astro@7.0.2
 
 ```
 ---
@@ -6126,9 +6132,6 @@ export const queryClient = new QueryClient({
 
 ## src/lib/router.ts
 ```ts
-// src/lib/router.ts
-// SPA navigation: intercept <a> clicks, fetch page HTML, swap <body> content
-
 const pageCache = new Map<string, string>(); // in-memory cache
 
 const PAGE_MAP: Record<string, string> = {
