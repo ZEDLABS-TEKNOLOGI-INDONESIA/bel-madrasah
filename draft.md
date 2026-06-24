@@ -1445,7 +1445,7 @@ func alsaDevice() string {
 
 func volumeString() string {
 	cfg, err := loadConfig()
-	if err != nil || cfg.Volume == 0 {
+	if err != nil {
 		return "0.85"
 	}
 	return fmt.Sprintf("%.2f", cfg.Volume)
