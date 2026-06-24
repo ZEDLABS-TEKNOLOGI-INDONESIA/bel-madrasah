@@ -316,7 +316,6 @@ func handleVolume(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		logMsg(fmt.Sprintf("volume diubah: %.2f", body.Volume))
-		go setLiveVolume(body.Volume)
 		jsonOK(w, map[string]string{"message": "volume berhasil disimpan"})
 
 	default:
