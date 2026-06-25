@@ -7,9 +7,11 @@ import {
   ScrollText,
   Settings2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 
-const ITEMS = [
+type NavItem = { label: string; href: string; Icon: React.ElementType };
+
+const ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/", Icon: LayoutDashboard },
   { label: "Jadwal", href: "/jadwal", Icon: CalendarDays },
   { label: "Audio", href: "/audio", Icon: Music2 },
@@ -28,11 +30,83 @@ function useCurrentPath() {
   return path;
 }
 
-function active(href: string, cur: string) {
+function isActive(href: string, cur: string) {
   return href === "/" ? cur === "/" : cur.startsWith(href);
 }
 
-export function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+function spaGo(href: string) {
+  if (window.location.pathname === href) return;
+  window.dispatchEvent(new CustomEvent("spa-do-navigate", { detail: { path: href } }));
+}
+
+function SidebarLink(props: { item: NavItem; cur: string; expanded: boolean }) {
+  const label = props.item.label;
+  const href = props.item.href;
+  const Icon = props.item.Icon;
+  const on = isActive(href, props.cur);
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        spaGo(href);
+      }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 16px",
+        margin: "0 6px",
+        borderRadius: "var(--radius)",
+        color: on ? "var(--accent)" : "var(--text-muted)",
+        background: on ? "rgba(9,105,218,0.08)" : "transparent",
+        textDecoration: "none",
+        fontWeight: on ? 600 : 400,
+        fontSize: 13,
+        transition: "background 0.15s, color 0.15s",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+      }}
+    >
+      <Icon size={18} style={{ flexShrink: 0 }} />
+      <span style={{ opacity: props.expanded ? 1 : 0, transition: "opacity 0.2s" }}>{label}</span>
+    </a>
+  );
+}
+
+function BottomLink(props: { item: NavItem; cur: string }) {
+  const label = props.item.label;
+  const href = props.item.href;
+  const Icon = props.item.Icon;
+  const on = isActive(href, props.cur);
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        spaGo(href);
+      }}
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "8px 0",
+        gap: 3,
+        textDecoration: "none",
+        color: on ? "var(--accent)" : "var(--text-muted)",
+        fontSize: 10,
+        fontWeight: on ? 600 : 400,
+        transition: "color 0.15s",
+      }}
+    >
+      <Icon size={20} />
+      {label}
+    </a>
+  );
+}
+
+export function Sidebar(props: { expanded: boolean; onToggle: () => void }) {
   const cur = useCurrentPath();
   return (
     <div
@@ -42,7 +116,7 @@ export function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: (
         left: 0,
         bottom: 0,
         zIndex: 100,
-        width: expanded ? 220 : 64,
+        width: props.expanded ? 220 : 64,
         background: "var(--card-gloss), var(--card-bg)",
         backdropFilter: "var(--glass-blur)",
         WebkitBackdropFilter: "var(--glass-blur)",
@@ -85,7 +159,7 @@ export function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: (
             fontSize: 14,
             whiteSpace: "nowrap",
             color: "var(--text)",
-            opacity: expanded ? 1 : 0,
+            opacity: props.expanded ? 1 : 0,
             transition: "opacity 0.2s",
           }}
         >
@@ -93,41 +167,16 @@ export function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: (
         </span>
       </div>
       <nav style={{ flex: 1, padding: "8px 0", display: "flex", flexDirection: "column", gap: 2 }}>
-        {ITEMS.map(({ label, href, Icon }) => {
-          const isActive = active(href, cur);
-          return (
-            <a
-              key={href}
-              href={href}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 16px",
-                margin: "0 6px",
-                borderRadius: "var(--radius)",
-                color: isActive ? "var(--accent)" : "var(--text-muted)",
-                background: isActive ? "rgba(9,105,218,0.08)" : "transparent",
-                textDecoration: "none",
-                fontWeight: isActive ? 600 : 400,
-                fontSize: 13,
-                transition: "background 0.15s, color 0.15s",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-              }}
-            >
-              <Icon size={18} style={{ flexShrink: 0 }} />
-              <span style={{ opacity: expanded ? 1 : 0, transition: "opacity 0.2s" }}>{label}</span>
-            </a>
-          );
-        })}
+        {ITEMS.map((item) => (
+          <SidebarLink key={item.href} item={item} cur={cur} expanded={props.expanded} />
+        ))}
       </nav>
       <button
-        onClick={onToggle}
+        onClick={props.onToggle}
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: expanded ? "flex-end" : "center",
+          justifyContent: props.expanded ? "flex-end" : "center",
           padding: "12px 16px",
           background: "none",
           border: "none",
@@ -139,7 +188,10 @@ export function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: (
       >
         <ChevronRight
           size={16}
-          style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.25s" }}
+          style={{
+            transform: props.expanded ? "rotate(180deg)" : "none",
+            transition: "transform 0.25s",
+          }}
         />
       </button>
     </div>
@@ -164,31 +216,9 @@ export function BottomNav() {
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      {ITEMS.map(({ label, href, Icon }) => {
-        const isActive = active(href, cur);
-        return (
-          <a
-            key={href}
-            href={href}
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "8px 0",
-              gap: 3,
-              textDecoration: "none",
-              color: isActive ? "var(--accent)" : "var(--text-muted)",
-              fontSize: 10,
-              fontWeight: isActive ? 600 : 400,
-              transition: "color 0.15s",
-            }}
-          >
-            <Icon size={20} />
-            {label}
-          </a>
-        );
-      })}
+      {ITEMS.map((item) => (
+        <BottomLink key={item.href} item={item} cur={cur} />
+      ))}
     </div>
   );
 }
