@@ -7,6 +7,7 @@ import {
   ScrollText,
   Settings2,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -17,11 +18,25 @@ const navItems = [
   { label: "Pengaturan", href: "/settings", icon: Settings2 },
 ];
 
-function isActive(href: string) {
-  if (typeof window === "undefined") return false;
-  return href === "/"
-    ? window.location.pathname === "/"
-    : window.location.pathname.startsWith(href);
+function useCurrentPath() {
+  const [path, setPath] = useState(
+    typeof window !== "undefined" ? window.location.pathname : "/"
+  );
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ path: string }>).detail;
+      setPath(detail.path);
+    };
+    window.addEventListener("spa-navigate", handler);
+    return () => window.removeEventListener("spa-navigate", handler);
+  }, []);
+
+  return path;
+}
+
+function isActive(href: string, currentPath: string) {
+  return href === "/" ? currentPath === "/" : currentPath.startsWith(href);
 }
 
 interface SidebarProps {
@@ -30,6 +45,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ expanded, onToggle }: SidebarProps) {
+  const currentPath = useCurrentPath();
+
   return (
     <div
       style={{
@@ -49,7 +66,6 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         overflow: "hidden",
       }}
     >
-      {/* Logo */}
       <div
         style={{
           height: 56,
@@ -90,12 +106,11 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         </span>
       </div>
 
-      {/* Nav */}
       <nav style={{ flex: 1, padding: "8px 0", display: "flex", flexDirection: "column", gap: 2 }}>
         {navItems.map(({ label, href, icon: Icon }) => {
-          const active = isActive(href);
+          const active = isActive(href, currentPath);
           return (
-            <a
+
               key={href}
               href={href}
               style={{
@@ -129,7 +144,6 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         })}
       </nav>
 
-      {/* Toggle button */}
       <button
         onClick={onToggle}
         style={{
@@ -158,6 +172,8 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
 }
 
 export function BottomNav() {
+  const currentPath = useCurrentPath();
+
   return (
     <div
       style={{
@@ -171,12 +187,13 @@ export function BottomNav() {
         WebkitBackdropFilter: "var(--glass-blur)",
         borderTop: "1px solid var(--border)",
         display: "flex",
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       {navItems.map(({ label, href, icon: Icon }) => {
-        const active = isActive(href);
+        const active = isActive(href, currentPath);
         return (
-          <a
+
             key={href}
             href={href}
             style={{
@@ -190,6 +207,7 @@ export function BottomNav() {
               color: active ? "var(--accent)" : "var(--text-muted)",
               fontSize: 10,
               fontWeight: active ? 600 : 400,
+              transition: "color 0.15s",
             }}
           >
             <Icon size={20} />

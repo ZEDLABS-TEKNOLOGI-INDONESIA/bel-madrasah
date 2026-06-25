@@ -2,26 +2,37 @@ import { Moon, Music2, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getTheme, toggleTheme } from "../../lib/theme";
 
+const PATH_TITLE: Record<string, string> = {
+  "/": "Dashboard",
+  "/jadwal": "Jadwal",
+  "/audio": "Audio",
+  "/libur": "Hari Libur",
+  "/log": "Log Aktivitas",
+  "/settings": "Pengaturan",
+};
+
 interface TopBarProps {
   isMobile: boolean;
 }
 
 export function TopBar({ isMobile }: TopBarProps) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [title, setTitle] = useState("Dashboard");
+  const [title, setTitle] = useState(() => {
+    if (typeof window === "undefined") return "Dashboard";
+    return PATH_TITLE[window.location.pathname] ?? "Bel Madrasah";
+  });
 
   useEffect(() => {
     setTheme(getTheme());
-    const path = window.location.pathname;
-    const map: Record<string, string> = {
-      "/": "Dashboard",
-      "/jadwal": "Jadwal",
-      "/audio": "Audio",
-      "/libur": "Hari Libur",
-      "/log": "Log Aktivitas",
-      "/settings": "Pengaturan",
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const path = (e as CustomEvent<{ path: string }>).detail.path;
+      setTitle(PATH_TITLE[path] ?? "Bel Madrasah");
     };
-    setTitle(map[path] ?? "Bel Madrasah");
+    window.addEventListener("spa-navigate", handler);
+    return () => window.removeEventListener("spa-navigate", handler);
   }, []);
 
   function handleToggle() {

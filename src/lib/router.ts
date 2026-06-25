@@ -52,7 +52,9 @@ async function navigate(path: string, pushState = true) {
 
     window.dispatchEvent(new CustomEvent("spa-navigate", { detail: { path } }));
 
-    setTimeout(attachListeners, 50);
+    requestAnimationFrame(() => {
+      attachListeners();
+    });
   } finally {
     isNavigating = false;
   }
@@ -72,6 +74,7 @@ export function attachListeners() {
     a.dataset.spa = "1";
 
     a.addEventListener("mouseenter", () => prefetch(href), { once: true });
+    a.addEventListener("touchstart", () => prefetch(href), { once: true, passive: true });
 
     a.addEventListener("click", (e) => {
       e.preventDefault();
@@ -89,6 +92,10 @@ export function initRouter() {
     requestIdleCallback(() => {
       Object.keys(PAGE_MAP).forEach(prefetch);
     });
+  } else {
+    setTimeout(() => {
+      Object.keys(PAGE_MAP).forEach(prefetch);
+    }, 500);
   }
 
   attachListeners();

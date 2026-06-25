@@ -1041,7 +1041,6 @@ func handleTonesFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gunakan RawPath jika tersedia agar encoding karakter spesial ditangani dengan benar
 	rawPath := r.URL.RawPath
 	if rawPath == "" {
 		rawPath = r.URL.Path
@@ -1087,28 +1086,21 @@ func safeFilename(name string) (string, bool) {
 	return base, true
 }
 
-// sanitizeFilename membersihkan nama file dari karakter spesial, spasi, dan unicode.
-// Hasil: huruf kecil, hanya alfanumerik dan dash, ekstensi dipertahankan.
 func sanitizeFilename(name string) string {
 	ext := strings.ToLower(filepath.Ext(name))
 	base := strings.TrimSuffix(name, filepath.Ext(name))
 
-	// Lowercase
 	base = strings.ToLower(base)
 
-	// Ganti spasi dan underscore dengan dash
 	base = strings.ReplaceAll(base, " ", "-")
 	base = strings.ReplaceAll(base, "_", "-")
 
-	// Hapus semua karakter selain huruf a-z, angka 0-9, dan dash
 	reg := regexp.MustCompile(`[^a-z0-9\-]`)
 	base = reg.ReplaceAllString(base, "")
 
-	// Hapus dash berulang
 	regDash := regexp.MustCompile(`-+`)
 	base = regDash.ReplaceAllString(base, "-")
 
-	// Trim dash di awal/akhir
 	base = strings.Trim(base, "-")
 
 	if base == "" {
@@ -1117,7 +1109,6 @@ func sanitizeFilename(name string) string {
 	return base + ext
 }
 
-// compressAudio mengompres file audio ke 128kbps menggunakan ffmpeg.
 func compressAudio(src, dst string) error {
 	cmd := exec.Command(ffmpegPath,
 		"-hide_banner", "-loglevel", "error",
@@ -1150,7 +1141,6 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize nama file: hapus spasi, karakter spesial, unicode
 	filename := sanitizeFilename(raw)
 
 	ext := strings.ToLower(filepath.Ext(filename))
@@ -1173,7 +1163,6 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	dst.Close()
 
-	// Kompres otomatis ke 128kbps
 	tmpPath := fullPath + ".tmp.mp3"
 	if err := compressAudio(fullPath, tmpPath); err != nil {
 		logMsg("gagal compress audio (pakai file asli): " + err.Error())
@@ -2017,10 +2006,8 @@ export default function App({ page: initialPage }: { page: Page }) {
       });
     }
 
-    // Init SPA router
     initRouter();
 
-    // Listen untuk navigasi
     const handler = (e: Event) => {
       const path = (e as CustomEvent<{ path: string }>).detail.path;
       const nextPage = PATH_TO_PAGE[path];
@@ -2030,7 +2017,6 @@ export default function App({ page: initialPage }: { page: Page }) {
     return () => window.removeEventListener("spa-navigate", handler);
   }, []);
 
-  // Re-attach listeners setiap render (link baru mungkin muncul)
   useEffect(() => {
     attachListeners();
   });
@@ -2571,16 +2557,31 @@ export function VolumeSlider() {
 
 ## src/components/auth/LoginPage.tsx
 ```tsx
+import { AlertCircle, Music2 } from "lucide-react";
 import React, { useState } from "react";
-import { Music2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { Button } from "../ui/Button";
+
+const shakeStyle = `
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%       { transform: translateX(-6px); }
+  30%       { transform: translateX(6px); }
+  45%       { transform: translateX(-4px); }
+  60%       { transform: translateX(4px); }
+  75%       { transform: translateX(-2px); }
+  90%       { transform: translateX(2px); }
+}
+.shake { animation: shake 0.45s ease; }
+`;
 
 export function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [shaking, setShaking] = useState(false);
+  const [attempts, setAttempts] = useState(0);
 
   React.useEffect(() => {
     document.documentElement.setAttribute(
@@ -2590,6 +2591,15 @@ export function LoginPage() {
     );
   }, []);
 
+  function triggerShake() {
+    setShaking(false);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setShaking(true));
+    });
+    setTimeout(() => setShaking(false), 500);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -2598,113 +2608,153 @@ export function LoginPage() {
       await api.post("/login", { username, password });
       window.location.href = "/";
     } catch (err: any) {
-      setError(err.message);
+      const msg = err.message ?? "Terjadi kesalahan";
+      setError(msg);
+      setAttempts((n) => n + 1);
+      triggerShake();
+
+      setPassword("");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--bg)",
-        padding: 16,
-      }}
-    >
+    <>
+      <style>{shakeStyle}</style>
       <div
         style={{
-          width: "100%",
-          maxWidth: 360,
-          background: "var(--card-gloss), var(--card-bg)",
-          border: "1px solid var(--card-border)",
-          backdropFilter: "var(--glass-blur)",
-          WebkitBackdropFilter: "var(--glass-blur)",
-          boxShadow: "var(--card-shadow)",
-          borderRadius: "var(--radius-xl)",
-          padding: 32,
+          minHeight: "100vh",
           display: "flex",
-          flexDirection: "column",
-          gap: 24,
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--bg)",
+          padding: 16,
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
-              background: "var(--accent)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Music2 size={24} color="#fff" />
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>Bel Madrasah</div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
-              Masuk untuk melanjutkan
-            </div>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-              Username
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-            />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </div>
-
-          {error && (
+        <div
+          className={shaking ? "shake" : ""}
+          style={{
+            width: "100%",
+            maxWidth: 360,
+            background: "var(--card-gloss), var(--card-bg)",
+            border: `1px solid ${error ? "rgba(207,34,46,0.4)" : "var(--card-border)"}`,
+            backdropFilter: "var(--glass-blur)",
+            WebkitBackdropFilter: "var(--glass-blur)",
+            boxShadow: error
+              ? "0 0 0 3px rgba(207,34,46,0.1), var(--card-shadow)"
+              : "var(--card-shadow)",
+            borderRadius: "var(--radius-xl)",
+            padding: 32,
+            display: "flex",
+            flexDirection: "column",
+            gap: 24,
+            transition: "border-color 0.2s, box-shadow 0.2s",
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
             <div
               style={{
-                fontSize: 12,
-                color: "var(--danger)",
-                background: "rgba(207,34,46,0.08)",
-                border: "1px solid rgba(207,34,46,0.2)",
-                borderRadius: "var(--radius)",
-                padding: "8px 12px",
+                width: 48,
+                height: 48,
+                borderRadius: 14,
+                background: "var(--accent)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              {error}
+              <Music2 size={24} color="#fff" />
             </div>
-          )}
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontWeight: 700, fontSize: 18 }}>Bel Madrasah</div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
+                Masuk untuk melanjutkan
+              </div>
+            </div>
+          </div>
 
-          <Button
-            variant="primary"
-            size="lg"
-            loading={loading}
-            style={{ width: "100%", marginTop: 4 }}
+          {/* Form */}
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: "flex", flexDirection: "column", gap: 14 }}
           >
-            Masuk
-          </Button>
-        </form>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
+                Username
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  setError("");
+                }}
+                autoComplete="username"
+                autoFocus
+                required
+                style={error ? { borderColor: "var(--danger)" } : undefined}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError("");
+                }}
+                autoComplete="current-password"
+                required
+                style={error ? { borderColor: "var(--danger)" } : undefined}
+              />
+            </div>
+
+            {/* Error banner */}
+            {error && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  fontSize: 12,
+                  color: "var(--danger)",
+                  background: "rgba(207,34,46,0.08)",
+                  border: "1px solid rgba(207,34,46,0.25)",
+                  borderRadius: "var(--radius)",
+                  padding: "10px 12px",
+                }}
+              >
+                <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>Login gagal</div>
+                  <div>{error}</div>
+                  {attempts >= 3 && (
+                    <div style={{ marginTop: 6, color: "var(--warning)", fontWeight: 500 }}>
+                      Terlalu banyak percobaan gagal. Akun akan dikunci sementara.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <Button
+              variant="primary"
+              size="lg"
+              loading={loading}
+              style={{ width: "100%", marginTop: 4 }}
+            >
+              Masuk
+            </Button>
+          </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -2943,23 +2993,36 @@ export function ModeCard() {
 
 ## src/components/dashboard/NowPlayingCard.tsx
 ```tsx
-import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Square } from "lucide-react";
-import { useServiceStatus } from "../../hooks/useConfig";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { api } from "../../lib/api";
+import { audioManager } from "../../lib/audioManager";
+import { queryClient } from "../../lib/queryClient";
+import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Skeleton } from "../ui/Skeleton";
-import { Button } from "../ui/Button";
-import toast from "react-hot-toast";
 
 export function NowPlayingCard() {
-  const { data, isLoading, refetch } = useServiceStatus();
+  const { data, isLoading } = useQuery({
+    queryKey: ["service-status"],
+    queryFn: () => api.get("/api/service/status"),
+    staleTime: 10_000,
+    refetchInterval: 3_000,
+  });
+
+  const [browserPlaying, setBrowserPlaying] = useState<string | null>(audioManager.playing);
+  useEffect(() => {
+    return audioManager.subscribe(() => setBrowserPlaying(audioManager.playing));
+  }, []);
 
   async function handleStop() {
     try {
       await api.post("/api/tones/stop", {});
       toast.success("Audio dihentikan");
-      refetch();
+      audioManager.stopBrowser();
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -2967,8 +3030,12 @@ export function NowPlayingCard() {
 
   if (isLoading) return <Skeleton height={100} radius="var(--radius-lg)" />;
 
-  const isPlaying = data?.is_playing;
-  const nowPlaying = data?.now_playing;
+  const serverPlaying = data?.is_playing as boolean;
+  const serverFile = data?.now_playing as string;
+  const isPlaying = serverPlaying || !!browserPlaying;
+  const nowPlaying = serverPlaying ? serverFile : browserPlaying;
+
+  const source = serverPlaying ? null : browserPlaying ? "(preview browser)" : null;
 
   return (
     <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -2994,23 +3061,36 @@ export function NowPlayingCard() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <div
-              style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 20, flexShrink: 0 }}
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: 2,
+                height: 20,
+                flexShrink: 0,
+              }}
             >
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="wave-bar" style={{ height: `${8 + i * 2}px` }} />
               ))}
             </div>
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {nowPlaying || "Audio"}
-            </span>
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {nowPlaying || "Audio"}
+              </div>
+              {source && (
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                  {source}
+                </div>
+              )}
+            </div>
           </div>
           <Button variant="danger" size="sm" icon={<Square size={12} />} onClick={handleStop}>
             Stop
@@ -3434,11 +3514,13 @@ export function EntryRow({
 ## src/components/jadwal/HariSection.tsx
 ```tsx
 import { ChevronDown, Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useDayToggle, useJadwalEntry } from "../../hooks/useJadwal";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { api } from "../../lib/api";
+import { audioManager } from "../../lib/audioManager";
+import { queryClient } from "../../lib/queryClient";
 import { Button } from "../ui/Button";
 import { Toggle } from "../ui/Toggle";
 import { EntryModal } from "./EntryModal";
@@ -3469,8 +3551,8 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
   const [open, setOpen] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<{ entry: Entry; index: number } | null>(null);
-  const [playingFile, setPlayingFile] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [playingFile, setPlayingFile] = useState<string | null>(audioManager.playing);
 
   const entryMutation = useJadwalEntry();
   const dayToggle = useDayToggle();
@@ -3478,6 +3560,10 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
   useEffect(() => {
     setOpen(!isMobile);
   }, [isMobile]);
+
+  useEffect(() => {
+    return audioManager.subscribe(() => setPlayingFile(audioManager.playing));
+  }, []);
 
   async function handleSave(entry: Entry) {
     try {
@@ -3518,16 +3604,8 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
         hari,
         index,
       });
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      const a = new Audio(safeAudioUrl(res.url));
-      audioRef.current = a;
-      setPlayingFile(res.filename);
-      a.onended = () => setPlayingFile(null);
-      a.onerror = () => setPlayingFile(null);
-      await a.play();
+      await audioManager.play(res.filename, safeAudioUrl(res.url));
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -3537,11 +3615,8 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
     try {
       await api.post("/api/tones/stop", {});
     } finally {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      setPlayingFile(null);
+      audioManager.stopBrowser();
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     }
   }
 
@@ -4565,10 +4640,11 @@ export function LiburModal({ open, onClose, onSave, loading }: LiburModalProps) 
 
 ## src/components/libur/LiburPage.tsx
 ```tsx
-import { ExternalLink, Plus } from "lucide-react";
+import { Download, ExternalLink, Plus } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useLiburNasional, useMutateLibur } from "../../hooks/useLibur";
+import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { LiburList } from "./LiburList";
@@ -4587,11 +4663,19 @@ function formatDate(dateStr: string) {
 function LiburNasionalPanel() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
+  const [showCuti, setShowCuti] = useState(true);
   const { data, isLoading } = useLiburNasional(year);
   const mutate = useMutateLibur();
+  const [importingAll, setImportingAll] = useState(false);
+  const [importedDates, setImportedDates] = useState<Set<string>>(new Set());
 
   const items: NasionalItem[] = Array.isArray(data) ? data : [];
   const nationals = items.filter((i) => i.is_national_holiday);
+  const cutis = items.filter((i) => !i.is_national_holiday);
+
+  const displayed = showCuti ? items : nationals;
+
+  const toImport = displayed.filter((i) => !importedDates.has(i.date));
 
   async function handleImport(item: NasionalItem) {
     try {
@@ -4600,14 +4684,70 @@ function LiburNasionalPanel() {
         date: item.date,
         keterangan: item.name,
       });
+      setImportedDates((prev) => new Set(prev).add(item.date));
       toast.success(`${item.name} ditambahkan`);
     } catch (e: any) {
-      toast.error(e.message);
+      if (e.message?.includes("sudah ada")) {
+        setImportedDates((prev) => new Set(prev).add(item.date));
+      } else {
+        toast.error(e.message);
+      }
     }
+  }
+
+  async function handleImportAll() {
+    if (toImport.length === 0) return;
+
+    const label = showCuti
+      ? `${toImport.length} hari libur & cuti bersama`
+      : `${toImport.length} hari libur nasional`;
+
+    if (!confirm(`Import semua ${label} tahun ${year}?\nData yang sudah ada akan dilewati.`))
+      return;
+
+    setImportingAll(true);
+    let sukses = 0;
+    let lewati = 0;
+    let gagal = 0;
+    const newImported = new Set(importedDates);
+
+    for (const item of toImport) {
+      try {
+        await mutate.mutateAsync({
+          action: "add",
+          date: item.date,
+          keterangan: item.name,
+        });
+        newImported.add(item.date);
+        sukses++;
+      } catch (e: any) {
+        if (e.message?.includes("sudah ada")) {
+          newImported.add(item.date);
+          lewati++;
+        } else {
+          gagal++;
+        }
+      }
+    }
+
+    setImportedDates(newImported);
+    setImportingAll(false);
+
+    const parts: string[] = [];
+    if (sukses > 0) parts.push(`${sukses} ditambahkan`);
+    if (lewati > 0) parts.push(`${lewati} dilewati`);
+    if (gagal > 0) parts.push(`${gagal} gagal`);
+    toast.success(`Import selesai: ${parts.join(", ")}`);
+  }
+
+  function handleYearChange(y: number) {
+    setYear(y);
+    setImportedDates(new Set());
   }
 
   return (
     <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span
           style={{
@@ -4622,7 +4762,7 @@ function LiburNasionalPanel() {
         </span>
         <select
           value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
+          onChange={(e) => handleYearChange(Number(e.target.value))}
           style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
         >
           {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
@@ -4633,6 +4773,69 @@ function LiburNasionalPanel() {
         </select>
       </div>
 
+      {/* Filter tabs: Semua / Libur Nasional / Cuti Bersama */}
+      {!isLoading && items.length > 0 && (
+        <div style={{ display: "flex", gap: 6 }}>
+          {[
+            { label: "Semua", value: true, count: items.length },
+            { label: "Libur", value: false, count: nationals.length },
+          ].map((tab) => {
+            const active = showCuti === tab.value;
+            return (
+              <button
+                key={tab.label}
+                onClick={() => setShowCuti(tab.value)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 10px",
+                  borderRadius: 99,
+                  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  background: active ? "rgba(9,105,218,0.1)" : "var(--bg-secondary)",
+                  color: active ? "var(--accent)" : "var(--text-muted)",
+                  fontSize: 12,
+                  fontWeight: active ? 600 : 400,
+                  fontFamily: "var(--font)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {tab.label}
+                <span
+                  style={{
+                    background: active ? "var(--accent)" : "var(--bg-tertiary)",
+                    color: active ? "#fff" : "var(--text-muted)",
+                    borderRadius: 99,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    padding: "1px 6px",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+          {/* Badge info jumlah cuti */}
+          {cutis.length > 0 && (
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                fontSize: 11,
+                color: "var(--text-muted)",
+                marginLeft: 2,
+              }}
+            >
+              ({cutis.length} cuti bersama)
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Loading skeleton */}
       {isLoading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[1, 2, 3].map((i) => (
@@ -4648,7 +4851,7 @@ function LiburNasionalPanel() {
             />
           ))}
         </div>
-      ) : nationals.length === 0 ? (
+      ) : displayed.length === 0 ? (
         <div
           style={{
             fontSize: 13,
@@ -4661,46 +4864,83 @@ function LiburNasionalPanel() {
           Tidak ada data
         </div>
       ) : (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 1,
-            maxHeight: 420,
-            overflowY: "auto",
-          }}
-        >
-          {nationals.map((item) => (
-            <div
-              key={item.date}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
-                padding: "8px 0",
-                borderBottom: "1px solid var(--border)",
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {formatDate(item.date)}
-                </span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Plus size={12} />}
-                onClick={() => handleImport(item)}
-                loading={mutate.isPending}
-                style={{ flexShrink: 0 }}
-              >
-                Import
-              </Button>
-            </div>
-          ))}
-        </div>
+        <>
+          {/* Tombol Import Semua */}
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Download size={13} />}
+            loading={importingAll}
+            disabled={toImport.length === 0}
+            onClick={handleImportAll}
+            style={{ alignSelf: "flex-start" }}
+          >
+            Import Semua ({toImport.length})
+          </Button>
+
+          {/* Daftar */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
+              maxHeight: 380,
+              overflowY: "auto",
+            }}
+          >
+            {displayed.map((item) => {
+              const imported = importedDates.has(item.date);
+              const isCuti = !item.is_national_holiday;
+              return (
+                <div
+                  key={item.date}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    padding: "8px 0",
+                    borderBottom: "1px solid var(--border)",
+                    opacity: imported ? 0.5 : 1,
+                    transition: "opacity 0.2s",
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {item.name}
+                      </span>
+                      {isCuti && <Badge variant="warning">Cuti</Badge>}
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {formatDate(item.date)}
+                    </span>
+                  </div>
+                  <Button
+                    variant={imported ? "secondary" : "ghost"}
+                    size="sm"
+                    icon={imported ? null : <Plus size={12} />}
+                    onClick={() => !imported && handleImport(item)}
+                    disabled={imported || importingAll}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {imported ? "✓" : "Import"}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <div
@@ -5881,36 +6121,34 @@ export function Toggle({ checked, onChange, disabled }: ToggleProps) {
 
 ## src/hooks/useAudio.ts
 ```ts
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { audioManager } from "../lib/audioManager";
+import { queryClient } from "../lib/queryClient";
+
+function safeAudioUrl(url: string): string {
+  return url
+    .split("/")
+    .map((seg, i) => (i === 0 ? seg : encodeURIComponent(decodeURIComponent(seg))))
+    .join("/");
+}
 
 export function useAudio() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<string | null>(audioManager.playing);
+
+  useEffect(() => {
+    return audioManager.subscribe(() => setPlaying(audioManager.playing));
+  }, []);
 
   async function preview(filename: string, endpoint: string, body: object) {
     try {
       const res: any = await api.post(endpoint, body);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      const safeUrl = res.url
-        ? res.url
-            .split("/")
-            .map((segment: string, i: number) =>
-              i === 0 ? segment : encodeURIComponent(decodeURIComponent(segment))
-            )
-            .join("/")
-        : "";
-      const a = new Audio(safeUrl);
-      audioRef.current = a;
-      setPlaying(filename);
-      a.onended = () => setPlaying(null);
-      a.onerror = () => setPlaying(null);
-      await a.play();
+      const url = safeAudioUrl(res.url ?? "");
+      await audioManager.play(filename, url);
+
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     } catch {
-      setPlaying(null);
+      audioManager.stopBrowser();
     }
   }
 
@@ -5918,16 +6156,13 @@ export function useAudio() {
     try {
       await api.post(endpoint, {});
     } finally {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      setPlaying(null);
+      audioManager.stopBrowser();
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     }
   }
 
   function isPlaying(filename: string) {
-    return playing === filename;
+    return audioManager.isPlaying(filename);
   }
 
   return { playing, preview, stop, isPlaying };
@@ -6176,17 +6411,24 @@ async function request<T = unknown>(method: string, path: string, body?: unknown
     headers: isFormData ? undefined : body ? { "Content-Type": "application/json" } : undefined,
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
   });
+
   if (res.status === 401) {
-    if (!redirectingToLogin && window.location.pathname !== "/login") {
+    if (window.location.pathname === "/login") {
+      const err = await res.json().catch(() => ({ error: "Username atau password salah" }));
+      throw new Error(err.error ?? "Username atau password salah");
+    }
+    if (!redirectingToLogin) {
       redirectingToLogin = true;
       window.location.href = "/login";
     }
     return new Promise<T>(() => {});
   }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Terjadi kesalahan" }));
     throw new Error(err.error ?? "Terjadi kesalahan");
   }
+
   const ct = res.headers.get("content-type") ?? "";
   if (ct.includes("application/json")) return res.json();
   return res as unknown as T;
@@ -6197,6 +6439,76 @@ export const api = {
   post: <T = unknown>(path: string, body: unknown) => request<T>("POST", path, body),
   upload: <T = unknown>(path: string, form: FormData) => request<T>("POST", path, form),
 };
+
+```
+---
+
+## src/lib/audioManager.ts
+```ts
+type Listener = () => void;
+
+class AudioManager {
+  private audio: HTMLAudioElement | null = null;
+  private _playing: string | null = null;
+  private listeners = new Set<Listener>();
+
+  private notify() {
+    this.listeners.forEach((fn) => fn());
+  }
+
+  async play(filename: string, url: string): Promise<void> {
+    this.stopBrowser();
+
+    this._playing = filename;
+    this.notify();
+
+    const a = new Audio(url);
+    this.audio = a;
+
+    const clear = (name: string) => {
+      if (this._playing === name) {
+        this._playing = null;
+        this.audio = null;
+        this.notify();
+      }
+    };
+
+    a.onended = () => clear(filename);
+    a.onerror = () => clear(filename);
+
+    try {
+      await a.play();
+    } catch {
+      clear(filename);
+    }
+  }
+
+  stopBrowser(): void {
+    if (this.audio) {
+      this.audio.onended = null;
+      this.audio.onerror = null;
+      this.audio.pause();
+      this.audio = null;
+    }
+    this._playing = null;
+    this.notify();
+  }
+
+  get playing(): string | null {
+    return this._playing;
+  }
+
+  isPlaying(filename: string): boolean {
+    return this._playing === filename;
+  }
+
+  subscribe(fn: Listener): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+}
+
+export const audioManager = new AudioManager();
 
 ```
 ---
@@ -6221,7 +6533,7 @@ export const queryClient = new QueryClient({
 
 ## src/lib/router.ts
 ```ts
-const pageCache = new Map<string, string>(); // in-memory cache
+const pageCache = new Map<string, string>();
 
 const PAGE_MAP: Record<string, string> = {
   "/": "dashboard",
@@ -6273,10 +6585,8 @@ async function navigate(path: string, pushState = true) {
 
     document.title = extractTitle(html);
 
-    // Dispatch custom event — App.tsx listen dan ganti page prop
     window.dispatchEvent(new CustomEvent("spa-navigate", { detail: { path } }));
 
-    // Re-attach SPA listeners setelah React re-render
     setTimeout(attachListeners, 50);
   } finally {
     isNavigating = false;
@@ -6296,10 +6606,8 @@ export function attachListeners() {
     if (a.dataset.spa === "1") return;
     a.dataset.spa = "1";
 
-    // Prefetch on hover
     a.addEventListener("mouseenter", () => prefetch(href), { once: true });
 
-    // Navigate on click
     a.addEventListener("click", (e) => {
       e.preventDefault();
       navigate(href);
@@ -6308,12 +6616,10 @@ export function attachListeners() {
 }
 
 export function initRouter() {
-  // Handle browser back/forward
   window.addEventListener("popstate", () => {
     navigate(window.location.pathname, false);
   });
 
-  // Prefetch all known pages on idle
   if ("requestIdleCallback" in window) {
     requestIdleCallback(() => {
       Object.keys(PAGE_MAP).forEach(prefetch);
