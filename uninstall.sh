@@ -14,10 +14,10 @@ SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 NGINX_CONF="/etc/nginx/sites-available/bel-madrasah"
 NGINX_ENABLED="/etc/nginx/sites-enabled/bel-madrasah"
 
-info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[OK]${NC} $1"; }
-warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+info()       { echo -e "${BLUE}[INFO]${NC} $1"; }
+success()    { echo -e "${GREEN}[OK]${NC} $1"; }
+warning()    { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+error()      { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 cmd_exists() { command -v "$1" >/dev/null 2>&1; }
 
 [ "$EUID" -eq 0 ] || error "Jalankan sebagai root: sudo $0"
@@ -27,62 +27,76 @@ echo " Bel Madrasah - Uninstaller"
 echo " ZEDLABS Teknologi Indonesia"
 echo "========================================="
 echo
-
 read -rp "Lanjutkan penghapusan? [y/N]: " -n 1; echo
 [[ $REPLY =~ ^[Yy]$ ]] || { info "Penghapusan dibatalkan."; exit 0; }
+echo
 
+# --- Stop & disable service ---
 if systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE_NAME}.service"; then
-    systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null && {
+    if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
         systemctl stop "${SERVICE_NAME}"
         success "Service dihentikan."
-    }
-    systemctl is-enabled --quiet "${SERVICE_NAME}" 2>/dev/null && {
+    fi
+    if systemctl is-enabled --quiet "${SERVICE_NAME}" 2>/dev/null; then
         systemctl disable "${SERVICE_NAME}"
         success "Service dinonaktifkan dari autostart."
-    }
+    fi
 else
     warning "Service ${SERVICE_NAME} tidak terdaftar di systemd."
 fi
 
+# --- Hapus unit file systemd ---
 if [ -f "$SERVICE_FILE" ]; then
     rm -f "$SERVICE_FILE"
     systemctl daemon-reload
     success "Unit file systemd dihapus."
 fi
 
-[ -L "$NGINX_ENABLED" ] || [ -f "$NGINX_ENABLED" ] && {
+# --- Nonaktifkan site nginx ---
+if [ -L "$NGINX_ENABLED" ] || [ -f "$NGINX_ENABLED" ]; then
     rm -f "$NGINX_ENABLED"
     success "Site nginx dinonaktifkan."
-}
-
-if [ -f "$NGINX_CONF" ]; then
-    read -rp "Hapus konfigurasi nginx? [y/N]: " -n 1; echo
-    [[ $REPLY =~ ^[Yy]$ ]] && { rm -f "$NGINX_CONF"; success "Konfigurasi nginx dihapus."; }
 fi
 
+# --- Hapus konfigurasi nginx ---
+if [ -f "$NGINX_CONF" ]; then
+    read -rp "Hapus konfigurasi nginx? [y/N]: " -n 1; echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm -f "$NGINX_CONF"
+        success "Konfigurasi nginx dihapus."
+    fi
+fi
+
+# --- Reload nginx ---
 if cmd_exists nginx && nginx -t 2>/dev/null; then
     systemctl reload nginx 2>/dev/null || true
     success "nginx direload."
 fi
 
-# Hapus system user
+# --- Hapus system user ---
 if id "$SERVICE_USER" &>/dev/null; then
     read -rp "Hapus system user '${SERVICE_USER}'? [y/N]: " -n 1; echo
-    [[ $REPLY =~ ^[Yy]$ ]] && {
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
         userdel "$SERVICE_USER" 2>/dev/null || true
         success "User ${SERVICE_USER} dihapus."
-    }
+    fi
 fi
 
+# --- Hapus direktori proyek ---
 if [ ! -d "$PROJECT_DIR" ]; then
     success "Direktori ${PROJECT_DIR} sudah tidak ada."
-    echo; success "PENGHAPUSAN SELESAI"; exit 0
+    echo
+    echo "========================================="
+    success "PENGHAPUSAN SELESAI"
+    echo "========================================="
+    exit 0
 fi
 
 echo
 warning "Direktori: ${PROJECT_DIR}"
 warning "Berisi binary, jadwal, log, audio, dan data login."
 echo
+
 read -rp "Hapus SELURUH direktori termasuk data? [y/N]: " -n 1; echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     rm -rf "$PROJECT_DIR"
