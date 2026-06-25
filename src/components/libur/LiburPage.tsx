@@ -1,4 +1,4 @@
-import { ExternalLink, Plus } from "lucide-react";
+import { Download, ExternalLink, Plus } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useLiburNasional, useMutateLibur } from "../../hooks/useLibur";
@@ -22,6 +22,8 @@ function LiburNasionalPanel() {
   const [year, setYear] = useState(currentYear);
   const { data, isLoading } = useLiburNasional(year);
   const mutate = useMutateLibur();
+  const [importingAll, setImportingAll] = useState(false);
+  const [importedDates, setImportedDates] = useState<Set<string>>(new Set());
 
   const items: NasionalItem[] = Array.isArray(data) ? data : [];
   const nationals = items.filter((i) => i.is_national_holiday);
@@ -33,14 +35,69 @@ function LiburNasionalPanel() {
         date: item.date,
         keterangan: item.name,
       });
+      setImportedDates((prev) => new Set(prev).add(item.date));
       toast.success(`${item.name} ditambahkan`);
     } catch (e: any) {
-      toast.error(e.message);
+      if (e.message?.includes("sudah ada")) {
+        setImportedDates((prev) => new Set(prev).add(item.date));
+      } else {
+        toast.error(e.message);
+      }
     }
+  }
+
+  async function handleImportAll() {
+    if (nationals.length === 0) return;
+    if (
+      !confirm(
+        `Import semua ${nationals.length} hari libur nasional tahun ${year}?\nData yang sudah ada akan dilewati.`
+      )
+    )
+      return;
+
+    setImportingAll(true);
+    let sukses = 0;
+    let lewati = 0;
+    let gagal = 0;
+    const newImported = new Set(importedDates);
+
+    for (const item of nationals) {
+      try {
+        await mutate.mutateAsync({
+          action: "add",
+          date: item.date,
+          keterangan: item.name,
+        });
+        newImported.add(item.date);
+        sukses++;
+      } catch (e: any) {
+        if (e.message?.includes("sudah ada")) {
+          newImported.add(item.date);
+          lewati++;
+        } else {
+          gagal++;
+        }
+      }
+    }
+
+    setImportedDates(newImported);
+    setImportingAll(false);
+
+    const parts: string[] = [];
+    if (sukses > 0) parts.push(`${sukses} ditambahkan`);
+    if (lewati > 0) parts.push(`${lewati} dilewati`);
+    if (gagal > 0) parts.push(`${gagal} gagal`);
+    toast.success(`Import selesai: ${parts.join(", ")}`);
+  }
+
+  function handleYearChange(y: number) {
+    setYear(y);
+    setImportedDates(new Set());
   }
 
   return (
     <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span
           style={{
@@ -55,7 +112,7 @@ function LiburNasionalPanel() {
         </span>
         <select
           value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
+          onChange={(e) => handleYearChange(Number(e.target.value))}
           style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
         >
           {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
@@ -66,6 +123,7 @@ function LiburNasionalPanel() {
         </select>
       </div>
 
+      {/* Loading skeleton */}
       {isLoading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[1, 2, 3].map((i) => (
@@ -94,46 +152,66 @@ function LiburNasionalPanel() {
           Tidak ada data
         </div>
       ) : (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 1,
-            maxHeight: 420,
-            overflowY: "auto",
-          }}
-        >
-          {nationals.map((item) => (
-            <div
-              key={item.date}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
-                padding: "8px 0",
-                borderBottom: "1px solid var(--border)",
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {formatDate(item.date)}
-                </span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Plus size={12} />}
-                onClick={() => handleImport(item)}
-                loading={mutate.isPending}
-                style={{ flexShrink: 0 }}
-              >
-                Import
-              </Button>
-            </div>
-          ))}
-        </div>
+        <>
+          {/* Tombol Import Semua */}
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Download size={13} />}
+            loading={importingAll}
+            onClick={handleImportAll}
+            style={{ alignSelf: "flex-start" }}
+          >
+            Import Semua ({nationals.length})
+          </Button>
+
+          {/* Daftar */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
+              maxHeight: 420,
+              overflowY: "auto",
+            }}
+          >
+            {nationals.map((item) => {
+              const imported = importedDates.has(item.date);
+              return (
+                <div
+                  key={item.date}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    padding: "8px 0",
+                    borderBottom: "1px solid var(--border)",
+                    opacity: imported ? 0.5 : 1,
+                    transition: "opacity 0.2s",
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {formatDate(item.date)}
+                    </span>
+                  </div>
+                  <Button
+                    variant={imported ? "secondary" : "ghost"}
+                    size="sm"
+                    icon={imported ? null : <Plus size={12} />}
+                    onClick={() => !imported && handleImport(item)}
+                    disabled={imported || importingAll}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {imported ? "✓" : "Import"}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <div
