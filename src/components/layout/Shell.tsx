@@ -10,7 +10,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem("sidebar-expanded");
     return stored === null ? true : stored === "true";
   });
-  const [isMobile, setIsMobile] = useState(false);
+
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 768px)").matches;
+  });
 
   useEffect(() => {
     initTheme();
@@ -46,7 +50,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
             flex: 1,
             padding: isMobile ? "12px 12px 80px" : "20px 24px",
             overflowY: "auto",
+            overflowX: "hidden",
             WebkitOverflowScrolling: "touch" as any,
+            contain: "layout" as any,
           }}
         >
           {children}

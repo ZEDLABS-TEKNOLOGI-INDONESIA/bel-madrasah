@@ -214,6 +214,8 @@ export function BottomNav() {
         borderTop: "1px solid var(--border)",
         display: "flex",
         paddingBottom: "env(safe-area-inset-bottom)",
+        transform: "translateZ(0)",
+        willChange: "transform",
       }}
     >
       {ITEMS.map((item) => (

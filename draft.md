@@ -4096,6 +4096,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             flex: 1,
             padding: isMobile ? "12px 12px 80px" : "20px 24px",
             overflowY: "auto",
+            WebkitOverflowScrolling: "touch" as any,
           }}
         >
           {children}
@@ -4121,29 +4122,107 @@ import {
   ScrollText,
   Settings2,
 } from "lucide-react";
+import React, { useEffect, useState } from "react";
 
-const navItems = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Jadwal", href: "/jadwal", icon: CalendarDays },
-  { label: "Audio", href: "/audio", icon: Music2 },
-  { label: "Libur", href: "/libur", icon: CalendarOff },
-  { label: "Log", href: "/log", icon: ScrollText },
-  { label: "Pengaturan", href: "/settings", icon: Settings2 },
+type NavItem = { label: string; href: string; Icon: React.ElementType };
+
+const ITEMS: NavItem[] = [
+  { label: "Dashboard", href: "/", Icon: LayoutDashboard },
+  { label: "Jadwal", href: "/jadwal", Icon: CalendarDays },
+  { label: "Audio", href: "/audio", Icon: Music2 },
+  { label: "Libur", href: "/libur", Icon: CalendarOff },
+  { label: "Log", href: "/log", Icon: ScrollText },
+  { label: "Pengaturan", href: "/settings", Icon: Settings2 },
 ];
 
-function isActive(href: string) {
-  if (typeof window === "undefined") return false;
-  return href === "/"
-    ? window.location.pathname === "/"
-    : window.location.pathname.startsWith(href);
+function useCurrentPath() {
+  const [path, setPath] = useState(typeof window !== "undefined" ? window.location.pathname : "/");
+  useEffect(() => {
+    const h = (e: Event) => setPath((e as CustomEvent<{ path: string }>).detail.path);
+    window.addEventListener("spa-navigate", h);
+    return () => window.removeEventListener("spa-navigate", h);
+  }, []);
+  return path;
 }
 
-interface SidebarProps {
-  expanded: boolean;
-  onToggle: () => void;
+function isActive(href: string, cur: string) {
+  return href === "/" ? cur === "/" : cur.startsWith(href);
 }
 
-export function Sidebar({ expanded, onToggle }: SidebarProps) {
+function spaGo(href: string) {
+  if (window.location.pathname === href) return;
+  window.dispatchEvent(new CustomEvent("spa-do-navigate", { detail: { path: href } }));
+}
+
+function SidebarLink(props: { item: NavItem; cur: string; expanded: boolean }) {
+  const label = props.item.label;
+  const href = props.item.href;
+  const Icon = props.item.Icon;
+  const on = isActive(href, props.cur);
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        spaGo(href);
+      }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 16px",
+        margin: "0 6px",
+        borderRadius: "var(--radius)",
+        color: on ? "var(--accent)" : "var(--text-muted)",
+        background: on ? "rgba(9,105,218,0.08)" : "transparent",
+        textDecoration: "none",
+        fontWeight: on ? 600 : 400,
+        fontSize: 13,
+        transition: "background 0.15s, color 0.15s",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+      }}
+    >
+      <Icon size={18} style={{ flexShrink: 0 }} />
+      <span style={{ opacity: props.expanded ? 1 : 0, transition: "opacity 0.2s" }}>{label}</span>
+    </a>
+  );
+}
+
+function BottomLink(props: { item: NavItem; cur: string }) {
+  const label = props.item.label;
+  const href = props.item.href;
+  const Icon = props.item.Icon;
+  const on = isActive(href, props.cur);
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        spaGo(href);
+      }}
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "8px 0",
+        gap: 3,
+        textDecoration: "none",
+        color: on ? "var(--accent)" : "var(--text-muted)",
+        fontSize: 10,
+        fontWeight: on ? 600 : 400,
+        transition: "color 0.15s",
+      }}
+    >
+      <Icon size={20} />
+      {label}
+    </a>
+  );
+}
+
+export function Sidebar(props: { expanded: boolean; onToggle: () => void }) {
+  const cur = useCurrentPath();
   return (
     <div
       style={{
@@ -4152,7 +4231,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         left: 0,
         bottom: 0,
         zIndex: 100,
-        width: expanded ? 220 : 64,
+        width: props.expanded ? 220 : 64,
         background: "var(--card-gloss), var(--card-bg)",
         backdropFilter: "var(--glass-blur)",
         WebkitBackdropFilter: "var(--glass-blur)",
@@ -4163,7 +4242,6 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         overflow: "hidden",
       }}
     >
-      {/* Logo */}
       <div
         style={{
           height: 56,
@@ -4196,60 +4274,24 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
             fontSize: 14,
             whiteSpace: "nowrap",
             color: "var(--text)",
-            opacity: expanded ? 1 : 0,
+            opacity: props.expanded ? 1 : 0,
             transition: "opacity 0.2s",
           }}
         >
           Bel Madrasah
         </span>
       </div>
-
-      {/* Nav */}
       <nav style={{ flex: 1, padding: "8px 0", display: "flex", flexDirection: "column", gap: 2 }}>
-        {navItems.map(({ label, href, icon: Icon }) => {
-          const active = isActive(href);
-          return (
-            <a
-              key={href}
-              href={href}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 16px",
-                margin: "0 6px",
-                borderRadius: "var(--radius)",
-                color: active ? "var(--accent)" : "var(--text-muted)",
-                background: active ? "rgba(9,105,218,0.08)" : "transparent",
-                textDecoration: "none",
-                fontWeight: active ? 600 : 400,
-                fontSize: 13,
-                transition: "background 0.15s, color 0.15s",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-              }}
-            >
-              <Icon size={18} style={{ flexShrink: 0 }} />
-              <span
-                style={{
-                  opacity: expanded ? 1 : 0,
-                  transition: "opacity 0.2s",
-                }}
-              >
-                {label}
-              </span>
-            </a>
-          );
-        })}
+        {ITEMS.map((item) => (
+          <SidebarLink key={item.href} item={item} cur={cur} expanded={props.expanded} />
+        ))}
       </nav>
-
-      {/* Toggle button */}
       <button
-        onClick={onToggle}
+        onClick={props.onToggle}
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: expanded ? "flex-end" : "center",
+          justifyContent: props.expanded ? "flex-end" : "center",
           padding: "12px 16px",
           background: "none",
           border: "none",
@@ -4262,7 +4304,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
         <ChevronRight
           size={16}
           style={{
-            transform: expanded ? "rotate(180deg)" : "none",
+            transform: props.expanded ? "rotate(180deg)" : "none",
             transition: "transform 0.25s",
           }}
         />
@@ -4272,6 +4314,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
 }
 
 export function BottomNav() {
+  const cur = useCurrentPath();
   return (
     <div
       style={{
@@ -4285,32 +4328,12 @@ export function BottomNav() {
         WebkitBackdropFilter: "var(--glass-blur)",
         borderTop: "1px solid var(--border)",
         display: "flex",
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      {navItems.map(({ label, href, icon: Icon }) => {
-        const active = isActive(href);
-        return (
-          <a
-            key={href}
-            href={href}
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "8px 0",
-              gap: 3,
-              textDecoration: "none",
-              color: active ? "var(--accent)" : "var(--text-muted)",
-              fontSize: 10,
-              fontWeight: active ? 600 : 400,
-            }}
-          >
-            <Icon size={20} />
-            {label}
-          </a>
-        );
-      })}
+      {ITEMS.map((item) => (
+        <BottomLink key={item.href} item={item} cur={cur} />
+      ))}
     </div>
   );
 }
@@ -4324,26 +4347,37 @@ import { Moon, Music2, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getTheme, toggleTheme } from "../../lib/theme";
 
+const PATH_TITLE: Record<string, string> = {
+  "/": "Dashboard",
+  "/jadwal": "Jadwal",
+  "/audio": "Audio",
+  "/libur": "Hari Libur",
+  "/log": "Log Aktivitas",
+  "/settings": "Pengaturan",
+};
+
 interface TopBarProps {
   isMobile: boolean;
 }
 
 export function TopBar({ isMobile }: TopBarProps) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [title, setTitle] = useState("Dashboard");
+  const [title, setTitle] = useState(() => {
+    if (typeof window === "undefined") return "Dashboard";
+    return PATH_TITLE[window.location.pathname] ?? "Bel Madrasah";
+  });
 
   useEffect(() => {
     setTheme(getTheme());
-    const path = window.location.pathname;
-    const map: Record<string, string> = {
-      "/": "Dashboard",
-      "/jadwal": "Jadwal",
-      "/audio": "Audio",
-      "/libur": "Hari Libur",
-      "/log": "Log Aktivitas",
-      "/settings": "Pengaturan",
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const path = (e as CustomEvent<{ path: string }>).detail.path;
+      setTitle(PATH_TITLE[path] ?? "Bel Madrasah");
     };
-    setTitle(map[path] ?? "Bel Madrasah");
+    window.addEventListener("spa-navigate", handler);
+    return () => window.removeEventListener("spa-navigate", handler);
   }, []);
 
   function handleToggle() {
@@ -6571,23 +6605,18 @@ let isNavigating = false;
 async function navigate(path: string, pushState = true) {
   if (isNavigating || window.location.pathname === path) return;
   isNavigating = true;
-
   try {
     const html = await fetchPage(path);
     if (!html) {
       window.location.href = path;
       return;
     }
-
     if (pushState) {
       window.history.pushState({}, "", path);
     }
-
     document.title = extractTitle(html);
-
     window.dispatchEvent(new CustomEvent("spa-navigate", { detail: { path } }));
-
-    setTimeout(attachListeners, 50);
+    requestAnimationFrame(() => attachListeners());
   } finally {
     isNavigating = false;
   }
@@ -6605,9 +6634,8 @@ export function attachListeners() {
     if (!PAGE_MAP[href]) return;
     if (a.dataset.spa === "1") return;
     a.dataset.spa = "1";
-
     a.addEventListener("mouseenter", () => prefetch(href), { once: true });
-
+    a.addEventListener("touchstart", () => prefetch(href), { once: true, passive: true });
     a.addEventListener("click", (e) => {
       e.preventDefault();
       navigate(href);
@@ -6620,10 +6648,15 @@ export function initRouter() {
     navigate(window.location.pathname, false);
   });
 
+  window.addEventListener("spa-do-navigate", (e: Event) => {
+    const path = (e as CustomEvent<{ path: string }>).detail.path;
+    navigate(path);
+  });
+
   if ("requestIdleCallback" in window) {
-    requestIdleCallback(() => {
-      Object.keys(PAGE_MAP).forEach(prefetch);
-    });
+    requestIdleCallback(() => Object.keys(PAGE_MAP).forEach(prefetch));
+  } else {
+    setTimeout(() => Object.keys(PAGE_MAP).forEach(prefetch), 500);
   }
 
   attachListeners();

@@ -1,5 +1,5 @@
 import { ChevronDown, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useDayToggle, useJadwalEntry } from "../../hooks/useJadwal";
 import { useIsMobile } from "../../hooks/useMediaQuery";
@@ -33,18 +33,27 @@ function safeAudioUrl(url: string): string {
 
 export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSectionProps) {
   const isMobile = useIsMobile();
-  const [open, setOpen] = useState(true);
+  const initializedRef = useRef(false);
+
+  const [open, setOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return !window.matchMedia("(max-width: 768px)").matches;
+  });
+
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      return;
+    }
+    setOpen(!isMobile);
+  }, [isMobile]);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<{ entry: Entry; index: number } | null>(null);
-
   const [playingFile, setPlayingFile] = useState<string | null>(audioManager.playing);
 
   const entryMutation = useJadwalEntry();
   const dayToggle = useDayToggle();
-
-  useEffect(() => {
-    setOpen(!isMobile);
-  }, [isMobile]);
 
   useEffect(() => {
     return audioManager.subscribe(() => setPlayingFile(audioManager.playing));
