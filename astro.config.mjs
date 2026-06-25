@@ -1,6 +1,7 @@
 import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, loadEnv } from "astro/config";
+import { defineConfig } from "astro/config";
+import { loadEnv } from "vite";
 
 const env = loadEnv("", process.cwd(), "BEL_");
 const BACKEND_URL = env.BEL_BACKEND_URL ?? "http://localhost:8082";

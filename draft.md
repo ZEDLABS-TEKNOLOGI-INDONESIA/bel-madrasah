@@ -4,35 +4,28 @@
 ```js
 import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "astro/config";
+import { defineConfig, loadEnv } from "astro/config";
 
-const BACKEND_URL = process.env.BEL_BACKEND_URL ?? "http://localhost:8082";
+const env = loadEnv("", process.cwd(), "BEL_");
+const BACKEND_URL = env.BEL_BACKEND_URL ?? "http://localhost:8082";
 
 export default defineConfig({
   integrations: [react()],
   build: {
     format: "file",
   },
+  server: {
+    port: parseInt(env.BEL_FRONTEND_PORT ?? "4321"),
+    host: env.BEL_FRONTEND_HOST ?? "localhost",
+  },
   vite: {
     plugins: [tailwindcss()],
     server: {
       proxy: {
-        "/api": {
-          target: BACKEND_URL,
-          changeOrigin: true,
-        },
-        "/login": {
-          target: BACKEND_URL,
-          changeOrigin: true,
-        },
-        "/logout": {
-          target: BACKEND_URL,
-          changeOrigin: true,
-        },
-        "/healthz": {
-          target: BACKEND_URL,
-          changeOrigin: true,
-        },
+        "/api": { target: BACKEND_URL, changeOrigin: true },
+        "/login": { target: BACKEND_URL, changeOrigin: true },
+        "/logout": { target: BACKEND_URL, changeOrigin: true },
+        "/healthz": { target: BACKEND_URL, changeOrigin: true },
       },
     },
   },
@@ -294,10 +287,17 @@ func jsonOK(w http.ResponseWriter, v any) {
 
 ## .env
 ```bash
+# Backend
+BEL_PORT=8082
 BEL_TLS=0
 BEL_TRUST_PROXY=0
-BEL_ORIGINS=http://localhost:4321,http://localhost:3000,http://0.0.0.0:4321
+BEL_ORIGINS=http://localhost:4321,http://0.0.0.0:4321
 BEL_ALSA_DEVICE=hw:1,0
+
+# Frontend dev server
+BEL_BACKEND_URL=http://localhost:8082
+BEL_FRONTEND_PORT=4321
+BEL_FRONTEND_HOST=localhost
 
 ```
 ---
@@ -1380,7 +1380,6 @@ import (
 )
 
 const (
-	port      = ":8082"
 	toneDir   = "/opt/bel-madrasah/tone"
 	dataDir   = "/opt/bel-madrasah/data"
 	staticDir = "/opt/bel-madrasah/static"
@@ -1697,7 +1696,12 @@ func main() {
 
 	allowedOrigins := trustedOrigins()
 	handler := corsMiddleware(allowedOrigins, maxBodyMiddleware(mux))
-
+	port := os.Getenv("BEL_PORT")
+	if port == "" {
+		port = ":8082"
+	} else if port[0] != ':' {
+		port = ":" + port
+	}
 	srv := &http.Server{
 		Addr:              port,
 		Handler:           handler,
@@ -1835,7 +1839,6 @@ func maxBodyMiddleware(next http.Handler) http.Handler {
     "@tailwindcss/vite": "^4.3.1",
     "@tanstack/react-query": "^5.101.0",
     "astro": "^7.0.2",
-    "dotenv": "^17.4.2",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.21.0",
     "react": "^19.2.7",
