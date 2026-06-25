@@ -3514,7 +3514,7 @@ export function EntryRow({
 ## src/components/jadwal/HariSection.tsx
 ```tsx
 import { ChevronDown, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useDayToggle, useJadwalEntry } from "../../hooks/useJadwal";
 import { useIsMobile } from "../../hooks/useMediaQuery";
@@ -3548,18 +3548,27 @@ function safeAudioUrl(url: string): string {
 
 export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSectionProps) {
   const isMobile = useIsMobile();
-  const [open, setOpen] = useState(true);
+  const initializedRef = useRef(false);
+
+  const [open, setOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return !window.matchMedia("(max-width: 768px)").matches;
+  });
+
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      return;
+    }
+    setOpen(!isMobile);
+  }, [isMobile]);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<{ entry: Entry; index: number } | null>(null);
-
   const [playingFile, setPlayingFile] = useState<string | null>(audioManager.playing);
 
   const entryMutation = useJadwalEntry();
   const dayToggle = useDayToggle();
-
-  useEffect(() => {
-    setOpen(!isMobile);
-  }, [isMobile]);
 
   useEffect(() => {
     return audioManager.subscribe(() => setPlayingFile(audioManager.playing));
@@ -3631,8 +3640,8 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
   return (
     <div
       style={{
-        background: "var(--card-gloss), var(--card-bg)",
-        border: "1px solid var(--card-border)",
+        background: "var(--bg-secondary)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)",
         overflow: "hidden",
       }}
@@ -4060,7 +4069,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem("sidebar-expanded");
     return stored === null ? true : stored === "true";
   });
-  const [isMobile, setIsMobile] = useState(false);
+
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 768px)").matches;
+  });
 
   useEffect(() => {
     initTheme();
@@ -4096,6 +4109,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             flex: 1,
             padding: isMobile ? "12px 12px 80px" : "20px 24px",
             overflowY: "auto",
+            overflowX: "hidden",
             WebkitOverflowScrolling: "touch" as any,
           }}
         >
@@ -4323,9 +4337,7 @@ export function BottomNav() {
         left: 0,
         right: 0,
         zIndex: 100,
-        background: "var(--card-gloss), var(--card-bg)",
-        backdropFilter: "var(--glass-blur)",
-        WebkitBackdropFilter: "var(--glass-blur)",
+        background: "var(--card-bg)",
         borderTop: "1px solid var(--border)",
         display: "flex",
         paddingBottom: "env(safe-area-inset-bottom)",
@@ -5820,16 +5832,19 @@ export function Card({
   onClick,
   style,
 }: CardProps) {
+  const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
+
   return (
     <div
       onClick={onClick}
       className={className}
       style={{
-        background: glossy ? "var(--card-gloss), var(--card-bg)" : "var(--bg-secondary)",
+        background:
+          glossy && !isMobile ? "var(--card-gloss), var(--card-bg)" : "var(--bg-secondary)",
         border: "1px solid var(--card-border)",
-        boxShadow: "var(--card-shadow)",
-        backdropFilter: "var(--glass-blur)",
-        WebkitBackdropFilter: "var(--glass-blur)",
+        boxShadow: isMobile ? "none" : "var(--card-shadow)",
+        backdropFilter: isMobile ? "none" : "var(--glass-blur)",
+        WebkitBackdropFilter: isMobile ? "none" : "var(--glass-blur)",
         borderRadius: "var(--radius-lg)",
         padding: "16px",
         transition: "transform 0.2s, box-shadow 0.2s",
@@ -6370,7 +6385,10 @@ export function useResetLog() {
 import { useState, useEffect } from "react";
 
 export function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(`(max-width: ${breakpoint}px)`).matches;
+  });
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
@@ -7048,6 +7066,15 @@ a:hover {
 
 button {
   font-family: var(--font);
+}
+
+@media (max-width: 768px) {
+
+  .card-glossy,
+  [style*="backdrop-filter"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
 }
 
 @keyframes spin {
