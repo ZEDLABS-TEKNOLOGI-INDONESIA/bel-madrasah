@@ -1,3 +1,4 @@
+// src/lib/api.ts
 const BASE = import.meta.env.PUBLIC_API_URL ?? "";
 
 let redirectingToLogin = false;
@@ -10,17 +11,26 @@ async function request<T = unknown>(method: string, path: string, body?: unknown
     headers: isFormData ? undefined : body ? { "Content-Type": "application/json" } : undefined,
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
   });
+
   if (res.status === 401) {
-    if (!redirectingToLogin && window.location.pathname !== "/login") {
+    // Jika sedang di halaman login, lempar error agar LoginPage bisa tampilkan pesan
+    if (window.location.pathname === "/login") {
+      const err = await res.json().catch(() => ({ error: "Username atau password salah" }));
+      throw new Error(err.error ?? "Username atau password salah");
+    }
+    // Di halaman lain, redirect ke login
+    if (!redirectingToLogin) {
       redirectingToLogin = true;
       window.location.href = "/login";
     }
     return new Promise<T>(() => {});
   }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Terjadi kesalahan" }));
     throw new Error(err.error ?? "Terjadi kesalahan");
   }
+
   const ct = res.headers.get("content-type") ?? "";
   if (ct.includes("application/json")) return res.json();
   return res as unknown as T;
