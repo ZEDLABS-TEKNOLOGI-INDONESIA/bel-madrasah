@@ -46,6 +46,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             flex: 1,
             padding: isMobile ? "12px 12px 80px" : "20px 24px",
             overflowY: "auto",
+            WebkitOverflowScrolling: "touch" as any,
           }}
         >
           {children}
