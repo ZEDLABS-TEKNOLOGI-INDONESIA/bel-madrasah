@@ -1,4 +1,3 @@
-// src/lib/api.ts
 const BASE = import.meta.env.PUBLIC_API_URL ?? "";
 
 let redirectingToLogin = false;
@@ -13,12 +12,10 @@ async function request<T = unknown>(method: string, path: string, body?: unknown
   });
 
   if (res.status === 401) {
-    // Jika sedang di halaman login, lempar error agar LoginPage bisa tampilkan pesan
     if (window.location.pathname === "/login") {
       const err = await res.json().catch(() => ({ error: "Username atau password salah" }));
       throw new Error(err.error ?? "Username atau password salah");
     }
-    // Di halaman lain, redirect ke login
     if (!redirectingToLogin) {
       redirectingToLogin = true;
       window.location.href = "/login";

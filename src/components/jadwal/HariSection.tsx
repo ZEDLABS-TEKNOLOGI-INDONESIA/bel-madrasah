@@ -37,7 +37,6 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
   const [modalOpen, setModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<{ entry: Entry; index: number } | null>(null);
 
-  // Gunakan audioManager singleton — konsisten lintas komponen & navigasi
   const [playingFile, setPlayingFile] = useState<string | null>(audioManager.playing);
 
   const entryMutation = useJadwalEntry();

@@ -715,7 +715,6 @@ func handleTonesFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gunakan RawPath jika tersedia agar encoding karakter spesial ditangani dengan benar
 	rawPath := r.URL.RawPath
 	if rawPath == "" {
 		rawPath = r.URL.Path
@@ -761,28 +760,21 @@ func safeFilename(name string) (string, bool) {
 	return base, true
 }
 
-// sanitizeFilename membersihkan nama file dari karakter spesial, spasi, dan unicode.
-// Hasil: huruf kecil, hanya alfanumerik dan dash, ekstensi dipertahankan.
 func sanitizeFilename(name string) string {
 	ext := strings.ToLower(filepath.Ext(name))
 	base := strings.TrimSuffix(name, filepath.Ext(name))
 
-	// Lowercase
 	base = strings.ToLower(base)
 
-	// Ganti spasi dan underscore dengan dash
 	base = strings.ReplaceAll(base, " ", "-")
 	base = strings.ReplaceAll(base, "_", "-")
 
-	// Hapus semua karakter selain huruf a-z, angka 0-9, dan dash
 	reg := regexp.MustCompile(`[^a-z0-9\-]`)
 	base = reg.ReplaceAllString(base, "")
 
-	// Hapus dash berulang
 	regDash := regexp.MustCompile(`-+`)
 	base = regDash.ReplaceAllString(base, "-")
 
-	// Trim dash di awal/akhir
 	base = strings.Trim(base, "-")
 
 	if base == "" {
@@ -791,7 +783,6 @@ func sanitizeFilename(name string) string {
 	return base + ext
 }
 
-// compressAudio mengompres file audio ke 128kbps menggunakan ffmpeg.
 func compressAudio(src, dst string) error {
 	cmd := exec.Command(ffmpegPath,
 		"-hide_banner", "-loglevel", "error",
@@ -824,7 +815,6 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize nama file: hapus spasi, karakter spesial, unicode
 	filename := sanitizeFilename(raw)
 
 	ext := strings.ToLower(filepath.Ext(filename))
@@ -847,7 +837,6 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	dst.Close()
 
-	// Kompres otomatis ke 128kbps
 	tmpPath := fullPath + ".tmp.mp3"
 	if err := compressAudio(fullPath, tmpPath); err != nil {
 		logMsg("gagal compress audio (pakai file asli): " + err.Error())

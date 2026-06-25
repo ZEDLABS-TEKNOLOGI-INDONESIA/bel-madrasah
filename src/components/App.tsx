@@ -50,10 +50,8 @@ export default function App({ page: initialPage }: { page: Page }) {
       });
     }
 
-    // Init SPA router
     initRouter();
 
-    // Listen untuk navigasi
     const handler = (e: Event) => {
       const path = (e as CustomEvent<{ path: string }>).detail.path;
       const nextPage = PATH_TO_PAGE[path];
@@ -63,7 +61,6 @@ export default function App({ page: initialPage }: { page: Page }) {
     return () => window.removeEventListener("spa-navigate", handler);
   }, []);
 
-  // Re-attach listeners setiap render (link baru mungkin muncul)
   useEffect(() => {
     attachListeners();
   });
