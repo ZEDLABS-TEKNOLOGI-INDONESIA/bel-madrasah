@@ -125,8 +125,8 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
   return (
     <div
       style={{
-        background: "var(--card-gloss), var(--card-bg)",
-        border: "1px solid var(--card-border)",
+        background: "var(--bg-secondary)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)",
         overflow: "hidden",
       }}
