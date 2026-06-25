@@ -143,73 +143,49 @@ install_node() {
 }
 
 install_pnpm() {
-    # Hapus symlink/binary pnpm yang rusak di /usr/local/bin
-    if [ -e "/usr/local/bin/pnpm" ] || [ -L "/usr/local/bin/pnpm" ]; then
-        if ! /usr/local/bin/pnpm --version >/dev/null 2>&1; then
-            info "Menghapus pnpm rusak di /usr/local/bin/pnpm..."
-            rm -f /usr/local/bin/pnpm
-        fi
-    fi
+    info "Membersihkan instalasi pnpm lama..."
 
-    # Cari pnpm yang benar-benar berfungsi
-    _find_working_pnpm() {
+    # Hapus semua wrapper/symlink pnpm yang mungkin rusak
+    rm -f /usr/local/bin/pnpm /usr/local/bin/pnpx
+    rm -rf /usr/local/share/pnpm
+
+    # Install pnpm via npm --force agar mendarat di NVM_BIN (node aktif)
+    if cmd_exists npm; then
+        info "Menginstall pnpm via npm..."
+        npm install -g pnpm --force 2>&1 | grep -v "^npm notice" || true
+
+        # Cari binary hasil install npm (biasanya di NVM_BIN atau prefix npm)
+        local npm_prefix
+        npm_prefix=$(npm config get prefix 2>/dev/null || true)
         local candidates=(
-            "$(command -v pnpm 2>/dev/null || true)"
             "${NVM_BIN:-}/pnpm"
-            "/usr/local/share/pnpm/bin/pnpm"
-            "/usr/local/share/pnpm/pnpm"
-            "$HOME/.local/share/pnpm/pnpm"
-            "$HOME/.local/share/pnpm/bin/pnpm"
+            "${npm_prefix}/bin/pnpm"
         )
-        # Cari juga di seluruh versi nvm
-        if [ -d "${NVM_DIR:-$HOME/.nvm}/versions/node" ]; then
-            while IFS= read -r -d '' bin; do
-                candidates+=("$bin")
-            done < <(find "${NVM_DIR:-$HOME/.nvm}/versions/node" -name "pnpm" -type f -print0 2>/dev/null)
-        fi
         for c in "${candidates[@]}"; do
             [ -z "$c" ] && continue
             [ -x "$c" ] || continue
-            "$c" --version >/dev/null 2>&1 && echo "$c" && return 0
+            if "$c" --version >/dev/null 2>&1; then
+                # Buat symlink ke /usr/local/bin
+                ln -sf "$c" /usr/local/bin/pnpm
+                # Verifikasi symlink benar-benar bisa dipanggil
+                if /usr/local/bin/pnpm --version >/dev/null 2>&1; then
+                    success "pnpm: $(/usr/local/bin/pnpm --version) (via ${c})"
+                    return
+                fi
+                # Jika symlink masih gagal, panggil langsung tanpa symlink
+                rm -f /usr/local/bin/pnpm
+                # Buat wrapper script sederhana
+                printf '#!/bin/bash\nexec "%s" "$@"\n' "$c" > /usr/local/bin/pnpm
+                chmod +x /usr/local/bin/pnpm
+                if /usr/local/bin/pnpm --version >/dev/null 2>&1; then
+                    success "pnpm: $(/usr/local/bin/pnpm --version) (wrapper ke ${c})"
+                    return
+                fi
+            fi
         done
-        return 1
-    }
-
-    local working_pnpm
-    if working_pnpm=$(_find_working_pnpm); then
-        info "pnpm ditemukan di: ${working_pnpm}"
-        ln -sf "$working_pnpm" /usr/local/bin/pnpm
-        export PATH="/usr/local/bin:$PATH"
-        success "pnpm: $(/usr/local/bin/pnpm --version)"
-        return
     fi
 
-    info "Menginstall pnpm via installer resmi..."
-    export PNPM_HOME="/usr/local/share/pnpm"
-    mkdir -p "$PNPM_HOME"
-
-    # Hapus instalasi lama yang mungkin rusak
-    rm -rf "${PNPM_HOME:?}"/*
-
-    curl -fsSL https://get.pnpm.io/install.sh \
-        | env SHELL=/bin/bash PNPM_HOME="$PNPM_HOME" sh - || true
-
-    # Cari lagi setelah install
-    if working_pnpm=$(_find_working_pnpm); then
-        ln -sf "$working_pnpm" /usr/local/bin/pnpm
-        export PATH="/usr/local/bin:$PATH"
-
-        {
-            echo 'export PNPM_HOME="/usr/local/share/pnpm"'
-            echo 'export PATH="/usr/local/bin:$PNPM_HOME/bin:$PATH"'
-        } > /etc/profile.d/pnpm.sh
-        chmod 644 /etc/profile.d/pnpm.sh
-
-        success "pnpm: $(/usr/local/bin/pnpm --version)"
-        return
-    fi
-
-    error "Gagal menginstall pnpm. Coba manual: npm install -g pnpm --force"
+    error "Gagal menginstall pnpm. Coba manual:\n  npm install -g pnpm --force\n  pnpm --version"
 }
 
 build_frontend() {
@@ -219,16 +195,24 @@ build_frontend() {
         return
     }
 
-    # Pastikan pnpm yang di /usr/local/bin benar-benar berfungsi
-    if ! /usr/local/bin/pnpm --version >/dev/null 2>&1; then
-        error "pnpm di /usr/local/bin tidak berfungsi. Jalankan install_pnpm ulang."
+    # Resolve path pnpm yang benar-benar berfungsi
+    local pnpm_bin="/usr/local/bin/pnpm"
+    if ! "$pnpm_bin" --version >/dev/null 2>&1; then
+        # Fallback: cari langsung di npm prefix / NVM_BIN
+        local npm_prefix
+        npm_prefix=$(npm config get prefix 2>/dev/null || true)
+        for c in "${NVM_BIN:-}/pnpm" "${npm_prefix}/bin/pnpm"; do
+            [ -x "$c" ] && "$c" --version >/dev/null 2>&1 && pnpm_bin="$c" && break
+        done
     fi
+    "$pnpm_bin" --version >/dev/null 2>&1 || error "pnpm tidak berfungsi: ${pnpm_bin}"
+    info "Menggunakan pnpm: ${pnpm_bin} (v$("$pnpm_bin" --version))"
 
     (
         cd "$BUILD_DIR"
         export PATH="/usr/local/bin:${NVM_BIN:-}:$PATH:/usr/local/go/bin"
-        pnpm install --frozen-lockfile
-        pnpm build
+        "$pnpm_bin" install --frozen-lockfile
+        "$pnpm_bin" build
     ) || error "Gagal build frontend."
 
     [ -d "${BUILD_DIR}/dist" ] || error "Output dist/ tidak ditemukan setelah build."
