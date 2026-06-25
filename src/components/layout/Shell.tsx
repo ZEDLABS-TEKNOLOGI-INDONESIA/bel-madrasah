@@ -1,8 +1,24 @@
 import React, { useEffect, useState } from "react";
 import { initTheme } from "../../lib/theme";
+import { Footer } from "./Footer";
 import { InstallPrompt } from "./InstallPrompt";
 import { BottomNav, Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+
+declare const __FOOTER_CONFIG__: {
+  schoolName: string;
+  schoolYear: string;
+  poweredBy: string;
+  poweredByUrl: string;
+  instagramUrl: string;
+  youtubeUrl: string;
+  uploadUrl: string;
+  githubUrl: string;
+  developerName: string;
+  developerUrl: string;
+  developerInstagramUrl: string;
+  developerLinkedinUrl: string;
+};
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [expanded, setExpanded] = useState(() => {
@@ -31,6 +47,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
     localStorage.setItem("sidebar-expanded", String(next));
   }
 
+  const footerCfg =
+    typeof __FOOTER_CONFIG__ !== "undefined"
+      ? __FOOTER_CONFIG__
+      : {
+          schoolName: "Bel Madrasah",
+          schoolYear: new Date().getFullYear().toString(),
+          poweredBy: "",
+          poweredByUrl: "#",
+          instagramUrl: "",
+          youtubeUrl: "",
+          uploadUrl: "",
+          githubUrl: "",
+          developerName: "",
+          developerUrl: "",
+          developerInstagramUrl: "",
+          developerLinkedinUrl: "",
+        };
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
       {!isMobile && <Sidebar expanded={expanded} onToggle={handleToggle} />}
@@ -56,6 +90,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
         >
           {children}
         </main>
+        {!isMobile && (
+          <Footer
+            schoolName={footerCfg.schoolName}
+            schoolYear={footerCfg.schoolYear}
+            poweredBy={footerCfg.poweredBy}
+            poweredByUrl={footerCfg.poweredByUrl}
+            instagramUrl={footerCfg.instagramUrl}
+            youtubeUrl={footerCfg.youtubeUrl}
+            uploadUrl={footerCfg.uploadUrl}
+            githubUrl={footerCfg.githubUrl}
+            developerName={footerCfg.developerName}
+            developerUrl={footerCfg.developerUrl}
+            developerInstagramUrl={footerCfg.developerInstagramUrl}
+            developerLinkedinUrl={footerCfg.developerLinkedinUrl}
+          />
+        )}
       </div>
       {isMobile && <BottomNav />}
       <InstallPrompt />
