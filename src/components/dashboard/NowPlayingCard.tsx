@@ -1,5 +1,7 @@
+// src/components/dashboard/NowPlayingCard.tsx
 import { useQuery } from "@tanstack/react-query";
 import { Square } from "lucide-react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { api } from "../../lib/api";
 import { audioManager } from "../../lib/audioManager";
@@ -13,9 +15,14 @@ export function NowPlayingCard() {
     queryKey: ["service-status"],
     queryFn: () => api.get("/api/service/status"),
     staleTime: 10_000,
-    // Poll lebih cepat (2 detik) agar Now Playing segera update
-    refetchInterval: 2_000,
+    refetchInterval: 3_000,
   });
+
+  // State audio dari browser (audioManager)
+  const [browserPlaying, setBrowserPlaying] = useState<string | null>(audioManager.playing);
+  useEffect(() => {
+    return audioManager.subscribe(() => setBrowserPlaying(audioManager.playing));
+  }, []);
 
   async function handleStop() {
     try {
@@ -30,8 +37,14 @@ export function NowPlayingCard() {
 
   if (isLoading) return <Skeleton height={100} radius="var(--radius-lg)" />;
 
-  const isPlaying = data?.is_playing;
-  const nowPlaying = data?.now_playing;
+  // Gabungkan: server state ATAU browser state
+  const serverPlaying = data?.is_playing as boolean;
+  const serverFile = data?.now_playing as string;
+  const isPlaying = serverPlaying || !!browserPlaying;
+  const nowPlaying = serverPlaying ? serverFile : browserPlaying;
+
+  // Label sumber audio agar user tahu
+  const source = serverPlaying ? null : browserPlaying ? "(preview browser)" : null;
 
   return (
     <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -57,23 +70,36 @@ export function NowPlayingCard() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <div
-              style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 20, flexShrink: 0 }}
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: 2,
+                height: 20,
+                flexShrink: 0,
+              }}
             >
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="wave-bar" style={{ height: `${8 + i * 2}px` }} />
               ))}
             </div>
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {nowPlaying || "Audio"}
-            </span>
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {nowPlaying || "Audio"}
+              </div>
+              {source && (
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                  {source}
+                </div>
+              )}
+            </div>
           </div>
           <Button variant="danger" size="sm" icon={<Square size={12} />} onClick={handleStop}>
             Stop
