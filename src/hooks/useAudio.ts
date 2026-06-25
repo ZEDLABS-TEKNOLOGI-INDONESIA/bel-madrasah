@@ -11,7 +11,6 @@ function safeAudioUrl(url: string): string {
 }
 
 export function useAudio() {
-  // Sinkron dengan audioManager singleton — tidak hilang saat navigasi
   const [playing, setPlaying] = useState<string | null>(audioManager.playing);
 
   useEffect(() => {
@@ -23,7 +22,7 @@ export function useAudio() {
       const res: any = await api.post(endpoint, body);
       const url = safeAudioUrl(res.url ?? "");
       await audioManager.play(filename, url);
-      // Langsung refresh dashboard setelah play
+
       queryClient.invalidateQueries({ queryKey: ["service-status"] });
     } catch {
       audioManager.stopBrowser();

@@ -1,4 +1,3 @@
-// src/components/dashboard/NowPlayingCard.tsx
 import { useQuery } from "@tanstack/react-query";
 import { Square } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -18,7 +17,6 @@ export function NowPlayingCard() {
     refetchInterval: 3_000,
   });
 
-  // State audio dari browser (audioManager)
   const [browserPlaying, setBrowserPlaying] = useState<string | null>(audioManager.playing);
   useEffect(() => {
     return audioManager.subscribe(() => setBrowserPlaying(audioManager.playing));
@@ -37,13 +35,11 @@ export function NowPlayingCard() {
 
   if (isLoading) return <Skeleton height={100} radius="var(--radius-lg)" />;
 
-  // Gabungkan: server state ATAU browser state
   const serverPlaying = data?.is_playing as boolean;
   const serverFile = data?.now_playing as string;
   const isPlaying = serverPlaying || !!browserPlaying;
   const nowPlaying = serverPlaying ? serverFile : browserPlaying;
 
-  // Label sumber audio agar user tahu
   const source = serverPlaying ? null : browserPlaying ? "(preview browser)" : null;
 
   return (

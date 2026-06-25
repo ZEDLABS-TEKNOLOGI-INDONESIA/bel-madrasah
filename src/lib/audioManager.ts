@@ -10,7 +10,6 @@ class AudioManager {
   }
 
   async play(filename: string, url: string): Promise<void> {
-    // Hentikan audio browser yang sedang berjalan
     this.stopBrowser();
 
     this._playing = filename;
@@ -62,5 +61,4 @@ class AudioManager {
   }
 }
 
-// Singleton — satu instance untuk seluruh aplikasi
 export const audioManager = new AudioManager();

@@ -1,4 +1,4 @@
-const pageCache = new Map<string, string>(); // in-memory cache
+const pageCache = new Map<string, string>();
 
 const PAGE_MAP: Record<string, string> = {
   "/": "dashboard",
@@ -50,10 +50,8 @@ async function navigate(path: string, pushState = true) {
 
     document.title = extractTitle(html);
 
-    // Dispatch custom event — App.tsx listen dan ganti page prop
     window.dispatchEvent(new CustomEvent("spa-navigate", { detail: { path } }));
 
-    // Re-attach SPA listeners setelah React re-render
     setTimeout(attachListeners, 50);
   } finally {
     isNavigating = false;
@@ -73,10 +71,8 @@ export function attachListeners() {
     if (a.dataset.spa === "1") return;
     a.dataset.spa = "1";
 
-    // Prefetch on hover
     a.addEventListener("mouseenter", () => prefetch(href), { once: true });
 
-    // Navigate on click
     a.addEventListener("click", (e) => {
       e.preventDefault();
       navigate(href);
@@ -85,12 +81,10 @@ export function attachListeners() {
 }
 
 export function initRouter() {
-  // Handle browser back/forward
   window.addEventListener("popstate", () => {
     navigate(window.location.pathname, false);
   });
 
-  // Prefetch all known pages on idle
   if ("requestIdleCallback" in window) {
     requestIdleCallback(() => {
       Object.keys(PAGE_MAP).forEach(prefetch);

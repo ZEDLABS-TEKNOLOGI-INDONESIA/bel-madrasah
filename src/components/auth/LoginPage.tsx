@@ -1,10 +1,8 @@
-// src/components/auth/LoginPage.tsx
 import { AlertCircle, Music2 } from "lucide-react";
 import React, { useState } from "react";
 import { api } from "../../lib/api";
 import { Button } from "../ui/Button";
 
-// Tambahkan keyframe shake ke <style> tag
 const shakeStyle = `
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
@@ -36,7 +34,7 @@ export function LoginPage() {
 
   function triggerShake() {
     setShaking(false);
-    // Force reflow agar animasi bisa diulang
+
     requestAnimationFrame(() => {
       requestAnimationFrame(() => setShaking(true));
     });
@@ -55,7 +53,7 @@ export function LoginPage() {
       setError(msg);
       setAttempts((n) => n + 1);
       triggerShake();
-      // Kosongkan password saja, biarkan username tetap
+
       setPassword("");
     } finally {
       setLoading(false);
