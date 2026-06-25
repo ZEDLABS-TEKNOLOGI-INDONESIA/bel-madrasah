@@ -52,7 +52,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
             overflowY: "auto",
             overflowX: "hidden",
             WebkitOverflowScrolling: "touch" as any,
-            contain: "layout" as any,
           }}
         >
           {children}

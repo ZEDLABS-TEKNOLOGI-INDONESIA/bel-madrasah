@@ -17,16 +17,19 @@ export function Card({
   onClick,
   style,
 }: CardProps) {
+  const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
+
   return (
     <div
       onClick={onClick}
       className={className}
       style={{
-        background: glossy ? "var(--card-gloss), var(--card-bg)" : "var(--bg-secondary)",
+        background:
+          glossy && !isMobile ? "var(--card-gloss), var(--card-bg)" : "var(--bg-secondary)",
         border: "1px solid var(--card-border)",
-        boxShadow: "var(--card-shadow)",
-        backdropFilter: "var(--glass-blur)",
-        WebkitBackdropFilter: "var(--glass-blur)",
+        boxShadow: isMobile ? "none" : "var(--card-shadow)",
+        backdropFilter: isMobile ? "none" : "var(--glass-blur)",
+        WebkitBackdropFilter: isMobile ? "none" : "var(--glass-blur)",
         borderRadius: "var(--radius-lg)",
         padding: "16px",
         transition: "transform 0.2s, box-shadow 0.2s",
