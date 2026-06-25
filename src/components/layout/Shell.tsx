@@ -96,14 +96,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
             schoolYear={footerCfg.schoolYear}
             poweredBy={footerCfg.poweredBy}
             poweredByUrl={footerCfg.poweredByUrl}
-            instagramUrl={footerCfg.instagramUrl}
-            youtubeUrl={footerCfg.youtubeUrl}
-            uploadUrl={footerCfg.uploadUrl}
-            githubUrl={footerCfg.githubUrl}
-            developerName={footerCfg.developerName}
-            developerUrl={footerCfg.developerUrl}
-            developerInstagramUrl={footerCfg.developerInstagramUrl}
-            developerLinkedinUrl={footerCfg.developerLinkedinUrl}
           />
         )}
       </div>
