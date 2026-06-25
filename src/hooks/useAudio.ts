@@ -12,7 +12,15 @@ export function useAudio() {
         audioRef.current.pause();
         audioRef.current = null;
       }
-      const a = new Audio(res.url);
+      const safeUrl = res.url
+        ? res.url
+            .split("/")
+            .map((segment: string, i: number) =>
+              i === 0 ? segment : encodeURIComponent(decodeURIComponent(segment))
+            )
+            .join("/")
+        : "";
+      const a = new Audio(safeUrl);
       audioRef.current = a;
       setPlaying(filename);
       a.onended = () => setPlaying(null);

@@ -22,6 +22,13 @@ interface HariSectionProps {
   toneDir: string;
 }
 
+function safeAudioUrl(url: string): string {
+  return url
+    .split("/")
+    .map((segment, i) => (i === 0 ? segment : encodeURIComponent(decodeURIComponent(segment))))
+    .join("/");
+}
+
 export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSectionProps) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(true);
@@ -80,7 +87,7 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
         audioRef.current.pause();
         audioRef.current = null;
       }
-      const a = new Audio(res.url);
+      const a = new Audio(safeAudioUrl(res.url));
       audioRef.current = a;
       setPlayingFile(res.filename);
       a.onended = () => setPlayingFile(null);
