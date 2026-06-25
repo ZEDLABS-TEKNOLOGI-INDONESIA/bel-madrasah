@@ -9,44 +9,31 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const navItems = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Jadwal", href: "/jadwal", icon: CalendarDays },
-  { label: "Audio", href: "/audio", icon: Music2 },
-  { label: "Libur", href: "/libur", icon: CalendarOff },
-  { label: "Log", href: "/log", icon: ScrollText },
-  { label: "Pengaturan", href: "/settings", icon: Settings2 },
+const ITEMS = [
+  { label: "Dashboard", href: "/", Icon: LayoutDashboard },
+  { label: "Jadwal", href: "/jadwal", Icon: CalendarDays },
+  { label: "Audio", href: "/audio", Icon: Music2 },
+  { label: "Libur", href: "/libur", Icon: CalendarOff },
+  { label: "Log", href: "/log", Icon: ScrollText },
+  { label: "Pengaturan", href: "/settings", Icon: Settings2 },
 ];
 
 function useCurrentPath() {
-  const [path, setPath] = useState(
-    typeof window !== "undefined" ? window.location.pathname : "/"
-  );
-
+  const [path, setPath] = useState(typeof window !== "undefined" ? window.location.pathname : "/");
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ path: string }>).detail;
-      setPath(detail.path);
-    };
-    window.addEventListener("spa-navigate", handler);
-    return () => window.removeEventListener("spa-navigate", handler);
+    const h = (e: Event) => setPath((e as CustomEvent<{ path: string }>).detail.path);
+    window.addEventListener("spa-navigate", h);
+    return () => window.removeEventListener("spa-navigate", h);
   }, []);
-
   return path;
 }
 
-function isActive(href: string, currentPath: string) {
-  return href === "/" ? currentPath === "/" : currentPath.startsWith(href);
+function active(href: string, cur: string) {
+  return href === "/" ? cur === "/" : cur.startsWith(href);
 }
 
-interface SidebarProps {
-  expanded: boolean;
-  onToggle: () => void;
-}
-
-export function Sidebar({ expanded, onToggle }: SidebarProps) {
-  const currentPath = useCurrentPath();
-
+export function Sidebar({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+  const cur = useCurrentPath();
   return (
     <div
       style={{
@@ -105,12 +92,11 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
           Bel Madrasah
         </span>
       </div>
-
       <nav style={{ flex: 1, padding: "8px 0", display: "flex", flexDirection: "column", gap: 2 }}>
-        {navItems.map(({ label, href, icon: Icon }) => {
-          const active = isActive(href, currentPath);
+        {ITEMS.map(({ label, href, Icon }) => {
+          const isActive = active(href, cur);
           return (
-
+            <a
               key={href}
               href={href}
               style={{
@@ -120,10 +106,10 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
                 padding: "8px 16px",
                 margin: "0 6px",
                 borderRadius: "var(--radius)",
-                color: active ? "var(--accent)" : "var(--text-muted)",
-                background: active ? "rgba(9,105,218,0.08)" : "transparent",
+                color: isActive ? "var(--accent)" : "var(--text-muted)",
+                background: isActive ? "rgba(9,105,218,0.08)" : "transparent",
                 textDecoration: "none",
-                fontWeight: active ? 600 : 400,
+                fontWeight: isActive ? 600 : 400,
                 fontSize: 13,
                 transition: "background 0.15s, color 0.15s",
                 whiteSpace: "nowrap",
@@ -131,19 +117,11 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
               }}
             >
               <Icon size={18} style={{ flexShrink: 0 }} />
-              <span
-                style={{
-                  opacity: expanded ? 1 : 0,
-                  transition: "opacity 0.2s",
-                }}
-              >
-                {label}
-              </span>
+              <span style={{ opacity: expanded ? 1 : 0, transition: "opacity 0.2s" }}>{label}</span>
             </a>
           );
         })}
       </nav>
-
       <button
         onClick={onToggle}
         style={{
@@ -161,10 +139,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
       >
         <ChevronRight
           size={16}
-          style={{
-            transform: expanded ? "rotate(180deg)" : "none",
-            transition: "transform 0.25s",
-          }}
+          style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.25s" }}
         />
       </button>
     </div>
@@ -172,8 +147,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
 }
 
 export function BottomNav() {
-  const currentPath = useCurrentPath();
-
+  const cur = useCurrentPath();
   return (
     <div
       style={{
@@ -190,10 +164,10 @@ export function BottomNav() {
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      {navItems.map(({ label, href, icon: Icon }) => {
-        const active = isActive(href, currentPath);
+      {ITEMS.map(({ label, href, Icon }) => {
+        const isActive = active(href, cur);
         return (
-
+          <a
             key={href}
             href={href}
             style={{
@@ -204,9 +178,9 @@ export function BottomNav() {
               padding: "8px 0",
               gap: 3,
               textDecoration: "none",
-              color: active ? "var(--accent)" : "var(--text-muted)",
+              color: isActive ? "var(--accent)" : "var(--text-muted)",
               fontSize: 10,
-              fontWeight: active ? 600 : 400,
+              fontWeight: isActive ? 600 : 400,
               transition: "color 0.15s",
             }}
           >
