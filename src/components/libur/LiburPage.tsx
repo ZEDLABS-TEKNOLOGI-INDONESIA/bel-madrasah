@@ -2,6 +2,7 @@ import { Download, ExternalLink, Plus } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useLiburNasional, useMutateLibur } from "../../hooks/useLibur";
+import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { LiburList } from "./LiburList";
@@ -20,6 +21,7 @@ function formatDate(dateStr: string) {
 function LiburNasionalPanel() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
+  const [showCuti, setShowCuti] = useState(true);
   const { data, isLoading } = useLiburNasional(year);
   const mutate = useMutateLibur();
   const [importingAll, setImportingAll] = useState(false);
@@ -27,6 +29,11 @@ function LiburNasionalPanel() {
 
   const items: NasionalItem[] = Array.isArray(data) ? data : [];
   const nationals = items.filter((i) => i.is_national_holiday);
+  const cutis = items.filter((i) => !i.is_national_holiday);
+
+  const displayed = showCuti ? items : nationals;
+
+  const toImport = displayed.filter((i) => !importedDates.has(i.date));
 
   async function handleImport(item: NasionalItem) {
     try {
@@ -47,12 +54,13 @@ function LiburNasionalPanel() {
   }
 
   async function handleImportAll() {
-    if (nationals.length === 0) return;
-    if (
-      !confirm(
-        `Import semua ${nationals.length} hari libur nasional tahun ${year}?\nData yang sudah ada akan dilewati.`
-      )
-    )
+    if (toImport.length === 0) return;
+
+    const label = showCuti
+      ? `${toImport.length} hari libur & cuti bersama`
+      : `${toImport.length} hari libur nasional`;
+
+    if (!confirm(`Import semua ${label} tahun ${year}?\nData yang sudah ada akan dilewati.`))
       return;
 
     setImportingAll(true);
@@ -61,7 +69,7 @@ function LiburNasionalPanel() {
     let gagal = 0;
     const newImported = new Set(importedDates);
 
-    for (const item of nationals) {
+    for (const item of toImport) {
       try {
         await mutate.mutateAsync({
           action: "add",
@@ -123,6 +131,68 @@ function LiburNasionalPanel() {
         </select>
       </div>
 
+      {/* Filter tabs: Semua / Libur Nasional / Cuti Bersama */}
+      {!isLoading && items.length > 0 && (
+        <div style={{ display: "flex", gap: 6 }}>
+          {[
+            { label: "Semua", value: true, count: items.length },
+            { label: "Libur", value: false, count: nationals.length },
+          ].map((tab) => {
+            const active = showCuti === tab.value;
+            return (
+              <button
+                key={tab.label}
+                onClick={() => setShowCuti(tab.value)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 10px",
+                  borderRadius: 99,
+                  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  background: active ? "rgba(9,105,218,0.1)" : "var(--bg-secondary)",
+                  color: active ? "var(--accent)" : "var(--text-muted)",
+                  fontSize: 12,
+                  fontWeight: active ? 600 : 400,
+                  fontFamily: "var(--font)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {tab.label}
+                <span
+                  style={{
+                    background: active ? "var(--accent)" : "var(--bg-tertiary)",
+                    color: active ? "#fff" : "var(--text-muted)",
+                    borderRadius: 99,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    padding: "1px 6px",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+          {/* Badge info jumlah cuti */}
+          {cutis.length > 0 && (
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                fontSize: 11,
+                color: "var(--text-muted)",
+                marginLeft: 2,
+              }}
+            >
+              ({cutis.length} cuti bersama)
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Loading skeleton */}
       {isLoading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -139,7 +209,7 @@ function LiburNasionalPanel() {
             />
           ))}
         </div>
-      ) : nationals.length === 0 ? (
+      ) : displayed.length === 0 ? (
         <div
           style={{
             fontSize: 13,
@@ -159,10 +229,11 @@ function LiburNasionalPanel() {
             size="sm"
             icon={<Download size={13} />}
             loading={importingAll}
+            disabled={toImport.length === 0}
             onClick={handleImportAll}
             style={{ alignSelf: "flex-start" }}
           >
-            Import Semua ({nationals.length})
+            Import Semua ({toImport.length})
           </Button>
 
           {/* Daftar */}
@@ -171,12 +242,13 @@ function LiburNasionalPanel() {
               display: "flex",
               flexDirection: "column",
               gap: 1,
-              maxHeight: 420,
+              maxHeight: 380,
               overflowY: "auto",
             }}
           >
-            {nationals.map((item) => {
+            {displayed.map((item) => {
               const imported = importedDates.has(item.date);
+              const isCuti = !item.is_national_holiday;
               return (
                 <div
                   key={item.date}
@@ -191,8 +263,23 @@ function LiburNasionalPanel() {
                     transition: "opacity 0.2s",
                   }}
                 >
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                    <span style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {item.name}
+                      </span>
+                      {isCuti && <Badge variant="warning">Cuti</Badge>}
+                    </div>
                     <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
                       {formatDate(item.date)}
                     </span>
