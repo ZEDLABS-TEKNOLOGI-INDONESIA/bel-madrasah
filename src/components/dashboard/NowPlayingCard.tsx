@@ -1,20 +1,28 @@
-import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Square } from "lucide-react";
-import { useServiceStatus } from "../../hooks/useConfig";
+import toast from "react-hot-toast";
 import { api } from "../../lib/api";
+import { audioManager } from "../../lib/audioManager";
+import { queryClient } from "../../lib/queryClient";
+import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Skeleton } from "../ui/Skeleton";
-import { Button } from "../ui/Button";
-import toast from "react-hot-toast";
 
 export function NowPlayingCard() {
-  const { data, isLoading, refetch } = useServiceStatus();
+  const { data, isLoading } = useQuery({
+    queryKey: ["service-status"],
+    queryFn: () => api.get("/api/service/status"),
+    staleTime: 10_000,
+    // Poll lebih cepat (2 detik) agar Now Playing segera update
+    refetchInterval: 2_000,
+  });
 
   async function handleStop() {
     try {
       await api.post("/api/tones/stop", {});
       toast.success("Audio dihentikan");
-      refetch();
+      audioManager.stopBrowser();
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     } catch (e: any) {
       toast.error(e.message);
     }

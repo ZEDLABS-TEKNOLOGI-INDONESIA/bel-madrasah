@@ -1,33 +1,32 @@
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { audioManager } from "../lib/audioManager";
+import { queryClient } from "../lib/queryClient";
+
+function safeAudioUrl(url: string): string {
+  return url
+    .split("/")
+    .map((seg, i) => (i === 0 ? seg : encodeURIComponent(decodeURIComponent(seg))))
+    .join("/");
+}
 
 export function useAudio() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState<string | null>(null);
+  // Sinkron dengan audioManager singleton — tidak hilang saat navigasi
+  const [playing, setPlaying] = useState<string | null>(audioManager.playing);
+
+  useEffect(() => {
+    return audioManager.subscribe(() => setPlaying(audioManager.playing));
+  }, []);
 
   async function preview(filename: string, endpoint: string, body: object) {
     try {
       const res: any = await api.post(endpoint, body);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      const safeUrl = res.url
-        ? res.url
-            .split("/")
-            .map((segment: string, i: number) =>
-              i === 0 ? segment : encodeURIComponent(decodeURIComponent(segment))
-            )
-            .join("/")
-        : "";
-      const a = new Audio(safeUrl);
-      audioRef.current = a;
-      setPlaying(filename);
-      a.onended = () => setPlaying(null);
-      a.onerror = () => setPlaying(null);
-      await a.play();
+      const url = safeAudioUrl(res.url ?? "");
+      await audioManager.play(filename, url);
+      // Langsung refresh dashboard setelah play
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     } catch {
-      setPlaying(null);
+      audioManager.stopBrowser();
     }
   }
 
@@ -35,16 +34,13 @@ export function useAudio() {
     try {
       await api.post(endpoint, {});
     } finally {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      setPlaying(null);
+      audioManager.stopBrowser();
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     }
   }
 
   function isPlaying(filename: string) {
-    return playing === filename;
+    return audioManager.isPlaying(filename);
   }
 
   return { playing, preview, stop, isPlaying };

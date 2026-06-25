@@ -1,9 +1,11 @@
 import { ChevronDown, Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useDayToggle, useJadwalEntry } from "../../hooks/useJadwal";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { api } from "../../lib/api";
+import { audioManager } from "../../lib/audioManager";
+import { queryClient } from "../../lib/queryClient";
 import { Button } from "../ui/Button";
 import { Toggle } from "../ui/Toggle";
 import { EntryModal } from "./EntryModal";
@@ -34,8 +36,9 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
   const [open, setOpen] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<{ entry: Entry; index: number } | null>(null);
-  const [playingFile, setPlayingFile] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Gunakan audioManager singleton — konsisten lintas komponen & navigasi
+  const [playingFile, setPlayingFile] = useState<string | null>(audioManager.playing);
 
   const entryMutation = useJadwalEntry();
   const dayToggle = useDayToggle();
@@ -43,6 +46,10 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
   useEffect(() => {
     setOpen(!isMobile);
   }, [isMobile]);
+
+  useEffect(() => {
+    return audioManager.subscribe(() => setPlayingFile(audioManager.playing));
+  }, []);
 
   async function handleSave(entry: Entry) {
     try {
@@ -83,16 +90,8 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
         hari,
         index,
       });
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      const a = new Audio(safeAudioUrl(res.url));
-      audioRef.current = a;
-      setPlayingFile(res.filename);
-      a.onended = () => setPlayingFile(null);
-      a.onerror = () => setPlayingFile(null);
-      await a.play();
+      await audioManager.play(res.filename, safeAudioUrl(res.url));
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -102,11 +101,8 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
     try {
       await api.post("/api/tones/stop", {});
     } finally {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      setPlayingFile(null);
+      audioManager.stopBrowser();
+      queryClient.invalidateQueries({ queryKey: ["service-status"] });
     }
   }
 
