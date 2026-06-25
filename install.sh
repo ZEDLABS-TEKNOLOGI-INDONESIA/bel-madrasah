@@ -82,16 +82,64 @@ install_go() {
     success "Go $(go version)"
 }
 
+node_ok() {
+    cmd_exists node && node -e "process.exit(parseInt(process.versions.node) >= 18 ? 0 : 1)" 2>/dev/null
+}
+
 install_node() {
-    if cmd_exists node && node -e "process.exit(parseInt(process.versions.node) >= 18 ? 0 : 1)" 2>/dev/null; then
-        success "Node.js: $(node -v)"
+    # Jika node sudah ada tapi npm tidak ada, hapus node terlebih dahulu
+    if cmd_exists node && ! cmd_exists npm; then
+        warning "Node.js ditemukan tanpa npm, menginstall ulang via NodeSource..."
+        local pm
+        pm=$(detect_pkg_manager)
+        case "$pm" in
+            apt)
+                apt-get remove -y nodejs 2>/dev/null || true
+                apt-get autoremove -y 2>/dev/null || true
+                ;;
+            dnf|yum)
+                "$pm" remove -y nodejs 2>/dev/null || true
+                ;;
+            pacman)
+                pacman -R --noconfirm nodejs 2>/dev/null || true
+                ;;
+        esac
+    fi
+
+    if node_ok && cmd_exists npm; then
+        success "Node.js: $(node -v) | npm: $(npm -v)"
         return
     fi
-    info "Menginstall Node.js LTS..."
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-    install_package nodejs
+
+    info "Menginstall Node.js LTS via NodeSource..."
+    local pm
+    pm=$(detect_pkg_manager)
+
+    case "$pm" in
+        apt)
+            curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+            apt-get install -y nodejs
+            ;;
+        dnf)
+            curl -fsSL https://rpm.nodesource.com/setup_lts.x | bash -
+            dnf install -y nodejs npm
+            ;;
+        yum)
+            curl -fsSL https://rpm.nodesource.com/setup_lts.x | bash -
+            yum install -y nodejs npm
+            ;;
+        pacman)
+            pacman -S --noconfirm nodejs npm
+            ;;
+        *)
+            error "Tidak bisa menginstall Node.js secara otomatis."
+            ;;
+    esac
+
     cmd_exists node || error "Gagal menginstall Node.js."
-    success "Node.js: $(node -v)"
+    cmd_exists npm  || error "npm tidak tersedia setelah instalasi Node.js."
+    node_ok         || error "Versi Node.js terlalu lama (butuh >= 18)."
+    success "Node.js: $(node -v) | npm: $(npm -v)"
 }
 
 install_pnpm() {
@@ -99,17 +147,49 @@ install_pnpm() {
         success "pnpm: $(pnpm -v)"
         return
     fi
+
     info "Menginstall pnpm..."
-    npm install -g pnpm
+
+    # Metode 1: via npm (jika tersedia)
+    if cmd_exists npm; then
+        npm install -g pnpm && cmd_exists pnpm && {
+            success "pnpm: $(pnpm -v)"
+            return
+        }
+    fi
+
+    # Metode 2: via installer resmi pnpm
+    info "Mencoba install pnpm via installer resmi..."
+    export PNPM_HOME="/usr/local/share/pnpm"
+    mkdir -p "$PNPM_HOME"
+    curl -fsSL https://get.pnpm.io/install.sh | env SHELL=/bin/bash PNPM_HOME="$PNPM_HOME" sh -
+
+    # Tambahkan ke PATH sesi ini
+    export PATH="$PNPM_HOME:$PATH"
+
+    # Simpan ke profile agar permanen
+    {
+        echo "export PNPM_HOME=\"${PNPM_HOME}\""
+        echo 'export PATH="$PNPM_HOME:$PATH"'
+    } > /etc/profile.d/pnpm.sh
+    chmod 644 /etc/profile.d/pnpm.sh
+
     cmd_exists pnpm || error "Gagal menginstall pnpm."
     success "pnpm: $(pnpm -v)"
 }
 
 build_frontend() {
     info "Membangun frontend..."
-    [ -f "${BUILD_DIR}/package.json" ] || { warning "package.json tidak ditemukan, lewati build FE."; return; }
+    [ -f "${BUILD_DIR}/package.json" ] || {
+        warning "package.json tidak ditemukan, lewati build frontend."
+        return
+    }
     (
         cd "$BUILD_DIR"
+        # Pastikan pnpm tersedia di subshell
+        export PNPM_HOME="/usr/local/share/pnpm"
+        export PATH="$PNPM_HOME:$PATH:/usr/local/go/bin"
+
         pnpm install --frozen-lockfile
         pnpm build
     ) || error "Gagal build frontend."
@@ -158,7 +238,6 @@ detect_alsa_device() {
         ALSA_DEVICE="default"
         return
     fi
-    # Pilih card pertama yang bukan HDMI
     local card=""
     while IFS= read -r line; do
         if echo "$line" | grep -q "^card" && ! echo "$line" | grep -qi "hdmi\|displayport"; then
@@ -171,7 +250,6 @@ detect_alsa_device() {
         ALSA_DEVICE="hw:${card},0"
         success "Audio device dipilih: ${ALSA_DEVICE}"
     else
-        # Fallback ke card pertama (termasuk HDMI)
         card=$(aplay -l 2>/dev/null | grep "^card" | head -1 | grep -o "^card [0-9]*" | awk '{print $2}')
         ALSA_DEVICE="hw:${card},0"
         warning "Hanya ditemukan HDMI, menggunakan: ${ALSA_DEVICE}"
@@ -202,23 +280,19 @@ backup_data() {
     ts=$(date +%Y%m%d-%H%M%S)
     local backup="/tmp/bel-madrasah-backup-${ts}"
     mkdir -p "$backup"
-    [ -d "${PROJECT_DIR}/data" ]  && cp -r "${PROJECT_DIR}/data"  "${backup}/"
-    [ -d "${PROJECT_DIR}/tone" ]  && cp -r "${PROJECT_DIR}/tone"  "${backup}/"
+    [ -d "${PROJECT_DIR}/data" ] && cp -r "${PROJECT_DIR}/data" "${backup}/"
+    [ -d "${PROJECT_DIR}/tone" ] && cp -r "${PROJECT_DIR}/tone" "${backup}/"
     success "Data di-backup ke: ${backup}"
 }
 
 detect_audio_backend() {
     info "Mendeteksi audio backend..."
-
-    # Cek PipeWire
     if cmd_exists pipewire && pactl info 2>/dev/null | grep -qi "pipewire"; then
         AUDIO_FORMAT="pipewire"
         ALSA_DEVICE="default"
         success "Backend: PipeWire"
         return
     fi
-
-    # Cek PulseAudio
     if cmd_exists pulseaudio || cmd_exists pactl; then
         if pactl info &>/dev/null; then
             AUDIO_FORMAT="pulse"
@@ -227,8 +301,6 @@ detect_audio_backend() {
             return
         fi
     fi
-
-    # Fallback ALSA
     AUDIO_FORMAT="alsa"
     success "Backend: ALSA (${ALSA_DEVICE})"
 }
@@ -247,6 +319,7 @@ build_binary() {
     done
     (
         cd "$BUILD_DIR"
+        export PATH="$PATH:/usr/local/go/bin"
         go mod tidy
         CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${PROJECT_DIR}/bel-madrasah" .
         if cmd_exists upx; then
@@ -402,7 +475,6 @@ create_service_user() {
         useradd -r -s /sbin/nologin -G audio "$SERVICE_USER"
         success "User ${SERVICE_USER} dibuat."
     else
-        # Pastikan user masuk group audio
         usermod -aG audio "$SERVICE_USER" 2>/dev/null || true
         success "User ${SERVICE_USER} sudah ada."
     fi
@@ -569,6 +641,7 @@ main() {
     prompt_tls
     setup_nginx
     setup_tls
+    create_service_user
     create_service
     copy_audio
     copy_uninstaller

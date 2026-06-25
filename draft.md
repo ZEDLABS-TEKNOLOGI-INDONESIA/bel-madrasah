@@ -4,7 +4,8 @@
 ```js
 import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, loadEnv } from "astro/config";
+import { defineConfig } from "astro/config";
+import { loadEnv } from "vite";
 
 const env = loadEnv("", process.cwd(), "BEL_");
 const BACKEND_URL = env.BEL_BACKEND_URL ?? "http://localhost:8082";
@@ -333,7 +334,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1038,7 +1041,12 @@ func handleTonesFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	raw := strings.TrimPrefix(r.URL.Path, "/api/tones/")
+	// Gunakan RawPath jika tersedia agar encoding karakter spesial ditangani dengan benar
+	rawPath := r.URL.RawPath
+	if rawPath == "" {
+		rawPath = r.URL.Path
+	}
+	raw := strings.TrimPrefix(rawPath, "/api/tones/")
 	decoded, err := url.PathUnescape(raw)
 	if err != nil {
 		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
@@ -1079,6 +1087,47 @@ func safeFilename(name string) (string, bool) {
 	return base, true
 }
 
+// sanitizeFilename membersihkan nama file dari karakter spesial, spasi, dan unicode.
+// Hasil: huruf kecil, hanya alfanumerik dan dash, ekstensi dipertahankan.
+func sanitizeFilename(name string) string {
+	ext := strings.ToLower(filepath.Ext(name))
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+
+	// Lowercase
+	base = strings.ToLower(base)
+
+	// Ganti spasi dan underscore dengan dash
+	base = strings.ReplaceAll(base, " ", "-")
+	base = strings.ReplaceAll(base, "_", "-")
+
+	// Hapus semua karakter selain huruf a-z, angka 0-9, dan dash
+	reg := regexp.MustCompile(`[^a-z0-9\-]`)
+	base = reg.ReplaceAllString(base, "")
+
+	// Hapus dash berulang
+	regDash := regexp.MustCompile(`-+`)
+	base = regDash.ReplaceAllString(base, "-")
+
+	// Trim dash di awal/akhir
+	base = strings.Trim(base, "-")
+
+	if base == "" {
+		base = "audio"
+	}
+	return base + ext
+}
+
+// compressAudio mengompres file audio ke 128kbps menggunakan ffmpeg.
+func compressAudio(src, dst string) error {
+	cmd := exec.Command(ffmpegPath,
+		"-hide_banner", "-loglevel", "error",
+		"-i", src,
+		"-b:a", "128k",
+		"-y", dst,
+	)
+	return cmd.Run()
+}
+
 func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -1095,28 +1144,49 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	filename, ok := safeFilename(header.Filename)
+	raw, ok := safeFilename(header.Filename)
 	if !ok {
 		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
 		return
 	}
+
+	// Sanitize nama file: hapus spasi, karakter spesial, unicode
+	filename := sanitizeFilename(raw)
+
 	ext := strings.ToLower(filepath.Ext(filename))
 	if ext != ".mp3" && ext != ".wav" && ext != ".ogg" {
 		jsonError(w, "format tidak didukung (mp3, wav, ogg)", http.StatusBadRequest)
 		return
 	}
 
-	dst, err := os.Create(filepath.Join(toneDir, filename))
+	fullPath := filepath.Join(toneDir, filename)
+	dst, err := os.Create(fullPath)
 	if err != nil {
 		jsonError(w, "gagal menyimpan file", http.StatusInternalServerError)
 		return
 	}
-	defer dst.Close()
-
 	if _, err := io.Copy(dst, file); err != nil {
+		dst.Close()
+		os.Remove(fullPath)
 		jsonError(w, "gagal menulis file", http.StatusInternalServerError)
 		return
 	}
+	dst.Close()
+
+	// Kompres otomatis ke 128kbps
+	tmpPath := fullPath + ".tmp.mp3"
+	if err := compressAudio(fullPath, tmpPath); err != nil {
+		logMsg("gagal compress audio (pakai file asli): " + err.Error())
+		os.Remove(tmpPath)
+	} else {
+		if err := os.Rename(tmpPath, fullPath); err != nil {
+			logMsg("gagal replace file setelah compress: " + err.Error())
+			os.Remove(tmpPath)
+		} else {
+			logMsg("audio dikompres: " + filename)
+		}
+	}
+
 	logMsg("audio diupload: " + filename)
 	jsonOK(w, map[string]string{"message": "upload berhasil", "filename": filename})
 }
@@ -1844,7 +1914,8 @@ func maxBodyMiddleware(next http.Handler) http.Handler {
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-hot-toast": "^2.6.0",
-    "tailwindcss": "^4.3.1"
+    "tailwindcss": "^4.3.1",
+    "vite": "^8.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
@@ -3386,6 +3457,13 @@ interface HariSectionProps {
   toneDir: string;
 }
 
+function safeAudioUrl(url: string): string {
+  return url
+    .split("/")
+    .map((segment, i) => (i === 0 ? segment : encodeURIComponent(decodeURIComponent(segment))))
+    .join("/");
+}
+
 export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSectionProps) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(true);
@@ -3444,7 +3522,7 @@ export function HariSection({ mode, hari, entries, disabled, toneDir }: HariSect
         audioRef.current.pause();
         audioRef.current = null;
       }
-      const a = new Audio(res.url);
+      const a = new Audio(safeAudioUrl(res.url));
       audioRef.current = a;
       setPlayingFile(res.filename);
       a.onended = () => setPlayingFile(null);
@@ -5817,7 +5895,15 @@ export function useAudio() {
         audioRef.current.pause();
         audioRef.current = null;
       }
-      const a = new Audio(res.url);
+      const safeUrl = res.url
+        ? res.url
+            .split("/")
+            .map((segment: string, i: number) =>
+              i === 0 ? segment : encodeURIComponent(decodeURIComponent(segment))
+            )
+            .join("/")
+        : "";
+      const a = new Audio(safeUrl);
       audioRef.current = a;
       setPlaying(filename);
       a.onended = () => setPlaying(null);
