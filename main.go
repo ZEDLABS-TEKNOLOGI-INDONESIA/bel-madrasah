@@ -74,7 +74,15 @@ func alsaDevice() string {
 	if d := os.Getenv("BEL_ALSA_DEVICE"); d != "" {
 		return d
 	}
-	return "hw:1,0"
+	// fallback: deteksi card pertama yang tersedia
+	if out, err := exec.Command("sh", "-c",
+		"aplay -l | grep '^card' | head -1 | grep -oP '(?<=card )\\d+'").Output(); err == nil {
+		card := strings.TrimSpace(string(out))
+		if card != "" {
+			return "hw:" + card + ",0"
+		}
+	}
+	return "hw:0,0"
 }
 
 func volumeString() string {
