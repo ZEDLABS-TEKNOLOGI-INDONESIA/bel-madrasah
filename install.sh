@@ -23,7 +23,7 @@ ENABLE_TLS=0
 DOMAIN=""
 EMAIL=""
 IS_UPDATE=0
-ALSA_DEVICE="hw:1,0"
+ALSA_DEVICE="hw:0,0"
 AUDIO_FORMAT="alsa"
 
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -87,7 +87,6 @@ node_ok() {
 }
 
 install_node() {
-    # Jika node sudah ada tapi npm tidak ada, hapus node terlebih dahulu
     if cmd_exists node && ! cmd_exists npm; then
         warning "Node.js ditemukan tanpa npm, menginstall ulang via NodeSource..."
         local pm
@@ -145,16 +144,13 @@ install_node() {
 install_pnpm() {
     info "Membersihkan instalasi pnpm lama..."
 
-    # Hapus semua wrapper/symlink pnpm yang mungkin rusak
     rm -f /usr/local/bin/pnpm /usr/local/bin/pnpx
     rm -rf /usr/local/share/pnpm
 
-    # Install pnpm via npm --force agar mendarat di NVM_BIN (node aktif)
     if cmd_exists npm; then
         info "Menginstall pnpm via npm..."
         npm install -g pnpm --force 2>&1 | grep -v "^npm notice" || true
 
-        # Cari binary hasil install npm (biasanya di NVM_BIN atau prefix npm)
         local npm_prefix
         npm_prefix=$(npm config get prefix 2>/dev/null || true)
         local candidates=(
@@ -165,16 +161,12 @@ install_pnpm() {
             [ -z "$c" ] && continue
             [ -x "$c" ] || continue
             if "$c" --version >/dev/null 2>&1; then
-                # Buat symlink ke /usr/local/bin
                 ln -sf "$c" /usr/local/bin/pnpm
-                # Verifikasi symlink benar-benar bisa dipanggil
                 if /usr/local/bin/pnpm --version >/dev/null 2>&1; then
                     success "pnpm: $(/usr/local/bin/pnpm --version) (via ${c})"
                     return
                 fi
-                # Jika symlink masih gagal, panggil langsung tanpa symlink
                 rm -f /usr/local/bin/pnpm
-                # Buat wrapper script sederhana
                 printf '#!/bin/bash\nexec "%s" "$@"\n' "$c" > /usr/local/bin/pnpm
                 chmod +x /usr/local/bin/pnpm
                 if /usr/local/bin/pnpm --version >/dev/null 2>&1; then
@@ -195,10 +187,8 @@ build_frontend() {
         return
     }
 
-    # Resolve path pnpm yang benar-benar berfungsi
     local pnpm_bin="/usr/local/bin/pnpm"
     if ! "$pnpm_bin" --version >/dev/null 2>&1; then
-        # Fallback: cari langsung di npm prefix / NVM_BIN
         local npm_prefix
         npm_prefix=$(npm config get prefix 2>/dev/null || true)
         for c in "${NVM_BIN:-}/pnpm" "${npm_prefix}/bin/pnpm"; do
@@ -254,12 +244,13 @@ install_tools() {
 }
 
 detect_alsa_device() {
-    info "Mendeteksi audio device..."
-    if ! aplay -l 2>/dev/null | grep -q "card"; then
-        warning "Tidak ada audio device ditemukan, menggunakan default."
+    info "Mendeteksi audio device ALSA..."
+    if ! aplay -l 2>/dev/null | grep -q "^card"; then
+        warning "Tidak ada audio device ALSA ditemukan, menggunakan default."
         ALSA_DEVICE="default"
         return
     fi
+
     local card=""
     while IFS= read -r line; do
         if echo "$line" | grep -q "^card" && ! echo "$line" | grep -qi "hdmi\|displayport"; then
@@ -275,6 +266,35 @@ detect_alsa_device() {
         card=$(aplay -l 2>/dev/null | grep "^card" | head -1 | grep -o "^card [0-9]*" | awk '{print $2}')
         ALSA_DEVICE="hw:${card},0"
         warning "Hanya ditemukan HDMI, menggunakan: ${ALSA_DEVICE}"
+    fi
+}
+
+prompt_audio_backend() {
+    echo
+    info "Backend audio default: ALSA (${ALSA_DEVICE})"
+    read -rp "Gunakan output Bluetooth/PulseAudio-PipeWire sebagai gantinya? [y/N]: " -n 1; echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if cmd_exists pipewire && pactl info 2>/dev/null | grep -qi "pipewire"; then
+            AUDIO_FORMAT="pipewire"
+            ALSA_DEVICE="default"
+            success "Backend diset ke PipeWire (Bluetooth)."
+        elif cmd_exists pulseaudio || cmd_exists pactl; then
+            if pactl info &>/dev/null; then
+                AUDIO_FORMAT="pulse"
+                ALSA_DEVICE="default"
+                success "Backend diset ke PulseAudio (Bluetooth)."
+            else
+                warning "PulseAudio terdeteksi tapi server tidak aktif, tetap menggunakan ALSA."
+                AUDIO_FORMAT="alsa"
+            fi
+        else
+            warning "PipeWire/PulseAudio tidak ditemukan, tetap menggunakan ALSA."
+            AUDIO_FORMAT="alsa"
+        fi
+        warning "Catatan: output Bluetooth memerlukan 'sudo loginctl enable-linger ${SERVICE_USER}' agar tetap berfungsi tanpa sesi login desktop."
+    else
+        AUDIO_FORMAT="alsa"
+        success "Backend: ALSA (${ALSA_DEVICE})"
     fi
 }
 
@@ -305,32 +325,6 @@ backup_data() {
     [ -d "${PROJECT_DIR}/data" ] && cp -r "${PROJECT_DIR}/data" "${backup}/"
     [ -d "${PROJECT_DIR}/tone" ] && cp -r "${PROJECT_DIR}/tone" "${backup}/"
     success "Data di-backup ke: ${backup}"
-}
-
-detect_audio_backend() {
-    info "Mendeteksi audio backend..."
-    if cmd_exists pipewire && pactl info 2>/dev/null | grep -qi "pipewire"; then
-        AUDIO_FORMAT="pipewire"
-        ALSA_DEVICE="default"
-        success "Backend: PipeWire"
-        return
-    fi
-    if cmd_exists pulseaudio || cmd_exists pactl; then
-        if pactl info &>/dev/null; then
-            AUDIO_FORMAT="pulse"
-            ALSA_DEVICE="default"
-            success "Backend: PulseAudio"
-            return
-        fi
-    fi
-    AUDIO_FORMAT="alsa"
-    success "Backend: ALSA (${ALSA_DEVICE})"
-}
-
-patch_alsa_device() {
-    info "Menyesuaikan audio output di main.go (${AUDIO_FORMAT}:${ALSA_DEVICE})..."
-    sed -i "s|\"-f\", \"alsa\", \"default\"|\"-f\", \"${AUDIO_FORMAT}\", \"${ALSA_DEVICE}\"|g" "${BUILD_DIR}/main.go"
-    success "Audio output diset ke: -f ${AUDIO_FORMAT} ${ALSA_DEVICE}"
 }
 
 build_binary() {
@@ -651,13 +645,12 @@ main() {
     check_requirements
     install_tools
     detect_alsa_device
-    detect_audio_backend
+    prompt_audio_backend
     clone_repo
     install_node
     install_pnpm
     build_frontend
     prepare_dirs
-    patch_alsa_device
     build_binary
     copy_static
     generate_pwa_icons
