@@ -519,6 +519,7 @@ Restart=on-failure
 RestartSec=10
 User=${SERVICE_USER}
 Group=audio
+Environment=BEL_ALSA_DEVICE=${ALSA_DEVICE}
 ${tls_env}
 StandardOutput=journal
 StandardError=journal
