@@ -137,7 +137,7 @@ void lcdTask(void *param)
         DateTime now = getNow();
         snprintf(line0, sizeof(line0), "    %02d:%02d:%02d    ", now.hour(), now.minute(), now.second());
 
-        int screen = (tick / 6) % 3; // ganti tiap ~3 detik
+        int screen = (tick / 6) % 1; // ganti tiap ~1 detik
         if (screen == 0)
         {
             snprintf(line1, sizeof(line1), "%s %02d/%02d/%04d", dayShort[now.dayOfTheWeek() % 7], now.day(), now.month(), now.year());
