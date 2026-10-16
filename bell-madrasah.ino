@@ -6,7 +6,8 @@
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <RTClib.h>
-#include <LiquidCrystal_I2C.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include <LittleFS.h>
 #include <time.h>
 #include <vector>
@@ -17,10 +18,17 @@
 #include "index_html.h"
 
 // ================== PIN CONFIG (ESP32-C3 Super Mini) ==================
-#define I2C_SDA_PIN 4
-#define I2C_SCL_PIN 5
-#define DFP_RX_PIN 0
-#define DFP_TX_PIN 1
+// RTC DS1307 (I2C)
+#define I2C_SDA_PIN 8
+#define I2C_SCL_PIN 9
+// OLED SSD1306 128x32 I2C (satu bus I2C dengan RTC)
+#define OLED_ADDR 0x3C
+#define OLED_WIDTH 128
+#define OLED_HEIGHT 32
+#define OLED_SCREEN_INTERVAL 3000UL // ganti tampilan tiap 3 detik
+// DFPlayer Mini (UART1)
+#define DFP_RX_PIN 20 // RX ESP <- TX DFPlayer
+#define DFP_TX_PIN 21 // TX ESP -> RX DFPlayer
 
 // ================== KONSTANTA ==================
 const char *AP_SSID = "BELL MADRASAH V0.1.0";
@@ -32,7 +40,7 @@ const char *SCHEDULE_FILE = "/schedule.json";
 const char *CONFIG_FILE = "/config.json";
 const char *TRACKS_FILE = "/tracks.json";
 
-const size_t MAX_SLOTS = 300;
+const size_t MAX_SLOTS = 1000;
 const size_t MAX_TRACKS = 60;
 const size_t SCHED_DOC_SIZE = 49152;
 const unsigned long NTP_SYNC_INTERVAL = 3600000UL;
@@ -42,11 +50,6 @@ const char *modeCode(ScheduleMode m)
 {
     static const char *c[] = {"reguler", "ramadhan", "pts", "pas"};
     return (m < MODE_COUNT) ? c[m] : "reguler";
-}
-const char *modeLabel(ScheduleMode m)
-{
-    static const char *c[] = {"REGULER", "RAMADHAN", "PTS", "PAS"};
-    return (m < MODE_COUNT) ? c[m] : "REGULER";
 }
 ScheduleMode modeFromCode(const String &s)
 {
@@ -60,8 +63,9 @@ ScheduleMode modeFromCode(const String &s)
 }
 
 // ================== OBJEK GLOBAL ==================
-RTC_DS3231 rtc;
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+RTC_DS1307 rtc;
+Adafruit_SSD1306 oled(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
+bool oledReady = false;
 AsyncWebServer server(80);
 HardwareSerial dfpSerial(1);
 DFRobotDFPlayerMini dfPlayer;
@@ -119,48 +123,69 @@ void setRtc(const DateTime &dt)
     rtc.adjust(dt);
 }
 
-// ================== LCD ==================
-void printLcdLine(int row, const char *text)
+// ================== OLED ==================
+// Gambar teks rata tengah horizontal pada posisi y. Harus dipanggil saat i2cMutex dipegang.
+void oledDrawCentered(const String &text, int y, uint8_t size)
 {
-    char buf[17];
-    snprintf(buf, sizeof(buf), "%-16.16s", text);
-    lcd.setCursor(0, row);
-    lcd.print(buf);
+    int16_t x1, y1;
+    uint16_t w, h;
+    oled.setTextSize(size);
+    oled.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+    oled.setCursor(((int)OLED_WIDTH - (int)w) / 2 - x1, y);
+    oled.print(text);
 }
-void lcdTask(void *param)
+
+// Teks isi: big = true memakai huruf besar (size 2, untuk jam);
+// big = false memakai huruf kecil (size 1, untuk IP dan nama WiFi, dipotong 21 karakter).
+void oledDrawValue(String text, bool big)
 {
-    static const char *dayShort[] = {"Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"};
-    char line0[17], line1[17];
-    unsigned long tick = 0;
+    if (big)
+    {
+        oledDrawCentered(text, 14, 2);
+    }
+    else
+    {
+        if (text.length() > 21)
+            text = text.substring(0, 21);
+        oledDrawCentered(text, 18, 1);
+    }
+}
+
+void oledShow(const String &label, const String &value, bool big = false)
+{
+    Lock l(i2cMutex);
+    if (!oledReady)
+        return;
+    oled.clearDisplay();
+    oled.setTextColor(SSD1306_WHITE);
+    oledDrawCentered(label, 0, 1);
+    oledDrawValue(value, big);
+    oled.display();
+}
+
+void oledTask(void *param)
+{
     for (;;)
     {
-        DateTime now = getNow();
-        snprintf(line0, sizeof(line0), "    %02d:%02d:%02d    ", now.hour(), now.minute(), now.second());
+        // 3 tampilan bergantian: 0 = Waktu, 1 = IP Address, 2 = Nama WiFi
+        int screen = (millis() / OLED_SCREEN_INTERVAL) % 3;
+        bool sta = WiFi.status() == WL_CONNECTED;
 
-        int screen = (tick / 6) % 1; // ganti tiap ~1 detik
         if (screen == 0)
         {
-            snprintf(line1, sizeof(line1), "%s %02d/%02d/%04d", dayShort[now.dayOfTheWeek() % 7], now.day(), now.month(), now.year());
+            DateTime now = getNow();
+            char tb[12];
+            snprintf(tb, sizeof(tb), "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+            oledShow("WAKTU", tb, true);
         }
         else if (screen == 1)
         {
-            if (holidayMode)
-                snprintf(line1, sizeof(line1), "MODE LIBUR");
-            else
-                snprintf(line1, sizeof(line1), "%s Vol:%d", modeLabel(activeMode), currentVolume);
+            oledShow("IP ADDRESS", sta ? WiFi.localIP().toString() : WiFi.softAPIP().toString());
         }
         else
         {
-            String ip = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : String("192.168.4.1");
-            snprintf(line1, sizeof(line1), "%s", ip.c_str());
+            oledShow("NAMA WIFI", sta ? WiFi.SSID() : String(AP_SSID));
         }
-
-        {
-            Lock l(i2cMutex);
-            printLcdLine(0, line0);
-            printLcdLine(1, line1);
-        }
-        tick++;
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
@@ -389,95 +414,39 @@ std::vector<BellSlot> defaultSchedule()
 {
     std::vector<BellSlot> v;
 
-    // ---- REGULER: Senin ----
-    addSlot(v, MODE_REGULER, "06:44", "mon", T_SHOLAWAT);
-    addSlot(v, MODE_REGULER, "06:50", "mon", T_MARS);
+    // ---- REGULER (sesuai jadwal di tampilan web, 32 bel) ----
+    addSlot(v, MODE_REGULER, "06:30", "mon-fri", T_SHOLAWAT);
+    addSlot(v, MODE_REGULER, "06:45", "mon-fri", T_MARS);
+    addSlot(v, MODE_REGULER, "07:30", "mon-fri", T_PEL1);
+    addSlot(v, MODE_REGULER, "07:50", "mon-fri", T_PEL1);
+    addSlot(v, MODE_REGULER, "07:50", "mon-fri", T_PEL1);
+    addSlot(v, MODE_REGULER, "07:50", "mon-fri", T_PEL1);
+    addSlot(v, MODE_REGULER, "08:30", "mon-fri", T_PEL2);
+    addSlot(v, MODE_REGULER, "09:10", "mon-fri", T_PEL3);
+    addSlot(v, MODE_REGULER, "09:50", "mon-fri", T_ISTIRAHAT1);
+    addSlot(v, MODE_REGULER, "10:05", "mon-fri", T_KEBERSIHAN);
+    addSlot(v, MODE_REGULER, "10:10", "mon-fri", T_PEL4);
+    addSlot(v, MODE_REGULER, "10:50", "mon-fri", T_PEL5);
+    addSlot(v, MODE_REGULER, "11:30", "mon-fri", T_ISTIRAHAT2);
+    addSlot(v, MODE_REGULER, "11:45", "mon-fri", T_KEBERSIHAN);
+    addSlot(v, MODE_REGULER, "12:35", "mon-fri", T_KEBERSIHAN);
+    addSlot(v, MODE_REGULER, "16:30", "mon-fri", T_TANAH_AIRKU);
+    addSlot(v, MODE_REGULER, "12:40", "mon-thu", T_PEL6);
+    addSlot(v, MODE_REGULER, "13:20", "mon-thu", T_PEL7);
+    addSlot(v, MODE_REGULER, "14:00", "mon-thu", T_PEL8);
+    addSlot(v, MODE_REGULER, "14:40", "mon-thu", T_PEL9);
+    addSlot(v, MODE_REGULER, "15:20", "mon-thu", T_SELESAI);
+    addSlot(v, MODE_REGULER, "15:21", "mon-thu", T_HYMNE);
     addSlot(v, MODE_REGULER, "07:00", "mon", T_UPACARA);
-    addSlot(v, MODE_REGULER, "08:10", "mon", T_PEL2);
-    addSlot(v, MODE_REGULER, "08:50", "mon", T_PEL3);
-    addSlot(v, MODE_REGULER, "09:30", "mon", T_PEL4);
     addSlot(v, MODE_REGULER, "10:00", "mon", T_INDONESIA_RAYA);
-    addSlot(v, MODE_REGULER, "10:10", "mon", T_ISTIRAHAT1);
-    addSlot(v, MODE_REGULER, "10:20", "mon", T_KEBERSIHAN);
-    addSlot(v, MODE_REGULER, "10:30", "mon", T_PEL5);
-    addSlot(v, MODE_REGULER, "11:10", "mon", T_PEL6);
-    addSlot(v, MODE_REGULER, "11:50", "mon", T_ISTIRAHAT2);
-    addSlot(v, MODE_REGULER, "12:30", "mon", T_KEBERSIHAN);
-    addSlot(v, MODE_REGULER, "12:40", "mon", T_PEL7);
-    addSlot(v, MODE_REGULER, "13:20", "mon", T_PEL8);
-    addSlot(v, MODE_REGULER, "14:00", "mon", T_PEL9);
-    addSlot(v, MODE_REGULER, "14:40", "mon", T_PEL10);
-    addSlot(v, MODE_REGULER, "15:20", "mon", T_SELESAI);
-    addSlot(v, MODE_REGULER, "15:21", "mon", T_TANAH_AIRKU);
-    addSlot(v, MODE_REGULER, "16:30", "mon", T_HYMNE);
-
-    // ---- REGULER: Selasa & Rabu ----
-    {
-        const char *days2[] = {"tue", "wed"};
-        for (int i = 0; i < 2; i++)
-        {
-            const char *d = days2[i];
-            addSlot(v, MODE_REGULER, "06:44", d, T_SHOLAWAT);
-            addSlot(v, MODE_REGULER, "06:50", d, T_MARS);
-            addSlot(v, MODE_REGULER, "07:30", d, T_PEL1);
-            addSlot(v, MODE_REGULER, "08:10", d, T_PEL2);
-            addSlot(v, MODE_REGULER, "08:50", d, T_PEL3);
-            addSlot(v, MODE_REGULER, "09:30", d, T_PEL4);
-            addSlot(v, MODE_REGULER, "10:10", d, T_ISTIRAHAT1);
-            addSlot(v, MODE_REGULER, "10:20", d, T_KEBERSIHAN);
-            addSlot(v, MODE_REGULER, "10:30", d, T_PEL5);
-            addSlot(v, MODE_REGULER, "11:10", d, T_PEL6);
-            addSlot(v, MODE_REGULER, "11:50", d, T_ISTIRAHAT2);
-            addSlot(v, MODE_REGULER, "12:30", d, T_KEBERSIHAN);
-            addSlot(v, MODE_REGULER, "12:40", d, T_PEL7);
-            addSlot(v, MODE_REGULER, "13:20", d, T_PEL8);
-            addSlot(v, MODE_REGULER, "14:00", d, T_PEL9);
-            addSlot(v, MODE_REGULER, "14:40", d, T_PEL10);
-            addSlot(v, MODE_REGULER, "15:20", d, T_SELESAI);
-            addSlot(v, MODE_REGULER, "15:21", d, T_TANAH_AIRKU);
-            addSlot(v, MODE_REGULER, "16:30", d, T_HYMNE);
-        }
-    }
-
-    // ---- REGULER: Kamis ----
-    addSlot(v, MODE_REGULER, "06:44", "thu", T_SHOLAWAT);
-    addSlot(v, MODE_REGULER, "06:50", "thu", T_MARS);
-    addSlot(v, MODE_REGULER, "07:00", "thu", T_LITERASI);
-    addSlot(v, MODE_REGULER, "08:10", "thu", T_PEL2);
-    addSlot(v, MODE_REGULER, "08:50", "thu", T_PEL3);
-    addSlot(v, MODE_REGULER, "09:30", "thu", T_PEL4);
+    addSlot(v, MODE_REGULER, "07:00", "wed", T_LITERASI);
     addSlot(v, MODE_REGULER, "10:00", "thu", T_INDONESIA_RAYA);
-    addSlot(v, MODE_REGULER, "10:10", "thu", T_ISTIRAHAT1);
-    addSlot(v, MODE_REGULER, "10:20", "thu", T_KEBERSIHAN);
-    addSlot(v, MODE_REGULER, "10:30", "thu", T_PEL5);
-    addSlot(v, MODE_REGULER, "11:10", "thu", T_PEL6);
-    addSlot(v, MODE_REGULER, "11:50", "thu", T_ISTIRAHAT2);
-    addSlot(v, MODE_REGULER, "12:30", "thu", T_KEBERSIHAN);
-    addSlot(v, MODE_REGULER, "12:40", "thu", T_PEL7);
-    addSlot(v, MODE_REGULER, "13:20", "thu", T_PEL8);
-    addSlot(v, MODE_REGULER, "14:00", "thu", T_PEL9);
-    addSlot(v, MODE_REGULER, "14:40", "thu", T_PEL10);
-    addSlot(v, MODE_REGULER, "15:20", "thu", T_SELESAI);
-    addSlot(v, MODE_REGULER, "15:21", "thu", T_TANAH_AIRKU);
-    addSlot(v, MODE_REGULER, "16:30", "thu", T_HYMNE);
-
-    // ---- REGULER: Jumat ----
-    addSlot(v, MODE_REGULER, "06:44", "fri", T_SHOLAWAT);
-    addSlot(v, MODE_REGULER, "06:50", "fri", T_MARS);
     addSlot(v, MODE_REGULER, "07:00", "fri", T_ROHANI);
-    addSlot(v, MODE_REGULER, "08:10", "fri", T_PEL3);
-    addSlot(v, MODE_REGULER, "08:50", "fri", T_PEL4);
-    addSlot(v, MODE_REGULER, "09:30", "fri", T_ISTIRAHAT1);
-    addSlot(v, MODE_REGULER, "09:40", "fri", T_KEBERSIHAN);
-    addSlot(v, MODE_REGULER, "10:10", "fri", T_PEL5);
-    addSlot(v, MODE_REGULER, "10:40", "fri", T_PEL6);
-    addSlot(v, MODE_REGULER, "11:20", "fri", T_ISTIRAHAT2);
-    addSlot(v, MODE_REGULER, "12:50", "fri", T_PEL7);
-    addSlot(v, MODE_REGULER, "13:30", "fri", T_PEL8);
-    addSlot(v, MODE_REGULER, "14:10", "fri", T_AKHIR_PEKAN);
-    addSlot(v, MODE_REGULER, "14:11", "fri", T_TANAH_AIRKU);
-    addSlot(v, MODE_REGULER, "14:12", "fri", T_PRAMUKA);
-    addSlot(v, MODE_REGULER, "16:00", "fri", T_HYMNE);
+    addSlot(v, MODE_REGULER, "13:10", "fri", T_PEL6);
+    addSlot(v, MODE_REGULER, "13:50", "fri", T_PEL7);
+    addSlot(v, MODE_REGULER, "14:30", "fri", T_PEL8);
+    addSlot(v, MODE_REGULER, "15:10", "fri", T_PRAMUKA);
+    addSlot(v, MODE_REGULER, "16:00", "fri", T_AKHIR_PEKAN);
 
     // ---- RAMADHAN: Senin ----
     addSlot(v, MODE_RAMADHAN, "06:50", "mon", T_MARS);
@@ -1272,15 +1241,18 @@ void setup()
     dfpMutex = xSemaphoreCreateMutex();
 
     Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-    lcd.init();
-    lcd.backlight();
-    lcd.clear();
+
+    oledReady = oled.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
+    if (!oledReady)
+        Serial.println("OLED SSD1306 tidak terdeteksi!");
+    else
+        oledShow("BEL MADRASAH", "Memulai...");
 
     if (!rtc.begin())
-        Serial.println("RTC tidak terdeteksi!");
-    if (rtc.lostPower())
+        Serial.println("RTC DS1307 tidak terdeteksi!");
+    if (!rtc.isrunning()) // DS1307 tidak punya lostPower(); isrunning() false bila osilator berhenti
     {
-        Serial.println("RTC kehilangan daya, set waktu sementara ke compile time");
+        Serial.println("RTC belum berjalan, set waktu sementara ke compile time");
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
     }
 
@@ -1294,7 +1266,7 @@ void setup()
 
     dfpBegin();
 
-    xTaskCreate(lcdTask, "lcdTask", 4096, NULL, 1, NULL);
+    xTaskCreate(oledTask, "oledTask", 4096, NULL, 1, NULL);
     xTaskCreate(bellTask, "bellTask", 6144, NULL, 1, NULL);
     xTaskCreate(wifiTask, "wifiTask", 10240, NULL, 1, NULL);
 }
