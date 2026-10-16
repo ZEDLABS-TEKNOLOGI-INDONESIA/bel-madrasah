@@ -11,6 +11,5 @@
 ## Kebutuhan
 - **ESP32-C3 Super Mini** — WiFi, otak sistem
 - **Modul DFPlayer Mini**
-- RTC DS3231
-- LCD 1602A + PCF8574, catu daya 5V
+- RTC DS1307
 - Amplifier External
