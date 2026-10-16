@@ -17,20 +17,15 @@
 #include "types.h"
 #include "index_html.h"
 
-// ================== PIN CONFIG (ESP32-C3 Super Mini) ==================
-// RTC DS1307 (I2C)
 #define I2C_SDA_PIN 8
 #define I2C_SCL_PIN 9
-// OLED SSD1306 128x32 I2C (satu bus I2C dengan RTC)
 #define OLED_ADDR 0x3C
 #define OLED_WIDTH 128
 #define OLED_HEIGHT 32
-#define OLED_SCREEN_INTERVAL 3000UL // ganti tampilan tiap 3 detik
-// DFPlayer Mini (UART1)
-#define DFP_RX_PIN 20 // RX ESP <- TX DFPlayer
-#define DFP_TX_PIN 21 // TX ESP -> RX DFPlayer
+#define OLED_SCREEN_INTERVAL 10000UL
+#define DFP_RX_PIN 20
+#define DFP_TX_PIN 21
 
-// ================== KONSTANTA ==================
 const char *AP_SSID = "BELL MADRASAH V0.1.0";
 const char *AP_PASS = "P@ssw0rd";
 const IPAddress AP_IP(192, 168, 4, 1);
@@ -40,7 +35,7 @@ const char *SCHEDULE_FILE = "/schedule.json";
 const char *CONFIG_FILE = "/config.json";
 const char *TRACKS_FILE = "/tracks.json";
 
-const size_t MAX_SLOTS = 1000;
+const size_t MAX_SLOTS = 300;
 const size_t MAX_TRACKS = 60;
 const size_t SCHED_DOC_SIZE = 49152;
 const unsigned long NTP_SYNC_INTERVAL = 3600000UL;
@@ -62,7 +57,6 @@ ScheduleMode modeFromCode(const String &s)
     return MODE_REGULER;
 }
 
-// ================== OBJEK GLOBAL ==================
 RTC_DS1307 rtc;
 Adafruit_SSD1306 oled(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 bool oledReady = false;
@@ -70,7 +64,6 @@ AsyncWebServer server(80);
 HardwareSerial dfpSerial(1);
 DFRobotDFPlayerMini dfPlayer;
 
-// ================== STATE ==================
 std::vector<BellSlot> schedule;
 std::vector<TrackInfo> trackList;
 StaticCfg staticCfg;
@@ -111,7 +104,6 @@ struct Lock
     }
 };
 
-// ================== RTC ==================
 DateTime getNow()
 {
     Lock l(i2cMutex);
@@ -123,8 +115,6 @@ void setRtc(const DateTime &dt)
     rtc.adjust(dt);
 }
 
-// ================== OLED ==================
-// Gambar teks rata tengah horizontal pada posisi y. Harus dipanggil saat i2cMutex dipegang.
 void oledDrawCentered(const String &text, int y, uint8_t size)
 {
     int16_t x1, y1;
@@ -135,8 +125,6 @@ void oledDrawCentered(const String &text, int y, uint8_t size)
     oled.print(text);
 }
 
-// Teks isi: big = true memakai huruf besar (size 2, untuk jam);
-// big = false memakai huruf kecil (size 1, untuk IP dan nama WiFi, dipotong 21 karakter).
 void oledDrawValue(String text, bool big)
 {
     if (big)
@@ -167,7 +155,6 @@ void oledTask(void *param)
 {
     for (;;)
     {
-        // 3 tampilan bergantian: 0 = Waktu, 1 = IP Address, 2 = Nama WiFi
         int screen = (millis() / OLED_SCREEN_INTERVAL) % 3;
         bool sta = WiFi.status() == WL_CONNECTED;
 
@@ -190,7 +177,6 @@ void oledTask(void *param)
     }
 }
 
-// ================== HELPER ==================
 const char *dayCode(int dow)
 {
     static const char *codes[] = {"sun", "mon", "tue", "wed", "thu", "fri", "sat"};
@@ -249,7 +235,6 @@ IPAddress u2ip(uint32_t v)
     return IPAddress((uint8_t)(v >> 24), (uint8_t)(v >> 16), (uint8_t)(v >> 8), (uint8_t)v);
 }
 
-// ================== PENYIMPANAN (LittleFS) ==================
 String fsReadText(const char *path)
 {
     String out;
@@ -340,7 +325,6 @@ void sortSchedule()
     return a.time < b.time; });
 }
 
-// ---- Nomor track default ----
 enum TrackId
 {
     T_SHOLAWAT = 1,
@@ -414,12 +398,9 @@ std::vector<BellSlot> defaultSchedule()
 {
     std::vector<BellSlot> v;
 
-    // ---- REGULER (sesuai jadwal di tampilan web, 32 bel) ----
     addSlot(v, MODE_REGULER, "06:30", "mon-fri", T_SHOLAWAT);
     addSlot(v, MODE_REGULER, "06:45", "mon-fri", T_MARS);
     addSlot(v, MODE_REGULER, "07:30", "mon-fri", T_PEL1);
-    addSlot(v, MODE_REGULER, "07:50", "mon-fri", T_PEL1);
-    addSlot(v, MODE_REGULER, "07:50", "mon-fri", T_PEL1);
     addSlot(v, MODE_REGULER, "07:50", "mon-fri", T_PEL1);
     addSlot(v, MODE_REGULER, "08:30", "mon-fri", T_PEL2);
     addSlot(v, MODE_REGULER, "09:10", "mon-fri", T_PEL3);
@@ -447,85 +428,6 @@ std::vector<BellSlot> defaultSchedule()
     addSlot(v, MODE_REGULER, "14:30", "fri", T_PEL8);
     addSlot(v, MODE_REGULER, "15:10", "fri", T_PRAMUKA);
     addSlot(v, MODE_REGULER, "16:00", "fri", T_AKHIR_PEKAN);
-
-    // ---- RAMADHAN: Senin ----
-    addSlot(v, MODE_RAMADHAN, "06:50", "mon", T_MARS);
-    addSlot(v, MODE_RAMADHAN, "07:00", "mon", T_UPACARA);
-    addSlot(v, MODE_RAMADHAN, "07:40", "mon", T_PEL2);
-    addSlot(v, MODE_RAMADHAN, "08:20", "mon", T_PEL3);
-    addSlot(v, MODE_RAMADHAN, "09:00", "mon", T_PEL4);
-    addSlot(v, MODE_RAMADHAN, "09:30", "mon", T_ISTIRAHAT1);
-    addSlot(v, MODE_RAMADHAN, "09:40", "mon", T_PEL5);
-    addSlot(v, MODE_RAMADHAN, "10:20", "mon", T_PEL6);
-    addSlot(v, MODE_RAMADHAN, "11:00", "mon", T_SELESAI);
-    addSlot(v, MODE_RAMADHAN, "11:01", "mon", T_TANAH_AIRKU);
-
-    // ---- RAMADHAN: Selasa & Rabu ----
-    {
-        const char *days2[] = {"tue", "wed"};
-        for (int i = 0; i < 2; i++)
-        {
-            const char *d = days2[i];
-            addSlot(v, MODE_RAMADHAN, "06:50", d, T_MARS);
-            addSlot(v, MODE_RAMADHAN, "07:10", d, T_PEL1);
-            addSlot(v, MODE_RAMADHAN, "07:50", d, T_PEL2);
-            addSlot(v, MODE_RAMADHAN, "08:30", d, T_PEL3);
-            addSlot(v, MODE_RAMADHAN, "09:10", d, T_PEL4);
-            addSlot(v, MODE_RAMADHAN, "09:40", d, T_ISTIRAHAT1);
-            addSlot(v, MODE_RAMADHAN, "09:50", d, T_PEL5);
-            addSlot(v, MODE_RAMADHAN, "10:30", d, T_PEL6);
-            addSlot(v, MODE_RAMADHAN, "11:00", d, T_SELESAI);
-            addSlot(v, MODE_RAMADHAN, "11:01", d, T_TANAH_AIRKU);
-        }
-    }
-
-    // ---- RAMADHAN: Kamis ----
-    addSlot(v, MODE_RAMADHAN, "06:50", "thu", T_MARS);
-    addSlot(v, MODE_RAMADHAN, "07:00", "thu", T_LITERASI);
-    addSlot(v, MODE_RAMADHAN, "07:40", "thu", T_PEL2);
-    addSlot(v, MODE_RAMADHAN, "08:20", "thu", T_PEL3);
-    addSlot(v, MODE_RAMADHAN, "09:00", "thu", T_PEL4);
-    addSlot(v, MODE_RAMADHAN, "09:30", "thu", T_ISTIRAHAT1);
-    addSlot(v, MODE_RAMADHAN, "09:40", "thu", T_PEL5);
-    addSlot(v, MODE_RAMADHAN, "10:20", "thu", T_PEL6);
-    addSlot(v, MODE_RAMADHAN, "11:00", "thu", T_SELESAI);
-    addSlot(v, MODE_RAMADHAN, "11:01", "thu", T_TANAH_AIRKU);
-
-    // ---- RAMADHAN: Jumat ----
-    addSlot(v, MODE_RAMADHAN, "06:50", "fri", T_MARS);
-    addSlot(v, MODE_RAMADHAN, "07:00", "fri", T_ROHANI);
-    addSlot(v, MODE_RAMADHAN, "07:40", "fri", T_PEL3);
-    addSlot(v, MODE_RAMADHAN, "08:20", "fri", T_PEL4);
-    addSlot(v, MODE_RAMADHAN, "09:00", "fri", T_ISTIRAHAT1);
-    addSlot(v, MODE_RAMADHAN, "09:10", "fri", T_PEL5);
-    addSlot(v, MODE_RAMADHAN, "09:50", "fri", T_PEL6);
-    addSlot(v, MODE_RAMADHAN, "10:20", "fri", T_AKHIR_PEKAN);
-    addSlot(v, MODE_RAMADHAN, "10:21", "fri", T_TANAH_AIRKU);
-
-    // ---- PTS & PAS (identik) ----
-    {
-        ScheduleMode modes2[] = {MODE_PTS, MODE_PAS};
-        for (int mi = 0; mi < 2; mi++)
-        {
-            ScheduleMode m = modes2[mi];
-            const char *days4[] = {"mon", "tue", "wed", "thu"};
-            for (int i = 0; i < 4; i++)
-            {
-                const char *d = days4[i];
-                addSlot(v, m, "06:50", d, T_MARS);
-                addSlot(v, m, "07:30", d, T_PEL1);
-                addSlot(v, m, "08:30", d, T_PEL2);
-                addSlot(v, m, "09:30", d, T_PEL3);
-                addSlot(v, m, "10:30", d, T_SELESAI);
-                addSlot(v, m, "10:31", d, T_TANAH_AIRKU);
-            }
-            addSlot(v, m, "06:50", "fri", T_MARS);
-            addSlot(v, m, "07:30", "fri", T_PEL1);
-            addSlot(v, m, "08:30", "fri", T_PEL2);
-            addSlot(v, m, "09:30", "fri", T_SELESAI);
-            addSlot(v, m, "09:31", "fri", T_TANAH_AIRKU);
-        }
-    }
 
     return v;
 }
@@ -564,7 +466,6 @@ void loadSchedule()
     DynamicJsonDocument d(SCHED_DOC_SIZE);
     if (deserializeJson(d, txt))
     {
-        // file rusak: pakai jadwal default supaya bel tetap berfungsi
         schedule = defaultSchedule();
         sortSchedule();
         saveScheduleLocked();
@@ -628,7 +529,6 @@ void loadTracks()
     }
 }
 
-// ================== DFPLAYER ==================
 void dfpBegin()
 {
     Lock l(dfpMutex);
@@ -698,7 +598,6 @@ void setDfpVolume()
     dfPlayer.volume(currentVolume);
 }
 
-// ================== JADWAL BEL ==================
 void checkSchedule(const DateTime &now)
 {
     if (holidayMode || !dfpReady)
@@ -750,7 +649,6 @@ void bellTask(void *param)
     }
 }
 
-// ================== NTP ==================
 void syncTimeFromNTP()
 {
     lastNtpAttempt = millis();
@@ -778,7 +676,6 @@ void syncTimeFromNTP()
     }
 }
 
-// ================== JARINGAN ==================
 String storedSsid()
 {
     wifi_config_t c;
@@ -816,7 +713,7 @@ void onWifiConnected()
 void networkTick()
 {
     if (!wifiSetupDone)
-        return; // jangan bentrok dengan WiFiManager
+        return;
     static bool wasConnected = false;
     static unsigned long disconnectedSince = 0;
     static unsigned long lastReconnect = 0;
@@ -852,7 +749,7 @@ void connectWiFi()
     WiFiManager wm;
     wm.setConnectTimeout(15);
     wm.setConfigPortalTimeout(120);
-    wm.setEnableConfigPortal(!hadSaved); // sudah pernah tersimpan: langsung AP fallback bila gagal
+    wm.setEnableConfigPortal(!hadSaved);
     wm.setAPStaticIPConfig(AP_IP, AP_IP, AP_MASK);
 
     if (staticCfg.enabled)
@@ -883,14 +780,12 @@ void connectWiFi()
     }
     else if (!hadSaved)
     {
-        // WiFi baru saja disimpan lewat portal: restart agar port 80 bersih
         Serial.println("WiFi baru tersimpan, restart...");
         delay(1000);
         ESP.restart();
     }
 }
 
-// ================== WEB: ROUTES ==================
 bool parseSlot(AsyncWebServerRequest *r, BellSlot &s, String &err)
 {
     s.mode = modeFromCode(postParam(r, "mode"));
@@ -1218,7 +1113,6 @@ void setupWebServer()
                       { sendResult(r, false, "Tidak ditemukan", 404); });
 }
 
-// ================== TASK WIFI + WEB ==================
 void wifiTask(void *param)
 {
     connectWiFi();
@@ -1229,7 +1123,6 @@ void wifiTask(void *param)
     vTaskDelete(NULL);
 }
 
-// ================== SETUP ==================
 void setup()
 {
     setCpuFrequencyMhz(80);
@@ -1250,7 +1143,7 @@ void setup()
 
     if (!rtc.begin())
         Serial.println("RTC DS1307 tidak terdeteksi!");
-    if (!rtc.isrunning()) // DS1307 tidak punya lostPower(); isrunning() false bila osilator berhenti
+    if (!rtc.isrunning())
     {
         Serial.println("RTC belum berjalan, set waktu sementara ke compile time");
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
@@ -1271,7 +1164,6 @@ void setup()
     xTaskCreate(wifiTask, "wifiTask", 10240, NULL, 1, NULL);
 }
 
-// ================== LOOP ==================
 void loop()
 {
     networkTick();
