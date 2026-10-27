@@ -447,7 +447,7 @@ void loadConfig()
     // BARU: pengaturan mode tidur
     JsonObject sl = d["sleep"];
     sleepEnabled = sl["enabled"] | false;
-    sleepStartMin = strToMin(String((const char *)(sl["start"] | "22:00")), 22 * 60);
+    sleepStartMin = strToMin(String((const char *)(sl["start"] | "18:00")), 18 * 60);
     sleepEndMin = strToMin(String((const char *)(sl["end"] | "05:00")), 5 * 60);
     sleepOledOff = sl["oled"] | true;
 }
