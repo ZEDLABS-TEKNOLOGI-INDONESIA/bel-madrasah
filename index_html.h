@@ -97,12 +97,12 @@ footer a:hover{text-decoration:underline}
 </div>
 
 <div class="card"><h2>Mode Tidur</h2>
-<p class="mut" style="margin-top:0">Pada rentang jam ini bel tidak berbunyi dan layar OLED bisa dimatikan. Web tetap aktif. Boleh melewati tengah malam (mis. 22:00 - 05:00).</p>
+<p class="mut" style="margin-top:0">Pada rentang jam ini bel tidak berbunyi dan layar OLED bisa dimatikan. Web tetap aktif. Boleh melewati tengah malam (mis. 18:00 - 05:00).</p>
 <form onsubmit="saveSleep(event)">
 <div class="row"><label>Aktifkan Mode Tidur</label>
 <label class="sw"><input type="checkbox" id="slEn"><span class="sl"></span></label></div>
 <div class="f2">
-<div><div class="l">Mulai</div><input type="time" id="slStart" value="22:00" required></div>
+<div><div class="l">Mulai</div><input type="time" id="slStart" value="18:00" required></div>
 <div><div class="l">Selesai</div><input type="time" id="slEnd" value="05:00" required></div>
 </div>
 <div class="row"><label>Matikan layar OLED saat tidur</label>
