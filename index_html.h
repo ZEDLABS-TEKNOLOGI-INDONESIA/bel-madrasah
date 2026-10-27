@@ -29,7 +29,7 @@ header .clk{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;tex
 .v{font-size:14px;font-weight:600;word-break:break-all}
 .mut{color:#777;font-size:12px}
 .warn{display:none;background:#fee2e2;color:#991b1b;border-radius:10px;padding:12px;margin-bottom:16px;font-size:13px;font-weight:600}
-input[type=text],input[type=time],input[type=number],select{width:100%;padding:10px 12px;border:1px solid #d4d9e0;border-radius:8px;font-size:14px;background:#fff;color:#1a1a1a}
+input[type=text],input[type=time],input[type=date],input[type=number],select{width:100%;padding:10px 12px;border:1px solid #d4d9e0;border-radius:8px;font-size:14px;background:#fff;color:#1a1a1a}
 button{padding:10px 16px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
 button:hover{filter:brightness(1.08)}
 button.sec{background:#6b7280}button.danger{background:#dc2626}
@@ -66,6 +66,7 @@ footer a:hover{text-decoration:underline}
 <header><h1>Bel Madrasah</h1><div class="clk" id="hTime">-</div></header>
 <div class="wrap">
 <div class="warn" id="dfWarn">DFPlayer / kartu SD tidak terdeteksi. Bel tidak akan berbunyi. Periksa kabel dan kartu SD di modul DFPlayer.</div>
+<div class="warn" id="timeWarn">Waktu perangkat belum tepercaya (RTC bermasalah / belum sinkron). Bel dikunci sampai waktu diperbaiki. Sambungkan ke internet atau atur waktu manual.</div>
 <div class="layout">
 
 <aside>
@@ -76,6 +77,7 @@ footer a:hover{text-decoration:underline}
 <div class="it"><div class="l">Sedang Diputar</div><div class="v" id="sPlay">-</div></div>
 <div class="it"><div class="l">DFPlayer</div><div class="v" id="sSd">-</div></div>
 <div class="it"><div class="l">Mode Libur</div><div class="v" id="sHol">-</div></div>
+<div class="it" style="grid-column:1/-1"><div class="l">Mode Tidur</div><div class="v" id="sSleep">-</div></div>
 </div></div>
 
 <div class="card"><h2>Kontrol</h2>
@@ -93,6 +95,27 @@ footer a:hover{text-decoration:underline}
 <label class="sw"><input type="checkbox" id="hol" onchange="setHol(this.checked)"><span class="sl"></span></label></div>
 <button class="danger full" onclick="act('/api/stop')">Stop Bel</button>
 </div>
+
+<div class="card"><h2>Mode Tidur</h2>
+<p class="mut" style="margin-top:0">Pada rentang jam ini bel tidak berbunyi dan layar OLED bisa dimatikan. Web tetap aktif. Boleh melewati tengah malam (mis. 22:00 - 05:00).</p>
+<form onsubmit="saveSleep(event)">
+<div class="row"><label>Aktifkan Mode Tidur</label>
+<label class="sw"><input type="checkbox" id="slEn"><span class="sl"></span></label></div>
+<div class="f2">
+<div><div class="l">Mulai</div><input type="time" id="slStart" value="22:00" required></div>
+<div><div class="l">Selesai</div><input type="time" id="slEnd" value="05:00" required></div>
+</div>
+<div class="row"><label>Matikan layar OLED saat tidur</label>
+<label class="sw"><input type="checkbox" id="slOled" checked><span class="sl"></span></label></div>
+<button type="submit" class="full" style="margin-top:0">Simpan Mode Tidur</button>
+</form></div>
+
+<div class="card"><h2>Atur Waktu</h2>
+<form onsubmit="setTimeManual(event)">
+<div class="f2"><input type="date" id="tmDate" required><input type="time" id="tmTime" required></div>
+<button type="submit" class="full" style="margin-top:0">Simpan Waktu</button>
+<button type="button" class="sec full" onclick="fillNow()">Isi dari perangkat ini</button>
+</form></div>
 
 <div class="card"><h2>Jaringan</h2>
 <div class="grid">
@@ -168,6 +191,31 @@ function getj(url){return fetch(url).then(function(r){return r.json();});}
 $('fDay').innerHTML=DAY_ORDER.map(function(k){return '<option value="'+k+'">'+DAYS[k]+'</option>';}).join('');
 $('fMode').innerHTML=Object.keys(MODES).map(function(k){return '<option value="'+k+'">'+MODES[k]+'</option>';}).join('');
 
+function fillNow(){
+ var d=new Date(),p=function(n){return String(n).padStart(2,'0');};
+ $('tmDate').value=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+ $('tmTime').value=p(d.getHours())+':'+p(d.getMinutes());
+}
+function setTimeManual(e){
+ e.preventDefault();
+ post('/api/time/set',{date:$('tmDate').value,time:$('tmTime').value}).then(function(j){msg(j.msg,j.ok);loadStatus();});
+}
+fillNow();
+
+function loadSleep(){
+ return getj('/api/sleep').then(function(j){
+  $('slEn').checked=j.enabled;
+  $('slStart').value=j.start;
+  $('slEnd').value=j.end;
+  $('slOled').checked=j.oled;
+ });
+}
+function saveSleep(e){
+ e.preventDefault();
+ post('/api/sleep',{enabled:$('slEn').checked?1:0,start:$('slStart').value,end:$('slEnd').value,oled:$('slOled').checked?1:0})
+  .then(function(j){msg(j.msg,j.ok);loadStatus();});
+}
+
 function loadStatus(){
  getj('/api/status').then(function(s){
  var t=s.time.substr(11);
@@ -178,6 +226,8 @@ function loadStatus(){
  $('sPlay').textContent=s.playing?('Track '+s.track):'-';
  $('sSd').textContent=s.dfp?'Terpasang':'Tidak ada';
  $('sHol').textContent=s.holiday?'Aktif':'Nonaktif';
+ $('sSleep').textContent=s.sleeping?('Sedang tidur (s/d '+s.sleep_end+')'):(s.sleep_on?('Siaga ('+s.sleep_start+' - '+s.sleep_end+')'):'Nonaktif');
+ $('timeWarn').style.display=s.trusted?'none':'block';
  $('dfWarn').style.display=s.dfp?'none':'block';
  if(document.activeElement!==$('vol')){$('vol').value=s.volume;$('volVal').textContent=s.volume;}
  $('hol').checked=s.holiday;
@@ -296,7 +346,7 @@ function resetWifi(){
  post('/api/network/reset').then(function(j){msg(j.msg,j.ok);});
 }
 
-loadTracks().then(loadSched).then(loadNet).then(loadStatus).then(function(){
+loadTracks().then(loadSched).then(loadNet).then(loadSleep).then(loadStatus).then(function(){
  setInterval(function(){if(!document.hidden)loadStatus();},5000);
 });
 </script></body></html>
