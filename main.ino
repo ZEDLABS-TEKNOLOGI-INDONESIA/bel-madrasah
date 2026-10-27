@@ -71,6 +71,13 @@ int currentVolume = 20;
 bool holidayMode = false;
 ScheduleMode activeMode = MODE_REGULER;
 
+// BARU: pengaturan mode tidur (jam disimpan sebagai menit sejak 00:00)
+volatile bool sleepEnabled = false;
+volatile int sleepStartMin = 22 * 60;
+volatile int sleepEndMin = 5 * 60;
+volatile bool sleepOledOff = true;
+volatile bool sleeping = false; // status saat ini, diperbarui di bellTask
+
 volatile bool dfpReady = false;
 volatile bool wifiSetupDone = false;
 bool apActive = false;
@@ -81,6 +88,12 @@ unsigned long restartAt = 0;
 unsigned long lastNtpAttempt = 0;
 bool ntpLastOk = false;
 uint32_t lastTriggeredMinute = 0;
+
+// Penanda kepercayaan waktu
+const int MIN_VALID_YEAR = 2025;
+volatile bool timeTrusted = false;
+volatile bool rtcPresent = false;
+volatile uint32_t lastUnixSeen = 0;
 
 volatile bool audioPlaying = false;
 uint16_t playingTrack = 0;
@@ -109,10 +122,95 @@ DateTime getNow()
     Lock l(i2cMutex);
     return rtc.now();
 }
+
 void setRtc(const DateTime &dt)
 {
+    {
+        Lock l(i2cMutex);
+        rtc.adjust(dt);
+    }
+    lastUnixSeen = 0; // reset baseline supaya lompatan sah tidak dianggap anomali
+}
+
+bool rtcRunning()
+{
     Lock l(i2cMutex);
-    rtc.adjust(dt);
+    return rtc.isrunning();
+}
+
+// Penanda "waktu pernah diverifikasi" disimpan di NVRAM DS1307.
+// NVRAM ikut hilang saat listrik padam tanpa baterai, jadi penanda otomatis terhapus.
+const uint8_t TRUST_ADDR = 0;
+const uint8_t TRUST_MAGIC = 0xA5;
+
+void markTrusted(bool t)
+{
+    Lock l(i2cMutex);
+    rtc.writenvram(TRUST_ADDR, t ? TRUST_MAGIC : 0x00);
+}
+
+void setTrusted(bool t)
+{
+    if (timeTrusted == t)
+        return;
+    timeTrusted = t;
+    if (rtcPresent)
+        markTrusted(t);
+}
+
+void validateTime(const DateTime &now)
+{
+    if (now.year() < MIN_VALID_YEAR || now.year() > 2099)
+    {
+        if (timeTrusted)
+            Serial.printf("Waktu tidak valid (tahun %d), bel dikunci\n", now.year());
+        setTrusted(false);
+        lastUnixSeen = 0;
+        return;
+    }
+
+    uint32_t u = now.unixtime();
+    if (lastUnixSeen != 0)
+    {
+        long d = (long)u - (long)lastUnixSeen;
+        // Loop berjalan ~300 ms. Mundur atau lompat > 120 dtk = anomali
+        if (d < 0 || d > 120)
+        {
+            if (timeTrusted)
+                Serial.printf("Lompatan waktu terdeteksi (%ld dtk), bel dikunci\n", d);
+            setTrusted(false);
+        }
+    }
+    lastUnixSeen = u;
+}
+
+// BARU: apakah jam saat ini masuk rentang tidur (mendukung lewat tengah malam)
+bool isSleepTime(const DateTime &now)
+{
+    if (!sleepEnabled)
+        return false;
+    int s = sleepStartMin, e = sleepEndMin;
+    if (s == e)
+        return false;
+    int m = now.hour() * 60 + now.minute();
+    if (s < e)
+        return m >= s && m < e;
+    return m >= s || m < e;
+}
+
+// BARU: matikan/nyalakan panel OLED
+bool oledIsOff = false;
+void oledPower(bool on)
+{
+    Lock l(i2cMutex);
+    if (!oledReady)
+        return;
+    if (!on)
+    {
+        oled.clearDisplay();
+        oled.display();
+    }
+    oled.ssd1306_command(on ? SSD1306_DISPLAYON : SSD1306_DISPLAYOFF);
 }
 
 void oledDrawCentered(const String &text, int y, uint8_t size)
@@ -155,6 +253,19 @@ void oledTask(void *param)
 {
     for (;;)
     {
+        // BARU: matikan layar saat mode tidur (jika opsi aktif)
+        bool wantOff = sleeping && sleepOledOff;
+        if (wantOff != oledIsOff)
+        {
+            oledPower(!wantOff);
+            oledIsOff = wantOff;
+        }
+        if (wantOff)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+
         int screen = (millis() / OLED_SCREEN_INTERVAL) % 3;
         bool sta = WiFi.status() == WL_CONNECTED;
 
@@ -163,7 +274,16 @@ void oledTask(void *param)
             DateTime now = getNow();
             char tb[12];
             snprintf(tb, sizeof(tb), "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-            oledShow("WAKTU", tb, true);
+            if (!timeTrusted)
+                oledShow("WAKTU BELUM VALID", tb, false);
+            else if (sleeping) // BARU: layar tidur (jika OLED tidak dimatikan)
+            {
+                char eb[16];
+                snprintf(eb, sizeof(eb), "s/d %02d:%02d", sleepEndMin / 60, sleepEndMin % 60);
+                oledShow("MODE TIDUR", eb, false);
+            }
+            else
+                oledShow("WAKTU", tb, true);
         }
         else if (screen == 1)
         {
@@ -213,6 +333,21 @@ bool validTime(const String &t)
     int m = t.substring(3, 5).toInt();
     return h >= 0 && h < 24 && m >= 0 && m < 60;
 }
+
+// BARU: konversi "HH:MM" <-> menit
+int strToMin(const String &t, int def)
+{
+    if (!validTime(t))
+        return def;
+    return t.substring(0, 2).toInt() * 60 + t.substring(3, 5).toInt();
+}
+String minToStr(int m)
+{
+    char b[8];
+    snprintf(b, sizeof(b), "%02d:%02d", (m / 60) % 24, m % 60);
+    return String(b);
+}
+
 String postParam(AsyncWebServerRequest *r, const char *n)
 {
     return r->hasParam(n, true) ? r->getParam(n, true)->value() : String();
@@ -266,7 +401,7 @@ bool fsWriteText(const char *path, const String &txt)
 
 bool saveConfig()
 {
-    StaticJsonDocument<768> d;
+    StaticJsonDocument<1024> d; // UBAH: dari 768
     d["volume"] = currentVolume;
     d["holiday"] = holidayMode;
     d["mode"] = modeCode(activeMode);
@@ -277,6 +412,12 @@ bool saveConfig()
     s["gw"] = staticCfg.gw;
     s["mask"] = staticCfg.mask;
     s["dns"] = staticCfg.dns;
+    // BARU: pengaturan mode tidur
+    JsonObject sl = d.createNestedObject("sleep");
+    sl["enabled"] = (bool)sleepEnabled;
+    sl["start"] = minToStr(sleepStartMin);
+    sl["end"] = minToStr(sleepEndMin);
+    sl["oled"] = (bool)sleepOledOff;
     String out;
     serializeJson(d, out);
     return fsWriteText(CONFIG_FILE, out);
@@ -290,7 +431,7 @@ void loadConfig()
         saveConfig();
         return;
     }
-    StaticJsonDocument<768> d;
+    StaticJsonDocument<1024> d; // UBAH: dari 768
     if (deserializeJson(d, txt))
         return;
     currentVolume = constrain((int)(d["volume"] | 20), 0, 30);
@@ -303,6 +444,12 @@ void loadConfig()
     staticCfg.gw = s["gw"] | "";
     staticCfg.mask = s["mask"] | "";
     staticCfg.dns = s["dns"] | "";
+    // BARU: pengaturan mode tidur
+    JsonObject sl = d["sleep"];
+    sleepEnabled = sl["enabled"] | false;
+    sleepStartMin = strToMin(String((const char *)(sl["start"] | "22:00")), 22 * 60);
+    sleepEndMin = strToMin(String((const char *)(sl["end"] | "05:00")), 5 * 60);
+    sleepOledOff = sl["oled"] | true;
 }
 
 int dayRank(const String &d)
@@ -602,6 +749,11 @@ void checkSchedule(const DateTime &now)
 {
     if (holidayMode || !dfpReady)
         return;
+    if (!timeTrusted) // jangan bunyi kalau waktu belum tepercaya
+        return;
+    if (sleeping) // BARU: jangan bunyi saat mode tidur
+        return;
+
     uint32_t minuteKey = now.unixtime() / 60;
     if (minuteKey == lastTriggeredMinute)
         return;
@@ -627,7 +779,7 @@ void checkSchedule(const DateTime &now)
     if (track)
     {
         lastTriggeredMinute = minuteKey;
-        Serial.printf("Memicu bel %s: track %d\n", timeBuf, track);
+        Serial.printf("Memicu bel %s: track %d (uptime %lus)\n", timeBuf, track, millis() / 1000UL);
         playTrack(track);
     }
 }
@@ -635,6 +787,7 @@ void checkSchedule(const DateTime &now)
 void bellTask(void *param)
 {
     unsigned long lastDfpTry = 0;
+    unsigned long lastRtcCheck = 0;
     for (;;)
     {
         if (!dfpReady && millis() - lastDfpTry > DFP_RETRY_INTERVAL)
@@ -642,7 +795,38 @@ void bellTask(void *param)
             lastDfpTry = millis();
             dfpBegin();
         }
-        checkSchedule(getNow());
+
+        // cek RTC masih berjalan, tiap 5 detik
+        if (millis() - lastRtcCheck > 5000)
+        {
+            lastRtcCheck = millis();
+            if (!rtcPresent || !rtcRunning())
+            {
+                if (timeTrusted)
+                    Serial.println("RTC berhenti/tidak terbaca, bel dikunci");
+                setTrusted(false);
+            }
+        }
+
+        DateTime now = getNow();
+        validateTime(now);
+
+        // BARU: perbarui status tidur (hanya jika waktu tepercaya)
+        bool nowSleep = timeTrusted && isSleepTime(now);
+        if (nowSleep && !sleeping)
+        {
+            Serial.println("Masuk mode tidur");
+            if (audioPlaying)
+                stopTrack();
+        }
+        else if (!nowSleep && sleeping)
+        {
+            Serial.println("Keluar mode tidur");
+        }
+        sleeping = nowSleep;
+
+        checkSchedule(now);
+
         if (dfpReady)
             dfpTick();
         vTaskDelay(pdMS_TO_TICKS(300));
@@ -654,7 +838,7 @@ void syncTimeFromNTP()
     lastNtpAttempt = millis();
     configTime(7 * 3600, 0, "pool.ntp.org", "time.google.com");
     struct tm ti;
-    if (getLocalTime(&ti, 5000))
+    if (getLocalTime(&ti, 5000) && (ti.tm_year + 1900) >= MIN_VALID_YEAR)
     {
         DateTime ntp(ti.tm_year + 1900, ti.tm_mon + 1, ti.tm_mday, ti.tm_hour, ti.tm_min, ti.tm_sec);
         long diff = (long)ntp.unixtime() - (long)getNow().unixtime();
@@ -667,6 +851,7 @@ void syncTimeFromNTP()
         {
             Serial.println("NTP OK, RTC sudah akurat");
         }
+        setTrusted(true);
         ntpLastOk = true;
     }
     else
@@ -825,7 +1010,7 @@ void setupWebServer()
     snprintf(tb, sizeof(tb), "%04d-%02d-%02d %02d:%02d:%02d",
              now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
     bool sta = WiFi.status() == WL_CONNECTED;
-    StaticJsonDocument<384> d;
+    StaticJsonDocument<640> d; // UBAH: dari 448
     d["time"] = tb;
     d["dow"] = now.dayOfTheWeek();
     d["mode"] = sta ? "STA" : "AP";
@@ -837,9 +1022,46 @@ void setupWebServer()
     d["dfp"] = (bool)dfpReady;
     d["playing"] = (bool)audioPlaying;
     d["track"] = playingTrack;
+    d["trusted"] = (bool)timeTrusted;
+    d["sleeping"] = (bool)sleeping;               // BARU
+    d["sleep_on"] = (bool)sleepEnabled;           // BARU
+    d["sleep_start"] = minToStr(sleepStartMin);   // BARU
+    d["sleep_end"] = minToStr(sleepEndMin);       // BARU
     String out;
     serializeJson(d, out);
     r->send(200, "application/json", out); });
+
+    // BARU: baca pengaturan mode tidur
+    server.on("/api/sleep", HTTP_GET, [](AsyncWebServerRequest *r)
+              {
+    StaticJsonDocument<256> d;
+    d["enabled"] = (bool)sleepEnabled;
+    d["start"] = minToStr(sleepStartMin);
+    d["end"] = minToStr(sleepEndMin);
+    d["oled"] = (bool)sleepOledOff;
+    d["sleeping"] = (bool)sleeping;
+    String out;
+    serializeJson(d, out);
+    r->send(200, "application/json", out); });
+
+    // BARU: simpan pengaturan mode tidur
+    server.on("/api/sleep", HTTP_POST, [](AsyncWebServerRequest *r)
+              {
+    bool en = postParam(r, "enabled") == "1";
+    String st = postParam(r, "start");
+    String ed = postParam(r, "end");
+    bool oledOff = postParam(r, "oled") == "1";
+    if (!validTime(st) || !validTime(ed))
+      return sendResult(r, false, "Format jam tidak valid");
+    int sm = strToMin(st, 0), em = strToMin(ed, 0);
+    if (en && sm == em)
+      return sendResult(r, false, "Jam mulai dan selesai tidak boleh sama");
+    sleepStartMin = sm;
+    sleepEndMin = em;
+    sleepOledOff = oledOff;
+    sleepEnabled = en;
+    bool saved = saveConfig();
+    sendResult(r, true, String(en ? "Mode tidur aktif " + st + " - " + ed : "Mode tidur nonaktif") + (saved ? "" : " (gagal disimpan)")); });
 
     server.on("/api/ring", HTTP_POST, [](AsyncWebServerRequest *r)
               {
@@ -853,6 +1075,23 @@ void setupWebServer()
               {
     stopTrack();
     sendResult(r, true, "Bel dihentikan"); });
+
+    server.on("/api/time/set", HTTP_POST, [](AsyncWebServerRequest *r)
+              {
+    // format: date=YYYY-MM-DD, time=HH:MM
+    String date = postParam(r, "date");
+    String tm = postParam(r, "time");
+    if (date.length() != 10 || date[4] != '-' || date[7] != '-' || !validTime(tm))
+      return sendResult(r, false, "Format tanggal/jam tidak valid");
+    int y = date.substring(0, 4).toInt();
+    int mo = date.substring(5, 7).toInt();
+    int d = date.substring(8, 10).toInt();
+    if (y < MIN_VALID_YEAR || y > 2099 || mo < 1 || mo > 12 || d < 1 || d > 31)
+      return sendResult(r, false, "Tanggal tidak valid");
+    if (!rtcPresent) return sendResult(r, false, "RTC tidak terdeteksi");
+    setRtc(DateTime(y, mo, d, tm.substring(0, 2).toInt(), tm.substring(3, 5).toInt(), 0));
+    setTrusted(true);
+    sendResult(r, true, "Waktu diatur"); });
 
     server.on("/api/volume", HTTP_POST, [](AsyncWebServerRequest *r)
               {
@@ -1141,12 +1380,27 @@ void setup()
     else
         oledShow("BEL MADRASAH", "Memulai...");
 
-    if (!rtc.begin())
-        Serial.println("RTC DS1307 tidak terdeteksi!");
-    if (!rtc.isrunning())
+    // Inisialisasi RTC dengan penanda kepercayaan di NVRAM
+    rtcPresent = rtc.begin();
+    if (!rtcPresent)
     {
-        Serial.println("RTC belum berjalan, set waktu sementara ke compile time");
+        Serial.println("RTC DS1307 tidak terdeteksi! Bel dikunci sampai waktu valid");
+        timeTrusted = false;
+    }
+    else if (!rtc.isrunning())
+    {
+        Serial.println("RTC belum berjalan. Waktu sementara, bel dikunci sampai NTP/manual");
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+        rtc.writenvram(TRUST_ADDR, 0x00);
+        timeTrusted = false;
+    }
+    else
+    {
+        DateTime n = rtc.now();
+        bool yearOk = (n.year() >= MIN_VALID_YEAR && n.year() <= 2099);
+        timeTrusted = yearOk && (rtc.readnvram(TRUST_ADDR) == TRUST_MAGIC);
+        if (!timeTrusted)
+            Serial.println("Waktu RTC belum pernah diverifikasi, bel dikunci");
     }
 
     if (!LittleFS.begin(true))
