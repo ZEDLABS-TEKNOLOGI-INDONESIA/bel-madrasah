@@ -1,8 +1,15 @@
+import { confirmAction } from "./confirm";
 import { clearPersistedCache } from "./queryClient";
 
-export function logout() {
+export async function logout() {
   if (typeof window === "undefined") return;
-  if (!window.confirm("Keluar dari panel?")) return;
+  const ok = await confirmAction({
+    title: "Keluar",
+    message: "Keluar dari panel?",
+    confirmLabel: "Keluar",
+    danger: true,
+  });
+  if (!ok) return;
   clearPersistedCache();
   window.location.href = "/logout";
 }

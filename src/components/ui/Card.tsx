@@ -1,15 +1,14 @@
-import React from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 interface CardProps {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
-  glossy?: boolean;
   hover?: boolean;
   onClick?: () => void;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
   title?: string;
-  action?: React.ReactNode;
-  bodyStyle?: React.CSSProperties;
+  action?: ReactNode;
+  bodyStyle?: CSSProperties;
 }
 
 export function Card({

@@ -123,12 +123,6 @@ textarea:focus {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-[data-theme="dark"] input:focus,
-[data-theme="dark"] select:focus,
-[data-theme="dark"] textarea:focus {
-  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
-}
-
 input[type="time"]::-webkit-calendar-picker-indicator {
   filter: invert(0.5);
   cursor: pointer;

@@ -1,27 +1,14 @@
 import { Check, Eye, EyeOff, User } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { api } from "../../lib/api";
+import { APP } from "../../lib/app.config";
+import { errorMessage } from "../../lib/errors";
 import { initTheme } from "../../lib/theme";
 
 if (typeof document !== "undefined") initTheme();
 
-const FEATURES = [
-  {
-    title: "Berbunyi otomatis sesuai jadwal",
-    desc: "Scheduler berjalan di server dan tidak bergantung pada browser.",
-  },
-  {
-    title: "Mode jadwal yang fleksibel",
-    desc: "Reguler, Ramadhan, PTS, PAS, dan pesantren siap dipakai.",
-  },
-  {
-    title: "Libur dan nada mudah diatur",
-    desc: "Impor libur nasional dan unggah audio dalam beberapa klik.",
-  },
-];
-
-const labelStyle: React.CSSProperties = {
+const labelStyle: CSSProperties = {
   fontSize: 13,
   fontWeight: 500,
   color: "var(--text)",
@@ -52,7 +39,7 @@ export function LoginPage() {
     };
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
@@ -60,8 +47,8 @@ export function LoginPage() {
     try {
       await api.post("/login", { username: username.trim(), password });
       window.location.href = "/";
-    } catch (err: any) {
-      setError(err?.message ?? "Gagal masuk");
+    } catch (err) {
+      setError(errorMessage(err));
       setLoading(false);
     }
   }
@@ -86,7 +73,7 @@ export function LoginPage() {
           overflowX: "hidden",
           background: narrow ? "var(--bg)" : "var(--panel)",
           borderRight: narrow ? "none" : "1px solid var(--border)",
-          WebkitOverflowScrolling: "touch" as any,
+          WebkitOverflowScrolling: "touch",
         }}
       >
         <div
@@ -112,13 +99,11 @@ export function LoginPage() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <img src="/icon.svg" alt="Bel Madrasah" width={28} height={28} />
-              <span style={{ fontWeight: 600, fontSize: 14 }}>Bel Madrasah</span>
+              <img src={APP.logo} alt={APP.name} width={28} height={28} />
+              <span style={{ fontWeight: 600, fontSize: 14 }}>{APP.name}</span>
             </div>
-            <h1 style={{ fontSize: 20, fontWeight: 600 }}>Masuk ke panel</h1>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              Gunakan username dan password akun administrator.
-            </div>
+            <h1 style={{ fontSize: 20, fontWeight: 600 }}>{APP.login.title}</h1>
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{APP.login.description}</div>
           </div>
 
           <form
@@ -169,6 +154,7 @@ export function LoginPage() {
                   className="addon"
                   onClick={() => setShow((v) => !v)}
                   title={show ? "Sembunyikan password" : "Tampilkan password"}
+                  aria-label={show ? "Sembunyikan password" : "Tampilkan password"}
                   style={{ cursor: "pointer" }}
                 >
                   {show ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -228,7 +214,7 @@ export function LoginPage() {
           }}
         >
           <img
-            src="/icon.svg"
+            src={APP.logo}
             alt=""
             aria-hidden="true"
             style={{
@@ -263,7 +249,7 @@ export function LoginPage() {
               userSelect: "none",
             }}
           >
-            ZEDLABS
+            {APP.watermark}
           </div>
 
           <div style={{ position: "relative", maxWidth: 560 }}>
@@ -280,7 +266,7 @@ export function LoginPage() {
               }}
             >
               <span style={{ width: 20, height: 1, background: "var(--accent)" }} />
-              Bel Madrasah
+              {APP.name}
             </div>
             <h2
               style={{
@@ -291,14 +277,14 @@ export function LoginPage() {
                 color: "var(--text)",
               }}
             >
-              Bel madrasah Anda, tepat waktu setiap hari.
+              {APP.login.headline}
             </h2>
             <p style={{ fontSize: 15, color: "var(--text-muted)", marginTop: 16 }}>
-              Jadwal, nada, dan hari libur dikelola dari satu tempat.
+              {APP.login.lead}
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 32 }}>
-              {FEATURES.map((f) => (
+              {APP.login.features.map((f) => (
                 <div key={f.title} style={{ display: "flex", gap: 14 }}>
                   <div
                     style={{
