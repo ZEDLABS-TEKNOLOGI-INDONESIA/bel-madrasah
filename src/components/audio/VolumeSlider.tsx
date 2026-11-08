@@ -1,10 +1,17 @@
 import { Volume1, Volume2, VolumeX } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useUpdateVolume, useVolume } from "../../hooks/useConfig";
+import { errorMessage } from "../../lib/errors";
 import { Card } from "../ui/Card";
 import { Skeleton } from "../ui/Skeleton";
 import { Slider } from "../ui/Slider";
+
+function VolumeIcon({ level }: { level: number }) {
+  if (level === 0) return <VolumeX size={16} color="var(--text-muted)" />;
+  if (level < 0.5) return <Volume1 size={16} color="var(--text-muted)" />;
+  return <Volume2 size={16} color="var(--text-muted)" />;
+}
 
 export function VolumeSlider() {
   const { data, isLoading } = useVolume();
@@ -16,6 +23,12 @@ export function VolumeSlider() {
     if (data?.volume != null) setLocal(data.volume);
   }, [data?.volume]);
 
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   function handleChange(val: number) {
     setLocal(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -23,16 +36,10 @@ export function VolumeSlider() {
       try {
         await update.mutateAsync(val);
         toast.success("Volume disimpan");
-      } catch (e: any) {
-        toast.error(e.message);
+      } catch (e) {
+        toast.error(errorMessage(e));
       }
     }, 300);
-  }
-
-  function VolumeIcon() {
-    if (local === 0) return <VolumeX size={16} color="var(--text-muted)" />;
-    if (local < 0.5) return <Volume1 size={16} color="var(--text-muted)" />;
-    return <Volume2 size={16} color="var(--text-muted)" />;
   }
 
   if (isLoading) return <Skeleton height={150} radius="var(--radius-lg)" />;
@@ -42,7 +49,7 @@ export function VolumeSlider() {
       title="Volume output"
       action={
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <VolumeIcon />
+          <VolumeIcon level={local} />
           <span className="tabular" style={{ fontSize: 16, fontWeight: 600 }}>
             {Math.round(local * 100)}%
           </span>

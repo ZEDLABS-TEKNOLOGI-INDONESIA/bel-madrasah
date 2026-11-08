@@ -1,6 +1,6 @@
 import { Music2, Play, Square, Trash2 } from "lucide-react";
-import React from "react";
 import { Button } from "../ui/Button";
+import { ListRow } from "../ui/ListRow";
 
 interface ToneRowProps {
   filename: string;
@@ -9,6 +9,7 @@ interface ToneRowProps {
   onStop: () => void;
   onDelete: () => void;
   deleteLoading?: boolean;
+  last?: boolean;
 }
 
 export function ToneRow({
@@ -18,19 +19,10 @@ export function ToneRow({
   onStop,
   onDelete,
   deleteLoading,
+  last,
 }: ToneRowProps) {
   return (
-    <div
-      className={isPlaying ? undefined : "row-hover"}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "8px 16px",
-        borderBottom: "1px solid var(--border)",
-        background: isPlaying ? "var(--accent-soft)" : "transparent",
-      }}
-    >
+    <ListRow highlighted={isPlaying} last={last} style={{ padding: "8px 16px" }}>
       <div
         style={{
           width: 32,
@@ -71,11 +63,23 @@ export function ToneRow({
 
       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
         {isPlaying ? (
-          <Button variant="danger" size="sm" icon={<Square size={12} />} onClick={onStop}>
+          <Button
+            variant="danger"
+            size="sm"
+            icon={<Square size={12} />}
+            onClick={onStop}
+            title="Stop"
+          >
             Stop
           </Button>
         ) : (
-          <Button variant="ghost" size="sm" icon={<Play size={12} />} onClick={onPlay}>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Play size={12} />}
+            onClick={onPlay}
+            title="Putar"
+          >
             Play
           </Button>
         )}
@@ -85,9 +89,11 @@ export function ToneRow({
           icon={<Trash2 size={12} />}
           onClick={onDelete}
           loading={deleteLoading}
+          title="Hapus"
+          aria-label={`Hapus ${filename}`}
           style={{ color: "var(--danger)" }}
         />
       </div>
-    </div>
+    </ListRow>
   );
 }

@@ -1,154 +1,136 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Share, SquarePlus } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useIsMobile } from "../../hooks/useMediaQuery";
+import { APP } from "../../lib/app.config";
 import { Button } from "../ui/Button";
+
+interface InstallEvent extends Event {
+  prompt: () => Promise<void>;
+}
+
+const DISMISS_KEY = "install-dismissed-at";
+const COOLDOWN = 7 * 24 * 60 * 60_000;
 
 function isIos() {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
 }
 
-function isInStandaloneMode() {
+function isStandalone() {
   return (
-    "standalone" in window.navigator &&
-    (window.navigator as unknown as { standalone?: boolean }).standalone === true
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
   );
 }
 
+function recentlyDismissed() {
+  try {
+    const at = Number(localStorage.getItem(DISMISS_KEY));
+    return at > 0 && Date.now() - at < COOLDOWN;
+  } catch {
+    return false;
+  }
+}
+
 export function InstallPrompt() {
-  const [prompt, setPrompt] = useState<any>(null);
-  const [show, setShow] = useState(false);
-  const [iosShow, setIosShow] = useState(false);
+  const isMobile = useIsMobile();
+  const [deferred, setDeferred] = useState<InstallEvent | null>(null);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const handler = (e: any) => {
+    if (isStandalone() || recentlyDismissed()) return;
+
+    const onPrompt = (e: Event) => {
       e.preventDefault();
-      setPrompt(e);
-      setShow(true);
+      setDeferred(e as InstallEvent);
+      setVisible(true);
     };
-    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("beforeinstallprompt", onPrompt);
 
     let timer: ReturnType<typeof setTimeout> | null = null;
-    if (isIos() && !isInStandaloneMode()) {
-      const dismissed = localStorage.getItem("ios-install-dismissed");
-      if (!dismissed) {
-        timer = setTimeout(() => setIosShow(true), 1500);
-      }
-    }
+    if (isIos()) timer = setTimeout(() => setVisible(true), 1500);
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("beforeinstallprompt", onPrompt);
       if (timer) clearTimeout(timer);
     };
   }, []);
 
-  function dismissIos() {
-    localStorage.setItem("ios-install-dismissed", "1");
-    setIosShow(false);
+  function dismiss() {
+    try {
+      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    } catch {
+      setVisible(false);
+      return;
+    }
+    setVisible(false);
   }
 
-  if (show) {
-    return (
-      <AnimatePresence>
+  async function install() {
+    if (!deferred) return;
+    setVisible(false);
+    await deferred.prompt();
+    setDeferred(null);
+  }
+
+  const position = isMobile
+    ? { left: 16, right: 16, bottom: "calc(72px + env(safe-area-inset-bottom))" }
+    : { right: 24, bottom: 24, width: 380 };
+
+  return (
+    <AnimatePresence>
+      {visible && (
         <motion.div
-          initial={{ y: 80, opacity: 0 }}
+          initial={{ y: 40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 80, opacity: 0 }}
+          exit={{ y: 40, opacity: 0 }}
           style={{
             position: "fixed",
-            bottom: 80,
-            left: 16,
-            right: 16,
             zIndex: 999,
-            background: "var(--card-gloss), var(--card-bg)",
+            ...position,
+            background: "var(--card-bg)",
             border: "1px solid var(--card-border)",
-            backdropFilter: "var(--glass-blur)",
-            WebkitBackdropFilter: "var(--glass-blur)",
-            borderRadius: "var(--radius-xl)",
+            borderRadius: "var(--radius-lg)",
             padding: 16,
-            boxShadow: "0 16px 48px rgba(0,0,0,0.2)",
+            boxShadow: "0 8px 24px rgba(1, 4, 9, 0.25)",
             display: "flex",
             alignItems: "center",
             gap: 12,
           }}
         >
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>Install Bel Madrasah</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-              Akses lebih cepat dari layar utama
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => setShow(false)}>
-            Nanti
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              prompt?.prompt();
-              setShow(false);
-            }}
-          >
-            Install
-          </Button>
-        </motion.div>
-      </AnimatePresence>
-    );
-  }
-
-  if (iosShow) {
-    return (
-      <AnimatePresence>
-        <motion.div
-          initial={{ y: 80, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 80, opacity: 0 }}
-          style={{
-            position: "fixed",
-            bottom: 80,
-            left: 16,
-            right: 16,
-            zIndex: 999,
-            background: "var(--card-gloss), var(--card-bg)",
-            border: "1px solid var(--card-border)",
-            backdropFilter: "var(--glass-blur)",
-            WebkitBackdropFilter: "var(--glass-blur)",
-            borderRadius: "var(--radius-xl)",
-            padding: 16,
-            boxShadow: "0 16px 48px rgba(0,0,0,0.2)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>Install Bel Madrasah</div>
+          <img src={APP.logo} alt="" width={32} height={32} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Install {APP.name}</div>
+            {deferred ? (
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                Akses lebih cepat dari layar utama
+              </div>
+            ) : (
               <div
                 style={{
                   fontSize: 12,
                   color: "var(--text-muted)",
-                  marginTop: 6,
+                  marginTop: 4,
                   display: "flex",
-                  flexDirection: "column",
+                  alignItems: "center",
+                  flexWrap: "wrap",
                   gap: 4,
                 }}
               >
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  Ketuk <Share size={13} style={{ flexShrink: 0 }} /> lalu pilih
-                </span>
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <SquarePlus size={13} style={{ flexShrink: 0 }} /> "Tambah ke Layar Utama"
-                </span>
+                Ketuk <Share size={13} /> lalu pilih <SquarePlus size={13} /> Tambah ke Layar Utama
               </div>
-            </div>
-            <Button variant="ghost" size="sm" onClick={dismissIos}>
-              Tutup
-            </Button>
+            )}
           </div>
+          <Button variant="ghost" size="sm" onClick={dismiss}>
+            {deferred ? "Nanti" : "Tutup"}
+          </Button>
+          {deferred && (
+            <Button variant="primary" size="sm" onClick={install}>
+              Install
+            </Button>
+          )}
         </motion.div>
-      </AnimatePresence>
-    );
-  }
-
-  return null;
+      )}
+    </AnimatePresence>
+  );
 }

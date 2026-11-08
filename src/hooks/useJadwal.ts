@@ -1,31 +1,34 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { POLICY, createResource, useApiMutation } from "../lib/createResource";
+import type { DayToggleBody, JadwalEntryBody, JadwalResponse } from "../lib/types";
 
-export function useJadwal(mode: string) {
-  return useQuery({
-    queryKey: ["jadwal", mode],
-    queryFn: () => api.get(`/api/jadwal?mode=${mode}`),
-    staleTime: 60_000,
-  });
+const useJadwalResource = createResource<JadwalResponse, string>({
+  key: "jadwal",
+  path: (mode) => `/api/jadwal?mode=${mode}`,
+  ...POLICY.schedule,
+});
+
+export function useJadwal(mode: string, enabled = true) {
+  return useJadwalResource(mode, { enabled });
 }
 
 export function useJadwalEntry() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: unknown) => api.post("/api/jadwal/entry", body),
-    onSuccess: (_data, variables: any) => {
-      qc.invalidateQueries({ queryKey: ["jadwal", variables.mode] });
-    },
-  });
+  return useApiMutation(
+    (body: JadwalEntryBody) => api.post("/api/jadwal/entry", body),
+    (body) => [["jadwal", body.mode]],
+  );
 }
 
 export function useDayToggle() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: { mode: string; hari: string; disable: boolean }) =>
-      api.post("/api/jadwal/day-toggle", body),
-    onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ["jadwal", variables.mode] });
-    },
-  });
+  return useApiMutation(
+    (body: DayToggleBody) => api.post("/api/jadwal/day-toggle", body),
+    (body) => [["jadwal", body.mode]],
+  );
+}
+
+export function useResetJadwal() {
+  return useApiMutation(
+    (mode: string) => api.post("/api/jadwal/reset", { mode }),
+    () => [["jadwal"]],
+  );
 }

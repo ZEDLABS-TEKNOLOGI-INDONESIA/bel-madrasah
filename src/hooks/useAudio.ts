@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { audioManager } from "../lib/audioManager";
+import { safeAudioUrl } from "../lib/format";
 import { queryClient } from "../lib/queryClient";
-
-function safeAudioUrl(url: string): string {
-  return url
-    .split("/")
-    .map((seg, i) => (i === 0 ? seg : encodeURIComponent(decodeURIComponent(seg))))
-    .join("/");
-}
+import type { PreviewResponse } from "../lib/types";
 
 export function useAudio() {
   const [playing, setPlaying] = useState<string | null>(audioManager.playing);
@@ -19,13 +14,12 @@ export function useAudio() {
 
   async function preview(filename: string, endpoint: string, body: object) {
     try {
-      const res: any = await api.post(endpoint, body);
-      const url = safeAudioUrl(res.url ?? "");
-      await audioManager.play(filename, url);
-
+      const res = await api.post<PreviewResponse>(endpoint, body);
+      await audioManager.play(filename, safeAudioUrl(res.url));
       queryClient.invalidateQueries({ queryKey: ["service-status"] });
-    } catch {
+    } catch (e) {
       audioManager.stopBrowser();
+      throw e;
     }
   }
 

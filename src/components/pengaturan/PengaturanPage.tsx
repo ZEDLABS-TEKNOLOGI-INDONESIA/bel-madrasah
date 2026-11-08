@@ -1,109 +1,34 @@
 import { Download, RefreshCw, Upload } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import toast from "react-hot-toast";
-import { useServiceStatus, useUpdateVolume, useVolume } from "../../hooks/useConfig";
+import { useServiceStatus } from "../../hooks/useConfig";
 import { api } from "../../lib/api";
+import { confirmAction } from "../../lib/confirm";
+import { modeLabel, type Tone } from "../../lib/constants";
+import { errorMessage } from "../../lib/errors";
+import { VolumeSlider } from "../audio/VolumeSlider";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { Field } from "../ui/Field";
 import { PageHeader } from "../ui/PageHeader";
-import { Slider } from "../ui/Slider";
+import { SettingRow } from "../ui/SettingRow";
 
-function Row(props: { title: string; desc?: string; children: React.ReactNode; last?: boolean }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        padding: "12px 16px",
-        borderBottom: props.last ? "none" : "1px solid var(--border)",
-      }}
-    >
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500 }}>{props.title}</div>
-        {props.desc && (
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{props.desc}</div>
-        )}
-      </div>
-      <div style={{ flexShrink: 0 }}>{props.children}</div>
-    </div>
-  );
-}
-
-function VolumeSection() {
-  const { data } = useVolume();
-  const update = useUpdateVolume();
-  const [local, setLocal] = useState<number>(1);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (data?.volume != null) setLocal(data.volume);
-  }, [data?.volume]);
-
-  function handleChange(val: number) {
-    setLocal(val);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        await update.mutateAsync(val);
-        toast.success("Volume disimpan");
-      } catch (e: any) {
-        toast.error(e.message);
-      }
-    }, 300);
-  }
-
-  return (
-    <Card
-      title="Volume output"
-      action={
-        <span className="tabular" style={{ fontSize: 16, fontWeight: 600 }}>
-          {Math.round(local * 100)}%
-        </span>
-      }
-      bodyStyle={{ display: "flex", flexDirection: "column", gap: 14 }}
-    >
-      <Slider
-        value={local}
-        min={0}
-        max={2}
-        step={0.01}
-        onChange={handleChange}
-        disabled={update.isPending}
-      />
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 11,
-          color: "var(--text-muted)",
-        }}
-      >
-        <span>0%</span>
-        <span style={{ color: local > 1 ? "var(--warning)" : "var(--text-muted)" }}>
-          {local > 1 ? "Amplifikasi aktif, bisa distorsi" : "100% = volume normal"}
-        </span>
-        <span>200%</span>
-      </div>
-    </Card>
-  );
-}
+const MIN_PASSWORD = 8;
 
 function PasswordSection() {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (newPassword.length < 8) {
-      toast.error("Password baru minimal 8 karakter");
+    if (newPassword.length < MIN_PASSWORD) {
+      toast.error(`Password baru minimal ${MIN_PASSWORD} karakter`);
       return;
     }
-    if (newPassword !== confirm) {
+    if (newPassword !== confirmPassword) {
       toast.error("Konfirmasi password tidak cocok");
       return;
     }
@@ -116,60 +41,60 @@ function PasswordSection() {
       toast.success("Password berhasil diubah");
       setOldPassword("");
       setNewPassword("");
-      setConfirm("");
-    } catch (e: any) {
-      toast.error(e.message);
+      setConfirmPassword("");
+    } catch (err) {
+      toast.error(errorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
+  const mismatch = confirmPassword !== "" && newPassword !== confirmPassword;
+
   return (
     <Card title="Ganti password">
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-            Password lama
-          </label>
+        <Field label="Password lama" htmlFor="old-password">
           <input
+            id="old-password"
             type="password"
             value={oldPassword}
             onChange={(e) => setOldPassword(e.target.value)}
             autoComplete="current-password"
             required
           />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-            Password baru
-          </label>
+        </Field>
+        <Field
+          label="Password baru"
+          htmlFor="new-password"
+          hint={`Minimal ${MIN_PASSWORD} karakter`}
+        >
           <input
+            id="new-password"
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             autoComplete="new-password"
-            minLength={8}
+            minLength={MIN_PASSWORD}
             required
           />
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Minimal 8 karakter</span>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-            Konfirmasi password baru
-          </label>
+        </Field>
+        <Field
+          label="Konfirmasi password baru"
+          htmlFor="confirm-password"
+          error={mismatch ? "Password tidak cocok" : undefined}
+        >
           <input
+            id="confirm-password"
             type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
             autoComplete="new-password"
             required
           />
-          {confirm && newPassword !== confirm && (
-            <span style={{ fontSize: 11, color: "var(--danger)" }}>Password tidak cocok</span>
-          )}
-        </div>
+        </Field>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <Button variant="primary" loading={loading}>
+          <Button variant="primary" type="submit" loading={loading}>
             Simpan password
           </Button>
         </div>
@@ -182,6 +107,10 @@ function BackupSection() {
   const restoreRef = useRef<HTMLInputElement>(null);
   const [restoreLoading, setRestoreLoading] = useState(false);
 
+  function resetInput() {
+    if (restoreRef.current) restoreRef.current.value = "";
+  }
+
   function handleBackup() {
     window.location.href = "/api/backup";
   }
@@ -191,9 +120,19 @@ function BackupSection() {
     const file = files[0];
     if (!file.name.endsWith(".json")) {
       toast.error("File harus berformat JSON");
+      resetInput();
       return;
     }
-    if (!confirm(`Restore jadwal dari ${file.name}? Data jadwal saat ini akan ditimpa.`)) return;
+    const ok = await confirmAction({
+      title: "Restore backup",
+      message: `Restore jadwal dari ${file.name}? Data jadwal saat ini akan ditimpa.`,
+      confirmLabel: "Restore",
+      danger: true,
+    });
+    if (!ok) {
+      resetInput();
+      return;
+    }
 
     setRestoreLoading(true);
     const form = new FormData();
@@ -201,22 +140,22 @@ function BackupSection() {
     try {
       await api.upload("/api/restore", form);
       toast.success("Jadwal berhasil direstore");
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(errorMessage(e));
     } finally {
       setRestoreLoading(false);
-      if (restoreRef.current) restoreRef.current.value = "";
+      resetInput();
     }
   }
 
   return (
     <Card title="Backup dan restore" bodyStyle={{ padding: 0 }}>
-      <Row title="Download backup" desc="Ekspor semua jadwal ke file JSON">
+      <SettingRow title="Download backup" desc="Ekspor semua jadwal ke file JSON">
         <Button variant="secondary" size="sm" icon={<Download size={13} />} onClick={handleBackup}>
           Download
         </Button>
-      </Row>
-      <Row title="Restore backup" desc="Import jadwal dari file JSON backup" last>
+      </SettingRow>
+      <SettingRow title="Restore backup" desc="Import jadwal dari file JSON backup" last>
         <Button
           variant="secondary"
           size="sm"
@@ -226,11 +165,12 @@ function BackupSection() {
         >
           Restore
         </Button>
-      </Row>
+      </SettingRow>
       <input
         ref={restoreRef}
         type="file"
         accept=".json"
+        aria-label="Pilih file backup"
         style={{ display: "none" }}
         onChange={(e) => handleRestore(e.target.files)}
       />
@@ -238,9 +178,11 @@ function BackupSection() {
   );
 }
 
+type HealthStatus = "ok" | "error" | "checking" | null;
+
 function InfoSection() {
   const { data, isLoading } = useServiceStatus();
-  const [healthStatus, setHealthStatus] = useState<"ok" | "error" | "checking" | null>(null);
+  const [healthStatus, setHealthStatus] = useState<HealthStatus>(null);
 
   async function checkHealth() {
     setHealthStatus("checking");
@@ -252,7 +194,7 @@ function InfoSection() {
     }
   }
 
-  const rows = [
+  const rows: { label: string; value: string; variant: Tone }[] = [
     {
       label: "Scheduler",
       value: isLoading ? "-" : data?.running ? "Berjalan" : "Dihentikan",
@@ -260,7 +202,7 @@ function InfoSection() {
     },
     {
       label: "Mode aktif",
-      value: data?.active_mode ?? "-",
+      value: modeLabel(data?.active_mode),
       variant: "accent",
     },
     {
@@ -270,25 +212,25 @@ function InfoSection() {
     },
   ];
 
+  const healthVariant: Tone =
+    healthStatus === "ok" ? "success" : healthStatus === "error" ? "danger" : "default";
+  const healthLabel =
+    healthStatus === "ok" ? "OK" : healthStatus === "error" ? "Error" : "Memeriksa";
+
   return (
     <Card title="Info dan status" bodyStyle={{ padding: 0 }}>
       {rows.map((r) => (
-        <Row key={r.label} title={r.label}>
-          <Badge variant={r.variant as any} dot>
+        <SettingRow key={r.label} title={r.label}>
+          <Badge variant={r.variant} dot>
             {r.value}
           </Badge>
-        </Row>
+        </SettingRow>
       ))}
-      <Row title="Health check" last>
+      <SettingRow title="Health check" last>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {healthStatus && (
-            <Badge
-              variant={
-                healthStatus === "ok" ? "success" : healthStatus === "error" ? "danger" : "default"
-              }
-              dot
-            >
-              {healthStatus === "ok" ? "OK" : healthStatus === "error" ? "Error" : "Memeriksa"}
+            <Badge variant={healthVariant} dot>
+              {healthLabel}
             </Badge>
           )}
           <Button
@@ -301,7 +243,7 @@ function InfoSection() {
             Cek
           </Button>
         </div>
-      </Row>
+      </SettingRow>
     </Card>
   );
 }
@@ -315,7 +257,7 @@ export function PengaturanPage() {
           className="col-span-12 md:col-span-6"
           style={{ display: "flex", flexDirection: "column", gap: 16 }}
         >
-          <VolumeSection />
+          <VolumeSlider />
           <PasswordSection />
         </div>
         <div

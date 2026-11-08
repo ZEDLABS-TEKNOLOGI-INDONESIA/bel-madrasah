@@ -1,59 +1,42 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { POLICY, createResource, useApiMutation } from "../lib/createResource";
+import type { Config, ConfigResponse, ServiceStatus, VolumeResponse } from "../lib/types";
 
-export function useConfig() {
-  return useQuery({
-    queryKey: ["config"],
-    queryFn: () => api.get("/api/config"),
-    staleTime: 30_000,
-    refetchInterval: 15_000,
-  });
-}
+export const useConfig = createResource<ConfigResponse>({
+  key: "config",
+  path: () => "/api/config",
+  ...POLICY.config,
+});
+
+export const useServiceStatus = createResource<ServiceStatus>({
+  key: "service-status",
+  path: () => "/api/service/status",
+  ...POLICY.status,
+});
+
+export const useVolume = createResource<VolumeResponse>({
+  key: "volume",
+  path: () => "/api/volume",
+  ...POLICY.schedule,
+});
 
 export function useUpdateConfig() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: unknown) => api.post("/api/config", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["config"] }),
-  });
-}
-
-export function useServiceStatus() {
-  return useQuery({
-    queryKey: ["service-status"],
-    queryFn: () => api.get("/api/service/status"),
-    staleTime: 10_000,
-    refetchInterval: 10_000,
-  });
+  return useApiMutation(
+    (body: Config) => api.post("/api/config", body),
+    () => [["config"]],
+  );
 }
 
 export function useServiceToggle() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post("/api/service/toggle", {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["service-status"] });
-      qc.invalidateQueries({ queryKey: ["config"] });
-    },
-  });
-}
-
-export function useVolume() {
-  return useQuery({
-    queryKey: ["volume"],
-    queryFn: () => api.get("/api/volume"),
-    staleTime: 60_000,
-  });
+  return useApiMutation(
+    () => api.post("/api/service/toggle", {}),
+    () => [["service-status"], ["config"]],
+  );
 }
 
 export function useUpdateVolume() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (volume: number) => api.post("/api/volume", { volume }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["volume"] });
-      qc.invalidateQueries({ queryKey: ["config"] });
-      qc.invalidateQueries({ queryKey: ["service-status"] });
-    },
-  });
+  return useApiMutation(
+    (volume: number) => api.post("/api/volume", { volume }),
+    () => [["volume"], ["config"], ["service-status"]],
+  );
 }

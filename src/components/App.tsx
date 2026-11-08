@@ -2,34 +2,25 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";
 import { queryClient } from "../lib/queryClient";
-import { attachListeners, initRouter } from "../lib/router";
+import { initRouter } from "../lib/router";
+import { PATH_TO_KEY, type PageKey } from "../lib/routes";
 import { Shell } from "./layout/Shell";
+import { ConfirmHost } from "./ui/ConfirmHost";
 
 const DashboardPage = lazy(() =>
-  import("./dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage }))
+  import("./dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })),
 );
 const JadwalPage = lazy(() =>
-  import("./jadwal/JadwalPage").then((m) => ({ default: m.JadwalPage }))
+  import("./jadwal/JadwalPage").then((m) => ({ default: m.JadwalPage })),
 );
 const AudioPage = lazy(() => import("./audio/AudioPage").then((m) => ({ default: m.AudioPage })));
 const LiburPage = lazy(() => import("./libur/LiburPage").then((m) => ({ default: m.LiburPage })));
 const LogPage = lazy(() => import("./log/LogPage").then((m) => ({ default: m.LogPage })));
 const PengaturanPage = lazy(() =>
-  import("./pengaturan/PengaturanPage").then((m) => ({ default: m.PengaturanPage }))
+  import("./pengaturan/PengaturanPage").then((m) => ({ default: m.PengaturanPage })),
 );
 
-type Page = "dashboard" | "jadwal" | "audio" | "libur" | "log" | "settings";
-
-const PATH_TO_PAGE: Record<string, Page> = {
-  "/": "dashboard",
-  "/jadwal": "jadwal",
-  "/audio": "audio",
-  "/libur": "libur",
-  "/log": "log",
-  "/settings": "settings",
-};
-
-const PAGE_MAP: Record<Page, React.ReactNode> = {
+const PAGES: Record<PageKey, React.ReactNode> = {
   dashboard: <DashboardPage />,
   jadwal: <JadwalPage />,
   audio: <AudioPage />,
@@ -38,32 +29,33 @@ const PAGE_MAP: Record<Page, React.ReactNode> = {
   settings: <PengaturanPage />,
 };
 
-export default function App({ page: initialPage }: { page: Page }) {
-  const [page, setPage] = useState<Page>(initialPage);
+export default function App({ page: initialPage }: { page: PageKey }) {
+  const [page, setPage] = useState<PageKey>(initialPage);
 
   useEffect(() => {
-    if (import.meta.env.PROD && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js");
-    } else if (import.meta.env.DEV && "serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations().then((regs) => {
-        regs.forEach((reg) => reg.unregister());
-      });
+    if ("serviceWorker" in navigator) {
+      if (import.meta.env.PROD) {
+        navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+      } else {
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((reg) => reg.unregister());
+        });
+      }
     }
 
-    initRouter();
-
-    const handler = (e: Event) => {
+    const stopRouter = initRouter();
+    const onNavigate = (e: Event) => {
       const path = (e as CustomEvent<{ path: string }>).detail.path;
-      const nextPage = PATH_TO_PAGE[path];
-      if (nextPage) setPage(nextPage);
+      const next = PATH_TO_KEY[path];
+      if (next) setPage(next);
     };
-    window.addEventListener("spa-navigate", handler);
-    return () => window.removeEventListener("spa-navigate", handler);
-  }, []);
+    window.addEventListener("spa-navigate", onNavigate);
 
-  useEffect(() => {
-    attachListeners();
-  });
+    return () => {
+      stopRouter();
+      window.removeEventListener("spa-navigate", onNavigate);
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -73,9 +65,10 @@ export default function App({ page: initialPage }: { page: Page }) {
             <div style={{ padding: 24, color: "var(--text-muted)", fontSize: 13 }}>Memuat...</div>
           }
         >
-          {PAGE_MAP[page]}
+          {PAGES[page]}
         </Suspense>
       </Shell>
+      <ConfirmHost />
       <Toaster
         position="top-right"
         toastOptions={{

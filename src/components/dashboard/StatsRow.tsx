@@ -1,26 +1,19 @@
 import { Activity, Layers, Music2, Volume2 } from "lucide-react";
-import React from "react";
+import type { ReactNode } from "react";
 import toast from "react-hot-toast";
 import { useServiceStatus, useServiceToggle } from "../../hooks/useConfig";
+import { modeLabel } from "../../lib/constants";
+import { errorMessage } from "../../lib/errors";
 import { Card } from "../ui/Card";
 import { Skeleton } from "../ui/Skeleton";
 import { Toggle } from "../ui/Toggle";
 
-const MODE_LABELS: Record<string, string> = {
-  reguler: "Reguler",
-  ramadhan: "Ramadhan",
-  pts: "PTS",
-  pas: "PAS",
-  pesantren: "Pesantren",
-  lainnya: "Lainnya",
-};
-
 function Stat(props: {
   label: string;
-  icon: React.ReactNode;
-  value: React.ReactNode;
-  footer?: React.ReactNode;
-  right?: React.ReactNode;
+  icon: ReactNode;
+  value: ReactNode;
+  footer?: ReactNode;
+  right?: ReactNode;
 }) {
   return (
     <Card style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
@@ -62,10 +55,10 @@ export function StatsRow() {
 
   async function handleToggle() {
     try {
-      await toggle.mutateAsync();
+      await toggle.mutateAsync(undefined);
       toast.success(data?.running ? "Scheduler dihentikan" : "Scheduler dijalankan");
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 
@@ -99,13 +92,13 @@ export function StatsRow() {
       <Stat
         label="Mode aktif"
         icon={<Layers size={13} />}
-        value={MODE_LABELS[data?.active_mode as string] ?? data?.active_mode ?? "-"}
+        value={modeLabel(data?.active_mode)}
         footer="Ditentukan oleh jadwal atau override"
       />
       <Stat
         label="Sedang diputar"
         icon={<Music2 size={13} />}
-        value={playing ? (data?.now_playing as string) || "Audio" : "Idle"}
+        value={playing ? data?.now_playing || "Audio" : "Idle"}
         footer={playing ? "Diputar di speaker server" : "Tidak ada audio"}
       />
       <Stat

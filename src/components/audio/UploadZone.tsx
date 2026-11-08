@@ -2,7 +2,11 @@ import { CheckCircle2, FileAudio, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useUploadTone } from "../../hooks/useTones";
+import { errorMessage } from "../../lib/errors";
 import { Card } from "../ui/Card";
+
+const ALLOWED_EXT = ["mp3", "wav", "ogg"];
+const MAX_SIZE = 32 * 1024 * 1024;
 
 export function UploadZone() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -14,11 +18,11 @@ export function UploadZone() {
     if (!files || files.length === 0) return;
     const file = files[0];
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!["mp3", "wav", "ogg"].includes(ext ?? "")) {
+    if (!ALLOWED_EXT.includes(ext ?? "")) {
       toast.error("Format tidak didukung (mp3, wav, ogg)");
       return;
     }
-    if (file.size > 32 * 1024 * 1024) {
+    if (file.size > MAX_SIZE) {
       toast.error("File terlalu besar (maks 32MB)");
       return;
     }
@@ -33,16 +37,18 @@ export function UploadZone() {
 
     try {
       await upload.mutateAsync(form);
-      clearInterval(interval);
       setProgress(100);
       toast.success(`${file.name} berhasil diupload`);
       setTimeout(() => setProgress(null), 1500);
-    } catch (e: any) {
-      clearInterval(interval);
+    } catch (e) {
       setProgress(null);
+      const message = errorMessage(e);
       toast.error(
-        e.message === "Failed to fetch" ? "Koneksi terputus saat upload, coba lagi" : e.message
+        message === "Failed to fetch" ? "Koneksi terputus saat upload, coba lagi" : message,
       );
+    } finally {
+      clearInterval(interval);
+      if (inputRef.current) inputRef.current.value = "";
     }
   }
 
@@ -98,6 +104,7 @@ export function UploadZone() {
           ref={inputRef}
           type="file"
           accept=".mp3,.wav,.ogg"
+          aria-label="Pilih file audio"
           style={{ display: "none" }}
           onChange={(e) => handleFiles(e.target.files)}
         />
