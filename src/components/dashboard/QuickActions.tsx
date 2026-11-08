@@ -1,13 +1,14 @@
 import { CalendarDays, CalendarOff, ChevronRight, Play, Square, Upload } from "lucide-react";
-import React from "react";
+import type { ReactNode } from "react";
 import toast from "react-hot-toast";
 import { useServiceStatus, useServiceToggle } from "../../hooks/useConfig";
+import { errorMessage } from "../../lib/errors";
 import { go } from "../../lib/nav";
 import { Card } from "../ui/Card";
 import { Skeleton } from "../ui/Skeleton";
 
 function ActionRow(props: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   desc: string;
   onClick: () => void;
@@ -52,10 +53,10 @@ export function QuickActions() {
 
   async function handleToggle() {
     try {
-      await toggle.mutateAsync();
+      await toggle.mutateAsync(undefined);
       toast.success(data?.running ? "Scheduler dihentikan" : "Scheduler dijalankan");
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 

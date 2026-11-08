@@ -1,25 +1,22 @@
-const pageCache = new Map<string, string>();
+import { APP } from "./app.config";
+import { PATHS } from "./routes";
 
-const PAGE_MAP: Record<string, string> = {
-  "/": "dashboard",
-  "/jadwal": "jadwal",
-  "/audio": "audio",
-  "/libur": "libur",
-  "/log": "log",
-  "/settings": "settings",
-};
+const TTL = 5 * 60_000;
+const known = new Set(PATHS);
+const pageCache = new Map<string, { html: string; at: number }>();
 
 async function fetchPage(url: string): Promise<string | null> {
-  if (pageCache.has(url)) return pageCache.get(url)!;
+  const hit = pageCache.get(url);
+  if (hit && Date.now() - hit.at < TTL) return hit.html;
   try {
     const res = await fetch(url, { credentials: "include" });
-    if (res.status === 401) {
+    if (res.status === 401 || (res.redirected && new URL(res.url).pathname === "/login")) {
       window.location.href = "/login";
       return null;
     }
     if (!res.ok) return null;
     const html = await res.text();
-    pageCache.set(url, html);
+    pageCache.set(url, { html, at: Date.now() });
     return html;
   } catch {
     return null;
@@ -28,13 +25,18 @@ async function fetchPage(url: string): Promise<string | null> {
 
 function extractTitle(html: string): string {
   const match = html.match(/<title>([^<]*)<\/title>/i);
-  return match ? match[1] : "Bel Madrasah";
+  return match ? match[1] : APP.name;
 }
 
 let isNavigating = false;
+let pending: { path: string; push: boolean } | null = null;
 
-async function navigate(path: string, pushState = true) {
-  if (isNavigating || window.location.pathname === path) return;
+async function navigate(path: string, push = true) {
+  if (isNavigating) {
+    pending = { path, push };
+    return;
+  }
+  if (push && window.location.pathname === path) return;
   isNavigating = true;
   try {
     const html = await fetchPage(path);
@@ -42,53 +44,43 @@ async function navigate(path: string, pushState = true) {
       window.location.href = path;
       return;
     }
-    if (pushState) {
-      window.history.pushState({}, "", path);
-    }
+    if (push) window.history.pushState({}, "", path);
     document.title = extractTitle(html);
     window.dispatchEvent(new CustomEvent("spa-navigate", { detail: { path } }));
-    requestAnimationFrame(() => attachListeners());
   } finally {
     isNavigating = false;
+    if (pending) {
+      const next = pending;
+      pending = null;
+      void navigate(next.path, next.push);
+    }
   }
 }
 
-function prefetch(path: string) {
-  if (!pageCache.has(path) && PAGE_MAP[path]) {
-    fetchPage(path);
-  }
-}
-
-export function attachListeners() {
-  document.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
-    const href = a.getAttribute("href") ?? "";
-    if (!PAGE_MAP[href]) return;
-    if (a.dataset.spa === "1") return;
-    a.dataset.spa = "1";
-    a.addEventListener("mouseenter", () => prefetch(href), { once: true });
-    a.addEventListener("touchstart", () => prefetch(href), { once: true, passive: true });
-    a.addEventListener("click", (e) => {
-      e.preventDefault();
-      navigate(href);
-    });
-  });
+export function prefetch(path: string) {
+  if (known.has(path)) void fetchPage(path);
 }
 
 export function initRouter() {
-  window.addEventListener("popstate", () => {
-    navigate(window.location.pathname, false);
-  });
+  const onPop = () => {
+    void navigate(window.location.pathname, false);
+  };
+  const onGo = (e: Event) => {
+    void navigate((e as CustomEvent<{ path: string }>).detail.path);
+  };
 
-  window.addEventListener("spa-do-navigate", (e: Event) => {
-    const path = (e as CustomEvent<{ path: string }>).detail.path;
-    navigate(path);
-  });
+  window.addEventListener("popstate", onPop);
+  window.addEventListener("spa-do-navigate", onGo);
 
+  const warm = () => PATHS.forEach(prefetch);
   if ("requestIdleCallback" in window) {
-    requestIdleCallback(() => Object.keys(PAGE_MAP).forEach(prefetch));
+    requestIdleCallback(warm);
   } else {
-    setTimeout(() => Object.keys(PAGE_MAP).forEach(prefetch), 500);
+    setTimeout(warm, 500);
   }
 
-  attachListeners();
+  return () => {
+    window.removeEventListener("popstate", onPop);
+    window.removeEventListener("spa-do-navigate", onGo);
+  };
 }

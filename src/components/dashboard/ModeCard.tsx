@@ -1,28 +1,21 @@
-import React, { useState } from "react";
-import { Badge } from "../ui/Badge";
-import { Card } from "../ui/Card";
-import { Skeleton } from "../ui/Skeleton";
-import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
+import { useState } from "react";
 import toast from "react-hot-toast";
 import { useConfig, useUpdateConfig } from "../../hooks/useConfig";
-
-const MODE_LABELS: Record<string, string> = {
-  reguler: "Reguler",
-  ramadhan: "Ramadhan",
-  pts: "PTS",
-  pas: "PAS",
-  pesantren: "Pesantren",
-  lainnya: "Lainnya",
-};
-
-const ALL_MODES = ["reguler", "ramadhan", "pts", "pas", "pesantren", "lainnya"];
+import { ALL_MODES, MODE_LABELS, RANGE_MODES, modeLabel } from "../../lib/constants";
+import { errorMessage } from "../../lib/errors";
+import { rangeKey, type Config } from "../../lib/types";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { Field } from "../ui/Field";
+import { Modal } from "../ui/Modal";
+import { Skeleton } from "../ui/Skeleton";
 
 export function ModeCard() {
   const { data, isLoading } = useConfig();
   const update = useUpdateConfig();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<Config | null>(null);
 
   function openModal() {
     if (!data?.config) return;
@@ -31,19 +24,22 @@ export function ModeCard() {
   }
 
   async function handleSave() {
+    if (!form) return;
     try {
       await update.mutateAsync(form);
       toast.success("Config berhasil disimpan");
       setOpen(false);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 
   if (isLoading) return <Skeleton height={120} radius="var(--radius-lg)" />;
 
   const cfg = data?.config;
-  const activeMode = data?.active_mode ?? "-";
+  const hasRange = RANGE_MODES.some(
+    (m) => cfg?.[rangeKey(m, "start")] || cfg?.[rangeKey(m, "end")],
+  );
 
   return (
     <>
@@ -58,13 +54,13 @@ export function ModeCard() {
       >
         <div>
           <Badge variant="accent" dot>
-            {MODE_LABELS[activeMode] ?? activeMode}
+            {modeLabel(data?.active_mode)}
           </Badge>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {["ramadhan", "pts", "pas", "pesantren"].map((m) => {
-            const start = cfg?.[`${m}_start`];
-            const end = cfg?.[`${m}_end`];
+          {RANGE_MODES.map((m) => {
+            const start = cfg?.[rangeKey(m, "start")];
+            const end = cfg?.[rangeKey(m, "end")];
             if (!start && !end) return null;
             return (
               <div
@@ -83,9 +79,7 @@ export function ModeCard() {
               </div>
             );
           })}
-          {!["ramadhan", "pts", "pas", "pesantren"].some(
-            (m) => cfg?.[`${m}_start`] || cfg?.[`${m}_end`]
-          ) && (
+          {!hasRange && (
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
               Belum ada rentang tanggal mode.
             </span>
@@ -96,11 +90,9 @@ export function ModeCard() {
       <Modal open={open} onClose={() => setOpen(false)} title="Konfigurasi Mode Bel" width={520}>
         {form && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-                Mode
-              </label>
+            <Field label="Mode" htmlFor="mode-select">
               <select
+                id="mode-select"
                 value={form.mode}
                 onChange={(e) => setForm({ ...form, mode: e.target.value })}
               >
@@ -110,7 +102,7 @@ export function ModeCard() {
                   </option>
                 ))}
               </select>
-            </div>
+            </Field>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <input
@@ -125,43 +117,42 @@ export function ModeCard() {
               </label>
             </div>
 
-            {[
-              { key: "ramadhan", label: "Ramadhan" },
-              { key: "pts", label: "PTS" },
-              { key: "pas", label: "PAS" },
-              { key: "pesantren", label: "Pesantren" },
-            ].map(({ key, label }) => (
-              <div key={key}>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--text-muted)",
-                    marginBottom: 8,
-                  }}
-                >
-                  {label}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div>
-                    <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Mulai</label>
-                    <input
-                      type="date"
-                      value={form[`${key}_start`] ?? ""}
-                      onChange={(e) => setForm({ ...form, [`${key}_start`]: e.target.value })}
-                    />
+            {RANGE_MODES.map((m) => {
+              const startKey = rangeKey(m, "start");
+              const endKey = rangeKey(m, "end");
+              return (
+                <div key={m}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "var(--text-muted)",
+                      marginBottom: 8,
+                    }}
+                  >
+                    {MODE_LABELS[m]}
                   </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Selesai</label>
-                    <input
-                      type="date"
-                      value={form[`${key}_end`] ?? ""}
-                      onChange={(e) => setForm({ ...form, [`${key}_end`]: e.target.value })}
-                    />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <Field label="Mulai" htmlFor={startKey}>
+                      <input
+                        id={startKey}
+                        type="date"
+                        value={form[startKey] ?? ""}
+                        onChange={(e) => setForm({ ...form, [startKey]: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Selesai" htmlFor={endKey}>
+                      <input
+                        id={endKey}
+                        type="date"
+                        value={form[endKey] ?? ""}
+                        onChange={(e) => setForm({ ...form, [endKey]: e.target.value })}
+                      />
+                    </Field>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
               <Button variant="ghost" onClick={() => setOpen(false)}>

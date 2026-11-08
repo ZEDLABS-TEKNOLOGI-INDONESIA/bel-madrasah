@@ -1,6 +1,6 @@
-import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
+import React, { useEffect } from "react";
 
 interface ModalProps {
   open: boolean;
@@ -11,6 +11,15 @@ interface ModalProps {
 }
 
 export function Modal({ open, onClose, title, children, width = 480 }: ModalProps) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -22,8 +31,7 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
             position: "fixed",
             inset: 0,
             zIndex: 1000,
-            background: "rgba(0,0,0,0.4)",
-            backdropFilter: "blur(4px)",
+            background: "var(--overlay)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -32,19 +40,23 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
           onClick={(e) => e.target === e.currentTarget && onClose()}
         >
           <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            initial={{ scale: 0.97, opacity: 0, y: 8 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.95, opacity: 0, y: 10 }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            exit={{ scale: 0.97, opacity: 0, y: 8 }}
+            transition={{ type: "spring", stiffness: 400, damping: 32 }}
             style={{
               width: "100%",
               maxWidth: width,
-              background: "var(--card-gloss), var(--card-bg)",
+              maxHeight: "calc(100dvh - 32px)",
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--card-bg)",
               border: "1px solid var(--card-border)",
-              backdropFilter: "var(--glass-blur)",
-              WebkitBackdropFilter: "var(--glass-blur)",
-              borderRadius: "var(--radius-xl)",
-              boxShadow: "0 24px 64px rgba(0,0,0,0.2)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "0 16px 48px rgba(1, 4, 9, 0.3)",
               overflow: "hidden",
             }}
           >
@@ -55,11 +67,14 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
+                flexShrink: 0,
               }}
             >
               <span style={{ fontWeight: 600, fontSize: 15 }}>{title}</span>
               <button
                 onClick={onClose}
+                aria-label="Tutup"
+                className="row-hover"
                 style={{
                   background: "none",
                   border: "none",
@@ -73,7 +88,7 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
                 <X size={16} />
               </button>
             </div>
-            <div style={{ padding: 20 }}>{children}</div>
+            <div style={{ padding: 20, overflowY: "auto" }}>{children}</div>
           </motion.div>
         </motion.div>
       )}

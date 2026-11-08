@@ -2,22 +2,20 @@ import { Download, ExternalLink, Plus } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useLiburNasional, useMutateLibur } from "../../hooks/useLibur";
+import { confirmAction } from "../../lib/confirm";
+import { errorMessage } from "../../lib/errors";
+import { formatDate } from "../../lib/format";
+import type { NasionalItem } from "../../lib/types";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { EmptyState } from "../ui/EmptyState";
+import { ListRow } from "../ui/ListRow";
 import { PageHeader } from "../ui/PageHeader";
+import { Skeleton } from "../ui/Skeleton";
 import { LiburList } from "./LiburList";
 
-interface NasionalItem {
-  date: string;
-  name: string;
-  is_national_holiday: boolean;
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("id-ID", { day: "numeric", month: "long" });
-}
+const ALREADY_EXISTS = "sudah ada";
 
 function LiburNasionalPanel() {
   const currentYear = new Date().getFullYear();
@@ -37,18 +35,15 @@ function LiburNasionalPanel() {
 
   async function handleImport(item: NasionalItem) {
     try {
-      await mutate.mutateAsync({
-        action: "add",
-        date: item.date,
-        keterangan: item.name,
-      });
+      await mutate.mutateAsync({ action: "add", date: item.date, keterangan: item.name });
       setImportedDates((prev) => new Set(prev).add(item.date));
       toast.success(`${item.name} ditambahkan`);
-    } catch (e: any) {
-      if (e.message?.includes("sudah ada")) {
+    } catch (e) {
+      const message = errorMessage(e);
+      if (message.includes(ALREADY_EXISTS)) {
         setImportedDates((prev) => new Set(prev).add(item.date));
       } else {
-        toast.error(e.message);
+        toast.error(message);
       }
     }
   }
@@ -57,11 +52,15 @@ function LiburNasionalPanel() {
     if (toImport.length === 0) return;
 
     const label = showCuti
-      ? `${toImport.length} hari libur & cuti bersama`
+      ? `${toImport.length} hari libur dan cuti bersama`
       : `${toImport.length} hari libur nasional`;
 
-    if (!confirm(`Import semua ${label} tahun ${year}?\nData yang sudah ada akan dilewati.`))
-      return;
+    const ok = await confirmAction({
+      title: "Import hari libur",
+      message: `Import semua ${label} tahun ${year}?\nData yang sudah ada akan dilewati.`,
+      confirmLabel: "Import",
+    });
+    if (!ok) return;
 
     setImportingAll(true);
     let sukses = 0;
@@ -71,15 +70,11 @@ function LiburNasionalPanel() {
 
     for (const item of toImport) {
       try {
-        await mutate.mutateAsync({
-          action: "add",
-          date: item.date,
-          keterangan: item.name,
-        });
+        await mutate.mutateAsync({ action: "add", date: item.date, keterangan: item.name });
         newImported.add(item.date);
         sukses++;
-      } catch (e: any) {
-        if (e.message?.includes("sudah ada")) {
+      } catch (e) {
+        if (errorMessage(e).includes(ALREADY_EXISTS)) {
           newImported.add(item.date);
           lewati++;
         } else {
@@ -103,12 +98,18 @@ function LiburNasionalPanel() {
     setImportedDates(new Set());
   }
 
+  const tabs = [
+    { label: "Semua", value: true, count: items.length },
+    { label: "Libur", value: false, count: nationals.length },
+  ];
+
   return (
     <Card
       title="Libur nasional"
       action={
         <select
           value={year}
+          aria-label="Tahun"
           onChange={(e) => handleYearChange(Number(e.target.value))}
           style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
         >
@@ -123,15 +124,13 @@ function LiburNasionalPanel() {
     >
       {!isLoading && items.length > 0 && (
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          {[
-            { label: "Semua", value: true, count: items.length },
-            { label: "Libur", value: false, count: nationals.length },
-          ].map((tab) => {
+          {tabs.map((tab) => {
             const active = showCuti === tab.value;
             return (
               <button
                 key={tab.label}
                 onClick={() => setShowCuti(tab.value)}
+                aria-pressed={active}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -174,29 +173,11 @@ function LiburNasionalPanel() {
       {isLoading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              style={{
-                height: 36,
-                borderRadius: "var(--radius)",
-                background: "var(--bg-tertiary)",
-                animation: "shimmer 1.5s infinite",
-                backgroundSize: "200% 100%",
-              }}
-            />
+            <Skeleton key={i} height={36} radius="var(--radius)" />
           ))}
         </div>
       ) : displayed.length === 0 ? (
-        <div
-          style={{
-            fontSize: 13,
-            color: "var(--text-muted)",
-            textAlign: "center",
-            padding: "16px 0",
-          }}
-        >
-          Tidak ada data
-        </div>
+        <EmptyState text="Tidak ada data" padding={16} />
       ) : (
         <>
           <Button
@@ -223,30 +204,22 @@ function LiburNasionalPanel() {
           >
             {displayed.map((item, i) => {
               const imported = importedDates.has(item.date);
-              const isCuti = !item.is_national_holiday;
               return (
-                <div
+                <ListRow
                   key={item.date}
-                  className="row-hover"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
-                    padding: "8px 12px",
-                    borderBottom: i === displayed.length - 1 ? "none" : "1px solid var(--border)",
-                    opacity: imported ? 0.5 : 1,
-                  }}
+                  dimmed={imported}
+                  last={i === displayed.length - 1}
+                  style={{ justifyContent: "space-between", gap: 8, padding: "8px 12px" }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
                     <div
                       style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
                     >
                       <span style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</span>
-                      {isCuti && <Badge variant="warning">Cuti</Badge>}
+                      {!item.is_national_holiday && <Badge variant="warning">Cuti</Badge>}
                     </div>
                     <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                      {formatDate(item.date)}
+                      {formatDate(item.date, false)}
                     </span>
                   </div>
                   <Button
@@ -259,7 +232,7 @@ function LiburNasionalPanel() {
                   >
                     {imported ? "Terimpor" : "Import"}
                   </Button>
-                </div>
+                </ListRow>
               );
             })}
           </div>

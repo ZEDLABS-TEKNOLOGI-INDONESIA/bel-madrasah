@@ -1,36 +1,22 @@
 import { Pencil, Play, Plus, RotateCcw, Square, Trash2 } from "lucide-react";
-import React, { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
+import { useAudio } from "../../hooks/useAudio";
 import { useConfig } from "../../hooks/useConfig";
-import { useDayToggle, useJadwal, useJadwalEntry } from "../../hooks/useJadwal";
-import { api } from "../../lib/api";
-import { audioManager } from "../../lib/audioManager";
-import { queryClient } from "../../lib/queryClient";
+import { useDayToggle, useJadwal, useJadwalEntry, useResetJadwal } from "../../hooks/useJadwal";
+import { confirmAction } from "../../lib/confirm";
+import { ALL_MODES, MODE_LABELS, TONE_DIR } from "../../lib/constants";
+import { errorMessage } from "../../lib/errors";
+import { baseName, fileLabel } from "../../lib/format";
+import type { JadwalEntry } from "../../lib/types";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { EmptyState } from "../ui/EmptyState";
 import { PageHeader } from "../ui/PageHeader";
 import { SkeletonCard } from "../ui/Skeleton";
 import { EntryModal } from "./EntryModal";
 
-const ALL_MODES = ["reguler", "ramadhan", "pts", "pas", "pesantren", "lainnya"];
-const MODE_LABELS: Record<string, string> = {
-  reguler: "Reguler",
-  ramadhan: "Ramadhan",
-  pts: "PTS",
-  pas: "PAS",
-  pesantren: "Pesantren",
-  lainnya: "Lainnya",
-};
-const TONE_DIR = "/opt/bel-madrasah/tone";
-
-interface Entry {
-  waktu: string;
-  audio: string;
-}
-
-interface Item {
-  waktu: string;
-  audio: string;
+interface Item extends JadwalEntry {
   days: string[];
 }
 
@@ -41,17 +27,7 @@ interface Group {
   items: Item[];
 }
 
-function safeAudioUrl(url: string): string {
-  return url
-    .split("/")
-    .map((segment, i) => (i === 0 ? segment : encodeURIComponent(decodeURIComponent(segment))))
-    .join("/");
-}
-
-function fileLabel(audio: string) {
-  const name = audio.split("/").pop() ?? audio;
-  return name.replace(/\.(mp3|wav|ogg)$/i, "");
-}
+const NO_DAYS: string[] = [];
 
 function dayLabel(days: string[], hariList: string[]) {
   if (days.length === 1) return days[0];
@@ -62,7 +38,7 @@ function dayLabel(days: string[], hariList: string[]) {
   return days.join(", ");
 }
 
-function buildGroups(jadwal: Record<string, Entry[]>, hariList: string[]): Group[] {
+function buildGroups(jadwal: Record<string, JadwalEntry[]>, hariList: string[]): Group[] {
   const items = new Map<string, Item>();
   for (const hari of hariList) {
     for (const e of jadwal[hari] ?? []) {
@@ -88,15 +64,16 @@ function buildGroups(jadwal: Record<string, Entry[]>, hariList: string[]): Group
   list.forEach((g) => g.items.sort((a, b) => a.waktu.localeCompare(b.waktu)));
   list.sort(
     (a, b) =>
-      b.days.length - a.days.length || hariList.indexOf(a.days[0]) - hariList.indexOf(b.days[0])
+      b.days.length - a.days.length || hariList.indexOf(a.days[0]) - hariList.indexOf(b.days[0]),
   );
   return list;
 }
 
-function Chip(props: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip(props: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       onClick={props.onClick}
+      aria-pressed={props.active}
       style={{
         padding: "4px 12px",
         borderRadius: 99,
@@ -120,30 +97,26 @@ export function JadwalPage() {
   const [filter, setFilter] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
-  const [playingFile, setPlayingFile] = useState<string | null>(audioManager.playing);
-  const [resetting, setResetting] = useState(false);
 
   const { data, isLoading } = useJadwal(mode);
   const { data: configData } = useConfig();
   const entryMutation = useJadwalEntry();
   const dayToggle = useDayToggle();
-
-  useEffect(() => {
-    return audioManager.subscribe(() => setPlayingFile(audioManager.playing));
-  }, []);
+  const resetMutation = useResetJadwal();
+  const { preview, stop, isPlaying } = useAudio();
 
   const activeMode = configData?.active_mode ?? "reguler";
-  const jadwal: Record<string, Entry[]> = data?.jadwal ?? {};
-  const hariList: string[] = data?.hari ?? [];
-  const disabledDays: string[] = data?.disabled_days ?? [];
+  const jadwal = data?.jadwal;
+  const hariList = data?.hari ?? NO_DAYS;
+  const disabledDays = data?.disabled_days ?? NO_DAYS;
 
-  const groups = useMemo(() => buildGroups(jadwal, hariList), [data]);
+  const groups = useMemo(() => buildGroups(data?.jadwal ?? {}, data?.hari ?? []), [data]);
   const total = groups.reduce((n, g) => n + g.items.length, 0);
   const activeFilter = groups.some((g) => g.key === filter) ? filter : "all";
   const visible = activeFilter === "all" ? groups : groups.filter((g) => g.key === activeFilter);
 
-  function indexOfEntry(day: string, item: Entry) {
-    return (jadwal[day] ?? []).findIndex((e) => e.waktu === item.waktu && e.audio === item.audio);
+  function indexOfEntry(day: string, item: JadwalEntry) {
+    return (jadwal?.[day] ?? []).findIndex((e) => e.waktu === item.waktu && e.audio === item.audio);
   }
 
   function openAdd() {
@@ -161,7 +134,7 @@ export function JadwalPage() {
     setEditing(null);
   }
 
-  async function handleSave(entry: Entry, days: string[]) {
+  async function handleSave(entry: JadwalEntry, days: string[]) {
     try {
       if (editing) {
         for (const day of hariList) {
@@ -184,13 +157,19 @@ export function JadwalPage() {
         toast.success("Bel ditambahkan");
       }
       closeModal();
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 
   async function handleDelete(item: Item, label: string) {
-    if (!confirm(`Hapus bel ${item.waktu} (${fileLabel(item.audio)}) pada ${label}?`)) return;
+    const ok = await confirmAction({
+      title: "Hapus bel",
+      message: `Hapus bel ${item.waktu} (${fileLabel(item.audio)}) pada ${label}?`,
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       for (const day of item.days) {
         const index = indexOfEntry(day, item);
@@ -199,8 +178,8 @@ export function JadwalPage() {
         }
       }
       toast.success("Bel dihapus");
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 
@@ -209,52 +188,46 @@ export function JadwalPage() {
     const index = indexOfEntry(day, item);
     if (index < 0) return;
     try {
-      const res: any = await api.post("/api/jadwal/entry", {
+      await preview(baseName(item.audio), "/api/jadwal/entry", {
         action: "preview",
         mode,
         hari: day,
         index,
       });
-      await audioManager.play(res.filename, safeAudioUrl(res.url));
-      queryClient.invalidateQueries({ queryKey: ["service-status"] });
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 
   async function handleStop() {
     try {
-      await api.post("/api/tones/stop", {});
-    } finally {
-      audioManager.stopBrowser();
-      queryClient.invalidateQueries({ queryKey: ["service-status"] });
+      await stop();
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 
   async function handleToggleDay(hari: string, currentlyOff: boolean) {
     try {
       await dayToggle.mutateAsync({ mode, hari, disable: !currentlyOff });
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 
   async function handleReset() {
-    if (
-      !confirm(
-        `Reset jadwal mode ${MODE_LABELS[mode]} ke default? Semua bel pada mode ini akan diganti.`
-      )
-    )
-      return;
-    setResetting(true);
+    const ok = await confirmAction({
+      title: "Reset jadwal",
+      message: `Reset jadwal mode ${MODE_LABELS[mode]} ke default? Semua bel pada mode ini akan diganti.`,
+      confirmLabel: "Reset",
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await api.post("/api/jadwal/reset", { mode });
-      await queryClient.invalidateQueries({ queryKey: ["jadwal"] });
+      await resetMutation.mutateAsync(mode);
       toast.success("Jadwal direset ke default");
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setResetting(false);
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 
@@ -274,8 +247,11 @@ export function JadwalPage() {
         title="Jadwal bel"
         action={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Mode</span>
+            <label htmlFor="jadwal-mode" style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Mode
+            </label>
             <select
+              id="jadwal-mode"
               value={mode}
               onChange={(e) => {
                 setMode(e.target.value);
@@ -294,7 +270,7 @@ export function JadwalPage() {
               variant="secondary"
               size="sm"
               icon={<RotateCcw size={12} />}
-              loading={resetting}
+              loading={resetMutation.isPending}
               onClick={handleReset}
             >
               Reset ke default
@@ -361,16 +337,7 @@ export function JadwalPage() {
             </div>
 
             {groups.length === 0 ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: 32,
-                  fontSize: 13,
-                  color: "var(--text-muted)",
-                }}
-              >
-                Belum ada bel pada mode ini.
-              </div>
+              <EmptyState text="Belum ada bel pada mode ini." />
             ) : (
               visible.map((g) => {
                 const allOff = g.days.every((d) => disabledDays.includes(d));
@@ -400,8 +367,7 @@ export function JadwalPage() {
                       }}
                     >
                       {g.items.map((item) => {
-                        const filename = item.audio.split("/").pop() ?? "";
-                        const playing = playingFile === filename;
+                        const playing = isPlaying(baseName(item.audio));
                         return (
                           <div
                             key={`${item.waktu}|${item.audio}`}
@@ -448,6 +414,7 @@ export function JadwalPage() {
                                   icon={<Square size={12} />}
                                   onClick={handleStop}
                                   title="Stop"
+                                  aria-label="Stop"
                                 />
                               ) : (
                                 <Button
@@ -456,6 +423,7 @@ export function JadwalPage() {
                                   icon={<Play size={12} />}
                                   onClick={() => handlePlay(item)}
                                   title="Putar"
+                                  aria-label="Putar"
                                 />
                               )}
                               <Button
@@ -464,6 +432,7 @@ export function JadwalPage() {
                                 icon={<Pencil size={12} />}
                                 onClick={() => openEdit(item)}
                                 title="Edit"
+                                aria-label="Edit"
                               />
                               <Button
                                 variant="ghost"
@@ -471,6 +440,7 @@ export function JadwalPage() {
                                 icon={<Trash2 size={12} />}
                                 onClick={() => handleDelete(item, g.label)}
                                 title="Hapus"
+                                aria-label="Hapus"
                                 style={{ color: "var(--danger)" }}
                               />
                             </div>
@@ -490,7 +460,7 @@ export function JadwalPage() {
         open={modalOpen}
         onClose={closeModal}
         onSave={handleSave}
-        initial={editing ? { waktu: editing.waktu, audio: editing.audio } : null}
+        initial={editing}
         initialDays={editing?.days}
         hariList={hariList}
         loading={entryMutation.isPending}

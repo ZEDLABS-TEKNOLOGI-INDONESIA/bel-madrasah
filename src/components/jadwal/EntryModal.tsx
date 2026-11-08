@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
 import { useTones } from "../../hooks/useTones";
+import { TONE_DIR } from "../../lib/constants";
+import { baseName } from "../../lib/format";
+import type { JadwalEntry } from "../../lib/types";
 import { Button } from "../ui/Button";
+import { Field } from "../ui/Field";
 import { Modal } from "../ui/Modal";
-
-interface Entry {
-  waktu: string;
-  audio: string;
-}
 
 interface EntryModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (entry: Entry, days: string[]) => void;
-  initial?: Entry | null;
+  onSave: (entry: JadwalEntry, days: string[]) => void;
+  initial?: JadwalEntry | null;
   initialDays?: string[];
   hariList: string[];
   loading?: boolean;
@@ -27,7 +26,7 @@ export function EntryModal({
   initialDays,
   hariList,
   loading,
-  toneDir = "/opt/bel-madrasah/tone",
+  toneDir = TONE_DIR,
 }: EntryModalProps) {
   const [waktu, setWaktu] = useState("");
   const [selectedFilename, setSelectedFilename] = useState("");
@@ -37,7 +36,7 @@ export function EntryModal({
   useEffect(() => {
     if (!open) return;
     setWaktu(initial?.waktu ?? "");
-    setSelectedFilename(initial?.audio ? (initial.audio.split("/").pop() ?? "") : "");
+    setSelectedFilename(initial?.audio ? baseName(initial.audio) : "");
     setDays(initialDays && initialDays.length > 0 ? initialDays : hariList.slice(0, 5));
   }, [open, initial, initialDays, hariList]);
 
@@ -45,27 +44,36 @@ export function EntryModal({
     setDays((prev) => (prev.includes(h) ? prev.filter((d) => d !== h) : [...prev, h]));
   }
 
+  const canSave = Boolean(waktu) && Boolean(selectedFilename) && days.length > 0;
+
   function handleSave() {
-    if (!waktu || !selectedFilename || days.length === 0) return;
+    if (!canSave) return;
     onSave(
       { waktu, audio: `${toneDir}/${selectedFilename}` },
-      hariList.filter((h) => days.includes(h))
+      hariList.filter((h) => days.includes(h)),
     );
   }
 
-  const tones: string[] = tonesData?.tones ?? [];
+  const tones = tonesData?.tones ?? [];
 
   return (
     <Modal open={open} onClose={onClose} title={initial ? "Edit bel" : "Tambah bel"} width={460}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>Waktu</label>
-          <input type="time" value={waktu} onChange={(e) => setWaktu(e.target.value)} />
-        </div>
+        <Field label="Waktu" htmlFor="entry-waktu">
+          <input
+            id="entry-waktu"
+            type="time"
+            value={waktu}
+            onChange={(e) => setWaktu(e.target.value)}
+          />
+        </Field>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>Audio</label>
-          <select value={selectedFilename} onChange={(e) => setSelectedFilename(e.target.value)}>
+        <Field label="Audio" htmlFor="entry-audio">
+          <select
+            id="entry-audio"
+            value={selectedFilename}
+            onChange={(e) => setSelectedFilename(e.target.value)}
+          >
             <option value="">Pilih audio</option>
             {tones.map((t) => (
               <option key={t} value={t}>
@@ -73,13 +81,13 @@ export function EntryModal({
               </option>
             ))}
           </select>
-        </div>
+        </Field>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
               Berlaku pada hari
-            </label>
+            </span>
             <div style={{ display: "flex", gap: 4 }}>
               <Button variant="ghost" size="sm" onClick={() => setDays(hariList.slice(0, 5))}>
                 Senin-Jumat
@@ -96,6 +104,7 @@ export function EntryModal({
                 <button
                   key={h}
                   type="button"
+                  aria-pressed={on}
                   onClick={() => toggleDay(h)}
                   style={{
                     padding: "5px 12px",
@@ -120,12 +129,7 @@ export function EntryModal({
           <Button variant="ghost" onClick={onClose}>
             Batal
           </Button>
-          <Button
-            variant="primary"
-            loading={loading}
-            disabled={!waktu || !selectedFilename || days.length === 0}
-            onClick={handleSave}
-          >
+          <Button variant="primary" loading={loading} disabled={!canSave} onClick={handleSave}>
             Simpan
           </Button>
         </div>

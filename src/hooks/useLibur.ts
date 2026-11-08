@@ -1,27 +1,26 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { POLICY, createResource, useApiMutation } from "../lib/createResource";
+import type { LiburBody, LiburResponse, NasionalItem } from "../lib/types";
 
-export function useLibur() {
-  return useQuery({
-    queryKey: ["libur"],
-    queryFn: () => api.get("/api/libur"),
-    staleTime: 60_000,
-  });
-}
+export const useLibur = createResource<LiburResponse>({
+  key: "libur",
+  path: () => "/api/libur",
+  ...POLICY.schedule,
+});
+
+const useLiburNasionalResource = createResource<NasionalItem[], number>({
+  key: "libur-nasional",
+  path: (year) => `/api/libur/nasional?year=${year}`,
+  ...POLICY.holiday,
+});
 
 export function useLiburNasional(year: number) {
-  return useQuery({
-    queryKey: ["libur-nasional", year],
-    queryFn: () => api.get(`/api/libur/nasional?year=${year}`),
-    staleTime: 24 * 60 * 60_000,
-  });
+  return useLiburNasionalResource(year);
 }
 
 export function useMutateLibur() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: { action: "add" | "delete"; date: string; keterangan: string }) =>
-      api.post("/api/libur", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["libur"] }),
-  });
+  return useApiMutation(
+    (body: LiburBody) => api.post("/api/libur", body),
+    () => [["libur"]],
+  );
 }

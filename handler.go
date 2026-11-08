@@ -50,7 +50,11 @@ func registerRoutes(mux *http.ServeMux) {
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 	mux.HandleFunc("/_astro/", handleAstroAssets)
-
+	mux.HandleFunc("/icons/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=604800")
+		http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
+	})
+	
 	for _, name := range []string{"icon.svg", "favicon.ico", "manifest.json", "robots.txt"} {
 		serveFile := filepath.Join(staticDir, name)
 		mux.HandleFunc("/"+name, func(w http.ResponseWriter, r *http.Request) {

@@ -1,8 +1,10 @@
 import { LogOut, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useServiceStatus } from "../../hooks/useConfig";
+import { APP } from "../../lib/app.config";
 import { logout } from "../../lib/auth";
 import { BAR_H } from "../../lib/layout";
+import { titleOf } from "../../lib/routes";
 import { getTheme, toggleTheme } from "../../lib/theme";
 
 declare const __FOOTER_CONFIG__: {
@@ -12,15 +14,6 @@ declare const __FOOTER_CONFIG__: {
   githubUrl: string;
   developerLinkedinUrl: string;
   developerName: string;
-};
-
-const PATH_TITLE: Record<string, string> = {
-  "/": "Dashboard",
-  "/jadwal": "Jadwal",
-  "/audio": "Audio",
-  "/libur": "Hari Libur",
-  "/log": "Log Aktivitas",
-  "/settings": "Pengaturan",
 };
 
 function IconLink({
@@ -105,7 +98,7 @@ export function TopBar({ isMobile }: { isMobile: boolean }) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [title, setTitle] = useState(() => {
     if (typeof window === "undefined") return "Dashboard";
-    return PATH_TITLE[window.location.pathname] ?? "Bel Madrasah";
+    return titleOf(window.location.pathname);
   });
 
   useEffect(() => {
@@ -115,7 +108,7 @@ export function TopBar({ isMobile }: { isMobile: boolean }) {
   useEffect(() => {
     const handler = (e: Event) => {
       const path = (e as CustomEvent<{ path: string }>).detail.path;
-      setTitle(PATH_TITLE[path] ?? "Bel Madrasah");
+      setTitle(titleOf(path));
     };
     window.addEventListener("spa-navigate", handler);
     return () => window.removeEventListener("spa-navigate", handler);
@@ -158,8 +151,8 @@ export function TopBar({ isMobile }: { isMobile: boolean }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
         {isMobile && (
           <img
-            src="/icon.svg"
-            alt="Bel Madrasah"
+            src={APP.logo}
+            alt={APP.name}
             width={28}
             height={28}
             style={{ flexShrink: 0, display: "block" }}
@@ -167,7 +160,7 @@ export function TopBar({ isMobile }: { isMobile: boolean }) {
         )}
         {!isMobile && (
           <>
-            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Bel Madrasah</span>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{APP.name}</span>
             <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/</span>
           </>
         )}

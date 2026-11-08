@@ -1,27 +1,18 @@
-import {
-  CalendarDays,
-  CalendarOff,
-  ChevronLeft,
-  LayoutDashboard,
-  LogOut,
-  Music2,
-  ScrollText,
-  Settings2,
-} from "lucide-react";
+import { ChevronLeft, LogOut, type LucideIcon } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { APP } from "../../lib/app.config";
 import { logout } from "../../lib/auth";
 import { BAR_H, FOOT_H, SIDEBAR_W, SIDEBAR_W_COLLAPSED } from "../../lib/layout";
+import { prefetch } from "../../lib/router";
+import { ROUTES } from "../../lib/routes";
 
-type NavItem = { label: string; href: string; Icon: React.ElementType };
+type NavItem = { label: string; href: string; Icon: LucideIcon };
 
-const ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/", Icon: LayoutDashboard },
-  { label: "Jadwal", href: "/jadwal", Icon: CalendarDays },
-  { label: "Audio", href: "/audio", Icon: Music2 },
-  { label: "Libur", href: "/libur", Icon: CalendarOff },
-  { label: "Log", href: "/log", Icon: ScrollText },
-  { label: "Pengaturan", href: "/settings", Icon: Settings2 },
-];
+const ITEMS: NavItem[] = ROUTES.map((r) => ({
+  label: r.label,
+  href: r.path,
+  Icon: r.icon,
+}));
 
 function useCurrentPath() {
   const [path, setPath] = useState(typeof window !== "undefined" ? window.location.pathname : "/");
@@ -50,6 +41,7 @@ function SidebarLink(props: { item: NavItem; cur: string; expanded: boolean }) {
       href={href}
       title={label}
       className={on ? undefined : "row-hover"}
+      onMouseEnter={() => prefetch(href)}
       onClick={(e) => {
         e.preventDefault();
         spaGo(href);
@@ -81,6 +73,7 @@ function BottomLink(props: { item: NavItem; cur: string }) {
   return (
     <a
       href={href}
+      onTouchStart={() => prefetch(href)}
       onClick={(e) => {
         e.preventDefault();
         spaGo(href);
@@ -159,8 +152,8 @@ export function Sidebar(props: { expanded: boolean; onToggle: () => void }) {
         }}
       >
         <img
-          src="/icon.svg"
-          alt="Bel Madrasah"
+          src={APP.logo}
+          alt={APP.name}
           width={28}
           height={28}
           style={{ flexShrink: 0, display: "block" }}
@@ -174,7 +167,7 @@ export function Sidebar(props: { expanded: boolean; onToggle: () => void }) {
               color: "var(--text)",
             }}
           >
-            Bel Madrasah
+            {APP.name}
           </span>
         )}
       </div>

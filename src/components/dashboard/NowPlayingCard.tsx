@@ -1,44 +1,30 @@
-import { useQuery } from "@tanstack/react-query";
 import { Square } from "lucide-react";
-import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { api } from "../../lib/api";
-import { audioManager } from "../../lib/audioManager";
-import { queryClient } from "../../lib/queryClient";
+import { useServiceStatus } from "../../hooks/useConfig";
+import { useAudio } from "../../hooks/useAudio";
+import { errorMessage } from "../../lib/errors";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Skeleton } from "../ui/Skeleton";
 
 export function NowPlayingCard() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["service-status"],
-    queryFn: () => api.get("/api/service/status"),
-    staleTime: 10_000,
-    refetchInterval: 3_000,
-  });
-
-  const [browserPlaying, setBrowserPlaying] = useState<string | null>(audioManager.playing);
-  useEffect(() => {
-    return audioManager.subscribe(() => setBrowserPlaying(audioManager.playing));
-  }, []);
+  const { data, isLoading } = useServiceStatus();
+  const { playing: browserPlaying, stop } = useAudio();
 
   async function handleStop() {
     try {
-      await api.post("/api/tones/stop", {});
+      await stop();
       toast.success("Audio dihentikan");
-      audioManager.stopBrowser();
-      queryClient.invalidateQueries({ queryKey: ["service-status"] });
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
   }
 
   if (isLoading) return <Skeleton height={100} radius="var(--radius-lg)" />;
 
-  const serverPlaying = data?.is_playing as boolean;
-  const serverFile = data?.now_playing as string;
-  const isPlaying = serverPlaying || !!browserPlaying;
-  const nowPlaying = serverPlaying ? serverFile : browserPlaying;
+  const serverPlaying = Boolean(data?.is_playing);
+  const isPlaying = serverPlaying || Boolean(browserPlaying);
+  const nowPlaying = serverPlaying ? data?.now_playing : browserPlaying;
   const source = serverPlaying ? "Speaker server" : browserPlaying ? "Preview browser" : null;
 
   return (
