@@ -1,45 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useIsMobile } from "../../hooks/useMediaQuery";
+import { FOOTER } from "../../lib/footer";
 import { SIDEBAR_W, SIDEBAR_W_COLLAPSED } from "../../lib/layout";
 import { initTheme } from "../../lib/theme";
 import { Footer } from "./Footer";
 import { InstallPrompt } from "./InstallPrompt";
 import { BottomNav, Sidebar } from "./Sidebar";
+import { StatusPill } from "./StatusPill";
 import { TopBar } from "./TopBar";
 
-interface FooterConfig {
-  schoolName: string;
-  schoolYear: string;
-  poweredBy: string;
-  poweredByUrl: string;
-  instagramUrl: string;
-  youtubeUrl: string;
-  uploadUrl: string;
-  githubUrl: string;
-  developerName: string;
-  developerUrl: string;
-  developerInstagramUrl: string;
-  developerLinkedinUrl: string;
-}
-
-declare const __FOOTER_CONFIG__: FooterConfig;
-
 const SIDEBAR_KEY = "sidebar-expanded";
-const MOBILE_QUERY = "(max-width: 768px)";
-
-const DEFAULT_FOOTER: FooterConfig = {
-  schoolName: "Bel Madrasah",
-  schoolYear: new Date().getFullYear().toString(),
-  poweredBy: "",
-  poweredByUrl: "#",
-  instagramUrl: "",
-  youtubeUrl: "",
-  uploadUrl: "",
-  githubUrl: "",
-  developerName: "",
-  developerUrl: "",
-  developerInstagramUrl: "",
-  developerLinkedinUrl: "",
-};
 
 function readExpanded(): boolean {
   try {
@@ -59,22 +29,13 @@ function writeExpanded(value: boolean) {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
+  const isMobile = useIsMobile();
   const [expanded, setExpanded] = useState(() =>
     typeof localStorage === "undefined" ? true : readExpanded(),
   );
 
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia(MOBILE_QUERY).matches;
-  });
-
   useEffect(() => {
     initTheme();
-    const mq = window.matchMedia(MOBILE_QUERY);
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
   }, []);
 
   function handleToggle() {
@@ -82,8 +43,6 @@ export function Shell({ children }: { children: ReactNode }) {
     setExpanded(next);
     writeExpanded(next);
   }
-
-  const footerCfg = typeof __FOOTER_CONFIG__ !== "undefined" ? __FOOTER_CONFIG__ : DEFAULT_FOOTER;
 
   return (
     <div style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
@@ -99,7 +58,7 @@ export function Shell({ children }: { children: ReactNode }) {
           transition: "margin-left 0.25s",
         }}
       >
-        <TopBar isMobile={isMobile} />
+        <TopBar isMobile={isMobile} status={<StatusPill />} />
         <main
           style={{
             flex: 1,
@@ -114,10 +73,10 @@ export function Shell({ children }: { children: ReactNode }) {
         </main>
         {!isMobile && (
           <Footer
-            schoolName={footerCfg.schoolName}
-            schoolYear={footerCfg.schoolYear}
-            poweredBy={footerCfg.poweredBy}
-            poweredByUrl={footerCfg.poweredByUrl}
+            schoolName={FOOTER.schoolName}
+            schoolYear={FOOTER.schoolYear}
+            poweredBy={FOOTER.poweredBy}
+            poweredByUrl={FOOTER.poweredByUrl}
           />
         )}
       </div>

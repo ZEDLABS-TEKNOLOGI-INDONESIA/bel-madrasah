@@ -1,24 +1,73 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import React, { useEffect } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+
+const FOCUSABLE = [
+  "a[href]",
+  "button:not(:disabled)",
+  "input:not(:disabled)",
+  "select:not(:disabled)",
+  "textarea:not(:disabled)",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
 
 interface ModalProps {
   open: boolean;
   onClose: () => void;
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
   width?: number;
 }
 
 export function Modal({ open, onClose, title, children, width = 480 }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+
+    const focusables = () =>
+      dialog ? Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)) : [];
+
+    (bodyRef.current?.querySelector<HTMLElement>(FOCUSABLE) ?? dialog)?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        closeRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) {
+        e.preventDefault();
+        dialog?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === dialog)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previous?.focus();
+    };
+  }, [open]);
 
   return (
     <AnimatePresence>
@@ -40,9 +89,11 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
           onClick={(e) => e.target === e.currentTarget && onClose()}
         >
           <motion.div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label={title}
+            tabIndex={-1}
             initial={{ scale: 0.97, opacity: 0, y: 8 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.97, opacity: 0, y: 8 }}
@@ -58,6 +109,7 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
               borderRadius: "var(--radius-lg)",
               boxShadow: "0 16px 48px rgba(1, 4, 9, 0.3)",
               overflow: "hidden",
+              outline: "none",
             }}
           >
             <div
@@ -74,6 +126,7 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
               <button
                 onClick={onClose}
                 aria-label="Tutup"
+                title="Tutup"
                 className="row-hover"
                 style={{
                   background: "none",
@@ -82,13 +135,15 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
                   color: "var(--text-muted)",
                   display: "flex",
                   padding: 4,
-                  borderRadius: 6,
+                  borderRadius: "var(--radius)",
                 }}
               >
                 <X size={16} />
               </button>
             </div>
-            <div style={{ padding: 20, overflowY: "auto" }}>{children}</div>
+            <div ref={bodyRef} style={{ padding: 20, overflowY: "auto" }}>
+              {children}
+            </div>
           </motion.div>
         </motion.div>
       )}

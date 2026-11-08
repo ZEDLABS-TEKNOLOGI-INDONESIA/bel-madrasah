@@ -1,20 +1,9 @@
 ---
 import App from "../components/App";
-import "../styles/global.css";
+import Layout from "../layouts/Layout.astro";
+import { titleOf } from "../lib/routes";
 ---
 
-<!doctype html>
-<html lang="id">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="/favicon.ico" sizes="32x32" />
-    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0969da" />
-    <link rel="manifest" href="/manifest.json" />
-    <title>Hari Libur - Bel Madrasah</title>
-  </head>
-  <body>
-    <App page="libur" client:only="react" />
-  </body>
-</html>
+<Layout title={titleOf("/libur")}>
+  <App page="libur" client:only="react" />
+</Layout>

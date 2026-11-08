@@ -1,0 +1,27 @@
+---
+import "../styles/global.css";
+import { APP } from "../lib/app.config";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+const fullTitle = `${title} - ${APP.name}`;
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href={APP.logo} type="image/svg+xml" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content={APP.themeColor} />
+    <link rel="manifest" href="/manifest.json" />
+    <title>{fullTitle}</title>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
