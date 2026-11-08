@@ -1,5 +1,5 @@
-import React from "react";
 import { Music2, Play, Square, Trash2 } from "lucide-react";
+import React from "react";
 import { Button } from "../ui/Button";
 
 interface ToneRowProps {
@@ -21,28 +21,26 @@ export function ToneRow({
 }: ToneRowProps) {
   return (
     <div
+      className={isPlaying ? undefined : "row-hover"}
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
-        padding: "8px 12px",
-        borderRadius: "var(--radius)",
-        background: isPlaying ? "rgba(9,105,218,0.06)" : "var(--bg-secondary)",
-        border: isPlaying ? "1px solid rgba(9,105,218,0.2)" : "1px solid var(--border)",
-        transition: "all 0.15s",
+        gap: 12,
+        padding: "8px 16px",
+        borderBottom: "1px solid var(--border)",
+        background: isPlaying ? "var(--accent-soft)" : "transparent",
       }}
     >
       <div
         style={{
           width: 32,
           height: 32,
-          borderRadius: 8,
-          background: isPlaying ? "rgba(9,105,218,0.12)" : "var(--bg-tertiary)",
+          borderRadius: "var(--radius)",
+          background: isPlaying ? "var(--accent-soft)" : "var(--bg-tertiary)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
-          transition: "background 0.15s",
         }}
       >
         {isPlaying ? (

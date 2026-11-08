@@ -1,12 +1,11 @@
 import React, { useState } from "react";
-import { Settings2, ChevronRight } from "lucide-react";
-import { useConfig, useUpdateConfig } from "../../hooks/useConfig";
 import { Badge } from "../ui/Badge";
 import { Card } from "../ui/Card";
 import { Skeleton } from "../ui/Skeleton";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import toast from "react-hot-toast";
+import { useConfig, useUpdateConfig } from "../../hooks/useConfig";
 
 const MODE_LABELS: Record<string, string> = {
   reguler: "Reguler",
@@ -49,30 +48,20 @@ export function ModeCard() {
   return (
     <>
       <Card
-        hover
-        onClick={openModal}
-        style={{ display: "flex", flexDirection: "column", gap: 14, cursor: "pointer" }}
+        title="Mode bel"
+        action={
+          <Button variant="secondary" size="sm" onClick={openModal}>
+            Ubah
+          </Button>
+        }
+        bodyStyle={{ display: "flex", flexDirection: "column", gap: 14 }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: 0.5,
-            }}
-          >
-            Mode Bel
-          </span>
-          <ChevronRight size={14} color="var(--text-muted)" />
-        </div>
         <div>
           <Badge variant="accent" dot>
             {MODE_LABELS[activeMode] ?? activeMode}
           </Badge>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {["ramadhan", "pts", "pas", "pesantren"].map((m) => {
             const start = cfg?.[`${m}_start`];
             const end = cfg?.[`${m}_end`];
@@ -83,28 +72,24 @@ export function ModeCard() {
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  fontSize: 11,
+                  fontSize: 12,
                   color: "var(--text-muted)",
                 }}
               >
-                <span style={{ fontWeight: 500 }}>{MODE_LABELS[m]}</span>
-                <span>
-                  {start} – {end}
+                <span style={{ fontWeight: 500, color: "var(--text)" }}>{MODE_LABELS[m]}</span>
+                <span className="tabular">
+                  {start} - {end}
                 </span>
               </div>
             );
           })}
-        </div>
-        <div
-          style={{
-            fontSize: 11,
-            color: "var(--text-muted)",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
-          <Settings2 size={11} /> Klik untuk ubah config
+          {!["ramadhan", "pts", "pas", "pesantren"].some(
+            (m) => cfg?.[`${m}_start`] || cfg?.[`${m}_end`]
+          ) && (
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Belum ada rentang tanggal mode.
+            </span>
+          )}
         </div>
       </Card>
 

@@ -424,7 +424,7 @@ server {
     server_name ${server_name};
     client_max_body_size 32M;
     location /static/ {
-        proxy_pass         http://127.0.0.1:8082;
+        proxy_pass         http://127.0.0.1:8083;
         proxy_http_version 1.1;
         proxy_set_header   Host              \$host;
         proxy_set_header   X-Real-IP         \$remote_addr;
@@ -434,7 +434,7 @@ server {
         add_header         Cache-Control "public, immutable";
     }
     location /sw.js {
-        proxy_pass         http://127.0.0.1:8082;
+        proxy_pass         http://127.0.0.1:8083;
         proxy_http_version 1.1;
         proxy_set_header   Host              \$host;
         proxy_set_header   X-Real-IP         \$remote_addr;
@@ -443,7 +443,7 @@ server {
         add_header         Cache-Control "no-cache";
     }
     location / {
-        proxy_pass         http://127.0.0.1:8082;
+        proxy_pass         http://127.0.0.1:8083;
         proxy_http_version 1.1;
         proxy_set_header   Host              \$host;
         proxy_set_header   X-Real-IP         \$remote_addr;

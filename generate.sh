@@ -131,4 +131,4 @@ while IFS= read -r -d '' file; do
 done < <(find . "${PRUNE_ARGS[@]}" -type f -print0 | sort -z)
 
 echo ""
-echo "✅ draft.md selesai dibuat — $COUNT file tercatat."
+echo "✅ draft.md selesai dibuat - $COUNT file tercatat."

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -47,11 +49,12 @@ func registerRoutes(mux *http.ServeMux) {
 	registerPWARoutes(mux)
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
-	mux.Handle("/_astro/", http.FileServer(http.Dir(staticDir)))
+	mux.HandleFunc("/_astro/", handleAstroAssets)
 
-	for _, name := range []string{"favicon.svg", "favicon.ico", "manifest.json", "robots.txt"} {
+	for _, name := range []string{"icon.svg", "favicon.ico", "manifest.json", "robots.txt"} {
 		serveFile := filepath.Join(staticDir, name)
 		mux.HandleFunc("/"+name, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "public, max-age=86400")
 			http.ServeFile(w, r, serveFile)
 		})
 	}
@@ -64,6 +67,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/jadwal", requireAuth(handleJadwal))
 	mux.HandleFunc("/api/jadwal/entry", requireAuth(handleJadwalEntry))
 	mux.HandleFunc("/api/jadwal/day-toggle", requireAuth(handleJadwalDayToggle))
+	mux.HandleFunc("/api/jadwal/reset", requireAuth(handleJadwalReset))
 
 	mux.HandleFunc("/api/tones", requireAuth(handleTones))
 	mux.HandleFunc("/api/tones/upload", requireAuth(handleTonesUpload))
@@ -102,7 +106,11 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func handlePages(w http.ResponseWriter, r *http.Request) {
 	if file, ok := pageRoutes[r.URL.Path]; ok {
-		http.ServeFile(w, r, filepath.Join(staticDir, file))
+		full := filepath.Join(staticDir, file)
+		if servePrecompressed(w, r, full) {
+			return
+		}
+		http.ServeFile(w, r, full)
 		return
 	}
 	notFoundPath := filepath.Join(staticDir, "404.html")
@@ -404,6 +412,32 @@ func handleLibur(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type kemendesaHoliday struct {
+	Date          string `json:"date"`
+	Name          string `json:"name"`
+	IsCutiBersama bool   `json:"is_cuti_bersama"`
+}
+
+type liburNasionalItem struct {
+	Date              string `json:"date"`
+	Name              string `json:"name"`
+	IsNationalHoliday bool   `json:"is_national_holiday"`
+}
+
+func parseKemendesaHolidays(body []byte) ([]kemendesaHoliday, error) {
+	var list []kemendesaHoliday
+	if err := json.Unmarshal(body, &list); err == nil {
+		return list, nil
+	}
+	var wrapped struct {
+		Data []kemendesaHoliday `json:"data"`
+	}
+	if err := json.Unmarshal(body, &wrapped); err != nil {
+		return nil, err
+	}
+	return wrapped.Data, nil
+}
+
 func handleLiburNasional(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
@@ -413,27 +447,59 @@ func handleLiburNasional(w http.ResponseWriter, r *http.Request) {
 	if year == "" {
 		year = strconv.Itoa(time.Now().Year())
 	}
-	if _, err := strconv.Atoi(year); err != nil {
+	y, err := strconv.Atoi(year)
+	if err != nil || y < 2000 || y > 2100 {
 		jsonError(w, "tahun tidak valid", http.StatusBadRequest)
 		return
 	}
 
-	apiURL := "https://libur.deno.dev/api?year=" + year
+	apiURL := "https://api.kemendesa.link/libur-nasional/api/holidays/" + strconv.Itoa(y) + ".json"
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(apiURL)
 	if err != nil {
+		logMsg("gagal mengambil libur nasional: " + err.Error())
 		jsonError(w, "gagal mengambil data libur nasional", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		jsonOK(w, []liburNasionalItem{})
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		logMsg(fmt.Sprintf("libur nasional: status %d dari sumber", resp.StatusCode))
+		jsonError(w, "sumber data libur nasional bermasalah", http.StatusBadGateway)
+		return
+	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		jsonError(w, "gagal membaca response", http.StatusBadGateway)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(body)
+
+	raw, err := parseKemendesaHolidays(body)
+	if err != nil {
+		logMsg("libur nasional: format respons tidak dikenali: " + err.Error())
+		jsonError(w, "format data libur nasional tidak dikenali", http.StatusBadGateway)
+		return
+	}
+
+	items := make([]liburNasionalItem, 0, len(raw))
+	for _, h := range raw {
+		if _, err := time.Parse("2006-01-02", h.Date); err != nil {
+			continue
+		}
+		items = append(items, liburNasionalItem{
+			Date:              h.Date,
+			Name:              h.Name,
+			IsNationalHoliday: !h.IsCutiBersama,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Date < items[j].Date })
+
+	jsonOK(w, items)
 }
 
 func handleJadwal(w http.ResponseWriter, r *http.Request) {
@@ -784,13 +850,32 @@ func sanitizeFilename(name string) string {
 }
 
 func compressAudio(src, dst string) error {
-	cmd := exec.Command(ffmpegPath,
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ffmpegPath,
 		"-hide_banner", "-loglevel", "error",
 		"-i", src,
-		"-b:a", "128k",
+		"-vn", "-map_metadata", "-1",
+		"-c:a", "libmp3lame", "-b:a", "128k",
+		"-f", "mp3",
 		"-y", dst,
 	)
 	return cmd.Run()
+}
+
+func uniqueToneName(base, ext string) (string, string) {
+	name := base + ext
+	full := filepath.Join(toneDir, name)
+	if _, err := os.Stat(full); os.IsNotExist(err) {
+		return name, full
+	}
+	for i := 1; ; i++ {
+		name = fmt.Sprintf("%s-%d%s", base, i, ext)
+		full = filepath.Join(toneDir, name)
+		if _, err := os.Stat(full); os.IsNotExist(err) {
+			return name, full
+		}
+	}
 }
 
 func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
@@ -798,10 +883,23 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		jsonError(w, "file terlalu besar (maks 32MB)", http.StatusBadRequest)
+
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Now().Add(10 * time.Minute))
+	_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Minute))
+
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			jsonError(w, "file terlalu besar (maks 32MB)", http.StatusRequestEntityTooLarge)
+			return
+		}
+		logMsg("upload gagal dibaca: " + err.Error())
+		jsonError(w, "upload terputus atau tidak valid, coba lagi", http.StatusBadRequest)
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
+
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		jsonError(w, "gagal membaca file", http.StatusBadRequest)
@@ -814,44 +912,54 @@ func handleTonesUpload(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
 		return
 	}
-
 	filename := sanitizeFilename(raw)
-
 	ext := strings.ToLower(filepath.Ext(filename))
 	if ext != ".mp3" && ext != ".wav" && ext != ".ogg" {
 		jsonError(w, "format tidak didukung (mp3, wav, ogg)", http.StatusBadRequest)
 		return
 	}
+	base := strings.TrimSuffix(filename, ext)
 
-	fullPath := filepath.Join(toneDir, filename)
-	dst, err := os.Create(fullPath)
+	rawPath := filepath.Join(toneDir, fmt.Sprintf(".upload-%d%s", time.Now().UnixNano(), ext))
+	dst, err := os.Create(rawPath)
 	if err != nil {
 		jsonError(w, "gagal menyimpan file", http.StatusInternalServerError)
 		return
 	}
 	if _, err := io.Copy(dst, file); err != nil {
 		dst.Close()
-		os.Remove(fullPath)
+		os.Remove(rawPath)
 		jsonError(w, "gagal menulis file", http.StatusInternalServerError)
 		return
 	}
 	dst.Close()
+	defer os.Remove(rawPath)
 
-	tmpPath := fullPath + ".tmp.mp3"
-	if err := compressAudio(fullPath, tmpPath); err != nil {
-		logMsg("gagal compress audio (pakai file asli): " + err.Error())
-		os.Remove(tmpPath)
-	} else {
-		if err := os.Rename(tmpPath, fullPath); err != nil {
-			logMsg("gagal replace file setelah compress: " + err.Error())
-			os.Remove(tmpPath)
-		} else {
-			logMsg("audio dikompres: " + filename)
+	finalName, finalPath := uniqueToneName(base, ".mp3")
+	tmpOut := finalPath + ".tmp"
+
+	if err := compressAudio(rawPath, tmpOut); err != nil {
+		os.Remove(tmpOut)
+		if ext != ".mp3" {
+			logMsg("gagal konversi audio: " + err.Error())
+			jsonError(w, "gagal memproses audio", http.StatusInternalServerError)
+			return
 		}
+		logMsg("gagal compress audio (pakai file asli): " + err.Error())
+		if err := os.Rename(rawPath, finalPath); err != nil {
+			jsonError(w, "gagal menyimpan file", http.StatusInternalServerError)
+			return
+		}
+	} else if err := os.Rename(tmpOut, finalPath); err != nil {
+		os.Remove(tmpOut)
+		jsonError(w, "gagal menyimpan file", http.StatusInternalServerError)
+		return
+	} else {
+		logMsg("audio dikompres: " + finalName)
 	}
 
-	logMsg("audio diupload: " + filename)
-	jsonOK(w, map[string]string{"message": "upload berhasil", "filename": filename})
+	logMsg("audio diupload: " + finalName)
+	jsonOK(w, map[string]string{"message": "upload berhasil", "filename": finalName})
 }
 
 func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
@@ -1089,4 +1197,34 @@ func handleServiceToggle(w http.ResponseWriter, r *http.Request) {
 		"running": running,
 		"message": "scheduler " + state,
 	})
+}
+
+func handleJadwalReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct {
+		Mode string `json:"mode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "request tidak valid", http.StatusBadRequest)
+		return
+	}
+	if !validModes[body.Mode] {
+		jsonError(w, "mode tidak valid", http.StatusBadRequest)
+		return
+	}
+	j, err := loadJadwal()
+	if err != nil {
+		jsonError(w, "gagal memuat jadwal", http.StatusInternalServerError)
+		return
+	}
+	j[body.Mode] = defaultJadwal()[body.Mode]
+	if err := saveJadwal(j); err != nil {
+		jsonError(w, "gagal menyimpan jadwal", http.StatusInternalServerError)
+		return
+	}
+	logMsg("jadwal mode " + body.Mode + " direset ke default")
+	jsonOK(w, map[string]string{"message": "jadwal direset ke default"})
 }

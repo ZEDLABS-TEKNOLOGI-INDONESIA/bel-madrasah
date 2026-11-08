@@ -1,4 +1,4 @@
-import { Activity, Download, RefreshCw, Shield, Upload } from "lucide-react";
+import { Download, RefreshCw, Upload } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useServiceStatus, useUpdateVolume, useVolume } from "../../hooks/useConfig";
@@ -6,21 +6,29 @@ import { api } from "../../lib/api";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { PageHeader } from "../ui/PageHeader";
 import { Slider } from "../ui/Slider";
 
-function SectionHeader({ title }: { title: string }) {
+function Row(props: { title: string; desc?: string; children: React.ReactNode; last?: boolean }) {
   return (
-    <span
+    <div
       style={{
-        fontSize: 12,
-        fontWeight: 600,
-        color: "var(--text-muted)",
-        textTransform: "uppercase",
-        letterSpacing: 0.5,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        padding: "12px 16px",
+        borderBottom: props.last ? "none" : "1px solid var(--border)",
       }}
     >
-      {title}
-    </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500 }}>{props.title}</div>
+        {props.desc && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{props.desc}</div>
+        )}
+      </div>
+      <div style={{ flexShrink: 0 }}>{props.children}</div>
+    </div>
   );
 }
 
@@ -48,21 +56,15 @@ function VolumeSection() {
   }
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <SectionHeader title="Volume Output" />
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 4,
-        }}
-      >
-        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Level volume</span>
-        <span style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+    <Card
+      title="Volume output"
+      action={
+        <span className="tabular" style={{ fontSize: 16, fontWeight: 600 }}>
           {Math.round(local * 100)}%
         </span>
-      </div>
+      }
+      bodyStyle={{ display: "flex", flexDirection: "column", gap: 14 }}
+    >
       <Slider
         value={local}
         min={0}
@@ -70,7 +72,6 @@ function VolumeSection() {
         step={0.01}
         onChange={handleChange}
         disabled={update.isPending}
-        formatLabel={(v) => `${Math.round(v * 100)}%`}
       />
       <div
         style={{
@@ -82,7 +83,7 @@ function VolumeSection() {
       >
         <span>0%</span>
         <span style={{ color: local > 1 ? "var(--warning)" : "var(--text-muted)" }}>
-          {local > 1 ? "Amplifikasi aktif — bisa distorsi" : "100% = volume normal"}
+          {local > 1 ? "Amplifikasi aktif, bisa distorsi" : "100% = volume normal"}
         </span>
         <span>200%</span>
       </div>
@@ -124,15 +125,11 @@ function PasswordSection() {
   }
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Shield size={14} color="var(--text-muted)" />
-        <SectionHeader title="Ganti Password" />
-      </div>
+    <Card title="Ganti password">
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-            Password Lama
+            Password lama
           </label>
           <input
             type="password"
@@ -144,7 +141,7 @@ function PasswordSection() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-            Password Baru
+            Password baru
           </label>
           <input
             type="password"
@@ -158,7 +155,7 @@ function PasswordSection() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-            Konfirmasi Password Baru
+            Konfirmasi password baru
           </label>
           <input
             type="password"
@@ -173,7 +170,7 @@ function PasswordSection() {
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <Button variant="primary" loading={loading}>
-            Simpan Password
+            Simpan password
           </Button>
         </div>
       </form>
@@ -213,77 +210,36 @@ function BackupSection() {
   }
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <SectionHeader title="Backup & Restore" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 14px",
-            borderRadius: "var(--radius)",
-            background: "var(--bg-secondary)",
-            border: "1px solid var(--border)",
-          }}
+    <Card title="Backup dan restore" bodyStyle={{ padding: 0 }}>
+      <Row title="Download backup" desc="Ekspor semua jadwal ke file JSON">
+        <Button variant="secondary" size="sm" icon={<Download size={13} />} onClick={handleBackup}>
+          Download
+        </Button>
+      </Row>
+      <Row title="Restore backup" desc="Import jadwal dari file JSON backup" last>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Upload size={13} />}
+          loading={restoreLoading}
+          onClick={() => restoreRef.current?.click()}
         >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>Download Backup</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-              Ekspor semua jadwal ke file JSON
-            </div>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Download size={13} />}
-            onClick={handleBackup}
-          >
-            Download
-          </Button>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 14px",
-            borderRadius: "var(--radius)",
-            background: "var(--bg-secondary)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>Restore Backup</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-              Import jadwal dari file JSON backup
-            </div>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Upload size={13} />}
-            loading={restoreLoading}
-            onClick={() => restoreRef.current?.click()}
-          >
-            Restore
-          </Button>
-        </div>
-        <input
-          ref={restoreRef}
-          type="file"
-          accept=".json"
-          style={{ display: "none" }}
-          onChange={(e) => handleRestore(e.target.files)}
-        />
-      </div>
+          Restore
+        </Button>
+      </Row>
+      <input
+        ref={restoreRef}
+        type="file"
+        accept=".json"
+        style={{ display: "none" }}
+        onChange={(e) => handleRestore(e.target.files)}
+      />
     </Card>
   );
 }
 
 function InfoSection() {
-  const { data, isLoading, refetch } = useServiceStatus();
+  const { data, isLoading } = useServiceStatus();
   const [healthStatus, setHealthStatus] = useState<"ok" | "error" | "checking" | null>(null);
 
   async function checkHealth() {
@@ -296,124 +252,79 @@ function InfoSection() {
     }
   }
 
+  const rows = [
+    {
+      label: "Scheduler",
+      value: isLoading ? "-" : data?.running ? "Berjalan" : "Dihentikan",
+      variant: data?.running ? "success" : "danger",
+    },
+    {
+      label: "Mode aktif",
+      value: data?.active_mode ?? "-",
+      variant: "accent",
+    },
+    {
+      label: "Status hari",
+      value: data?.is_libur ? "Libur" : "Aktif",
+      variant: data?.is_libur ? "warning" : "default",
+    },
+  ];
+
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Activity size={14} color="var(--text-muted)" />
-        <SectionHeader title="Info & Status" />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {[
-          {
-            label: "Scheduler",
-            value: isLoading ? "-" : data?.running ? "Berjalan" : "Dihentikan",
-            variant: data?.running ? "success" : "danger",
-          },
-          {
-            label: "Mode Aktif",
-            value: data?.active_mode ?? "-",
-            variant: "accent",
-          },
-          {
-            label: "Status Hari",
-            value: data?.is_libur ? "Libur" : "Aktif",
-            variant: data?.is_libur ? "warning" : "default",
-          },
-        ].map(({ label, value, variant }) => (
-          <div
-            key={label}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontSize: 13,
-            }}
-          >
-            <span style={{ color: "var(--text-muted)" }}>{label}</span>
-            <Badge variant={variant as any}>{value}</Badge>
-          </div>
-        ))}
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            fontSize: 13,
-          }}
-        >
-          <span style={{ color: "var(--text-muted)" }}>Health Check</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {healthStatus && (
-              <Badge
-                variant={
-                  healthStatus === "ok"
-                    ? "success"
-                    : healthStatus === "error"
-                      ? "danger"
-                      : "default"
-                }
-                dot
-              >
-                {healthStatus === "ok" ? "OK" : healthStatus === "error" ? "Error" : "Checking..."}
-              </Badge>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw size={12} />}
-              onClick={checkHealth}
-              loading={healthStatus === "checking"}
+    <Card title="Info dan status" bodyStyle={{ padding: 0 }}>
+      {rows.map((r) => (
+        <Row key={r.label} title={r.label}>
+          <Badge variant={r.variant as any} dot>
+            {r.value}
+          </Badge>
+        </Row>
+      ))}
+      <Row title="Health check" last>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {healthStatus && (
+            <Badge
+              variant={
+                healthStatus === "ok" ? "success" : healthStatus === "error" ? "danger" : "default"
+              }
+              dot
             >
-              Cek
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div
-        style={{
-          paddingTop: 12,
-          borderTop: "1px solid var(--border)",
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 11,
-          color: "var(--text-muted)",
-        }}
-      >
-        <span>Bel Madrasah</span>
-        <span>
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: "var(--text-muted)" }}
+              {healthStatus === "ok" ? "OK" : healthStatus === "error" ? "Error" : "Memeriksa"}
+            </Badge>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RefreshCw size={12} />}
+            onClick={checkHealth}
+            loading={healthStatus === "checking"}
           >
-            GitHub
-          </a>
-        </span>
-      </div>
+            Cek
+          </Button>
+        </div>
+      </Row>
     </Card>
   );
 }
 
 export function PengaturanPage() {
   return (
-    <div className="grid grid-cols-12 gap-4">
-      <div
-        className="col-span-12 md:col-span-6"
-        style={{ display: "flex", flexDirection: "column", gap: 16 }}
-      >
-        <VolumeSection />
-        <PasswordSection />
-      </div>
-      <div
-        className="col-span-12 md:col-span-6"
-        style={{ display: "flex", flexDirection: "column", gap: 16 }}
-      >
-        <BackupSection />
-        <InfoSection />
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <PageHeader title="Pengaturan" description="Volume, keamanan akun, dan backup data" />
+      <div className="grid grid-cols-12 gap-4">
+        <div
+          className="col-span-12 md:col-span-6"
+          style={{ display: "flex", flexDirection: "column", gap: 16 }}
+        >
+          <VolumeSection />
+          <PasswordSection />
+        </div>
+        <div
+          className="col-span-12 md:col-span-6"
+          style={{ display: "flex", flexDirection: "column", gap: 16 }}
+        >
+          <BackupSection />
+          <InfoSection />
+        </div>
       </div>
     </div>
   );

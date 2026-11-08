@@ -4,6 +4,7 @@ import { Footer } from "./Footer";
 import { InstallPrompt } from "./InstallPrompt";
 import { BottomNav, Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { SIDEBAR_W, SIDEBAR_W_COLLAPSED } from "../../lib/layout";
 
 declare const __FOOTER_CONFIG__: {
   schoolName: string;
@@ -66,7 +67,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
+    <div style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
       {!isMobile && <Sidebar expanded={expanded} onToggle={handleToggle} />}
       <div
         style={{
@@ -74,7 +75,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           display: "flex",
           flexDirection: "column",
           minWidth: 0,
-          marginLeft: isMobile ? 0 : expanded ? 220 : 64,
+          minHeight: 0,
+          marginLeft: isMobile ? 0 : expanded ? SIDEBAR_W : SIDEBAR_W_COLLAPSED,
           transition: "margin-left 0.25s",
         }}
       >
@@ -82,13 +84,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <main
           style={{
             flex: 1,
-            padding: isMobile ? "12px 12px 80px" : "20px 24px",
+            minHeight: 0,
+            padding: isMobile ? "16px 12px 88px" : "24px 32px",
             overflowY: "auto",
             overflowX: "hidden",
             WebkitOverflowScrolling: "touch" as any,
           }}
         >
-          {children}
+          <div style={{ maxWidth: 1280, margin: "0 auto" }}>{children}</div>
         </main>
         {!isMobile && (
           <Footer

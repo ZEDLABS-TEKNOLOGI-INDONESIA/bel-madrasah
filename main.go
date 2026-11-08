@@ -342,7 +342,7 @@ func main() {
 	handler := corsMiddleware(allowedOrigins, maxBodyMiddleware(mux))
 	port := os.Getenv("BEL_PORT")
 	if port == "" {
-		port = ":8082"
+		port = ":8083"
 	} else if port[0] != ':' {
 		port = ":" + port
 	}

@@ -1,11 +1,12 @@
+import { Clock, RotateCcw } from "lucide-react";
 import React, { useState } from "react";
-import { RotateCcw, Clock } from "lucide-react";
-import { Card } from "../ui/Card";
+import toast from "react-hot-toast";
+import { useLog, useResetLog } from "../../hooks/useLog";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { PageHeader } from "../ui/PageHeader";
 import { SkeletonCard } from "../ui/Skeleton";
-import { useLog, useResetLog } from "../../hooks/useLog";
-import toast from "react-hot-toast";
 
 interface LogEntry {
   time: string;
@@ -58,147 +59,132 @@ export function LogPage() {
   if (isLoading) return <SkeletonCard />;
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: 0.5,
-            }}
-          >
-            Log Aktivitas
-          </span>
-          <Badge variant="default">{logs.length}</Badge>
-        </div>
-        <Button
-          variant={confirmReset ? "danger" : "ghost"}
-          size="sm"
-          icon={<RotateCcw size={13} />}
-          loading={reset.isPending}
-          onClick={handleReset}
-        >
-          {confirmReset ? "Konfirmasi Reset" : "Reset Log"}
-        </Button>
-      </div>
-
-      {logs.length === 0 ? (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 10,
-            padding: "32px 0",
-            color: "var(--text-muted)",
-          }}
-        >
-          <Clock size={28} />
-          <span style={{ fontSize: 13, fontStyle: "italic" }}>Belum ada aktivitas</span>
-        </div>
-      ) : (
-        <>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <PageHeader title="Log aktivitas" description="Riwayat bel yang sudah dibunyikan" />
+      <Card
+        title="Riwayat"
+        action={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Badge>{logs.length}</Badge>
+            <Button
+              variant={confirmReset ? "danger" : "secondary"}
+              size="sm"
+              icon={<RotateCcw size={13} />}
+              loading={reset.isPending}
+              onClick={handleReset}
+            >
+              {confirmReset ? "Konfirmasi reset" : "Reset log"}
+            </Button>
+          </div>
+        }
+        bodyStyle={{ padding: 0 }}
+      >
+        {logs.length === 0 ? (
           <div
             style={{
-              overflowX: "auto",
-              borderRadius: "var(--radius)",
-              border: "1px solid var(--border)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 10,
+              padding: 40,
+              color: "var(--text-muted)",
             }}
           >
-            <table
+            <Clock size={28} />
+            <span style={{ fontSize: 13 }}>Belum ada aktivitas</span>
+          </div>
+        ) : (
+          <>
+            <div style={{ overflowX: "auto" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: 12,
+                  minWidth: 520,
+                }}
+              >
+                <thead>
+                  <tr style={{ background: "var(--bg-tertiary)" }}>
+                    {["Waktu", "Mode", "Hari", "Jam", "Audio"].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: "8px 16px",
+                          textAlign: "left",
+                          fontWeight: 600,
+                          color: "var(--text-muted)",
+                          borderBottom: "1px solid var(--border)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log, i) => (
+                    <tr
+                      key={i}
+                      className="row-hover"
+                      style={{
+                        borderBottom: i < logs.length - 1 ? "1px solid var(--border)" : "none",
+                      }}
+                    >
+                      <td
+                        className="tabular"
+                        style={{
+                          padding: "8px 16px",
+                          color: "var(--text-muted)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {log.time}
+                      </td>
+                      <td style={{ padding: "8px 16px" }}>
+                        <Badge variant={MODE_VARIANT[log.mode] ?? "default"}>
+                          {MODE_LABELS[log.mode] ?? log.mode}
+                        </Badge>
+                      </td>
+                      <td style={{ padding: "8px 16px", color: "var(--text)" }}>{log.hari}</td>
+                      <td
+                        className="tabular"
+                        style={{ padding: "8px 16px", fontWeight: 500, color: "var(--text)" }}
+                      >
+                        {log.waktu}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px 16px",
+                          color: "var(--text-muted)",
+                          maxWidth: 220,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {log.audio}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div
               style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 12,
-                minWidth: 520,
+                fontSize: 11,
+                color: "var(--text-muted)",
+                textAlign: "right",
+                padding: "10px 16px",
+                borderTop: "1px solid var(--border)",
               }}
             >
-              <thead>
-                <tr style={{ background: "var(--bg-secondary)" }}>
-                  {["Waktu", "Mode", "Hari", "Jam", "Audio"].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "8px 12px",
-                        textAlign: "left",
-                        fontWeight: 600,
-                        color: "var(--text-muted)",
-                        borderBottom: "1px solid var(--border)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log, i) => (
-                  <tr
-                    key={i}
-                    style={{
-                      borderBottom: i < logs.length - 1 ? "1px solid var(--border)" : "none",
-                      transition: "background 0.1s",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLTableRowElement).style.background =
-                        "var(--bg-secondary)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLTableRowElement).style.background = "transparent";
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        color: "var(--text-muted)",
-                        whiteSpace: "nowrap",
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      {log.time}
-                    </td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <Badge variant={MODE_VARIANT[log.mode] ?? "default"}>
-                        {MODE_LABELS[log.mode] ?? log.mode}
-                      </Badge>
-                    </td>
-                    <td style={{ padding: "8px 12px", color: "var(--text)" }}>{log.hari}</td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontVariantNumeric: "tabular-nums",
-                        fontWeight: 500,
-                        color: "var(--text)",
-                      }}
-                    >
-                      {log.waktu}
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        color: "var(--text-muted)",
-                        maxWidth: 200,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {log.audio}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "right" }}>
-            Menampilkan {logs.length} entri terbaru
-          </div>
-        </>
-      )}
-    </Card>
+              Menampilkan {logs.length} entri terbaru
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
   );
 }

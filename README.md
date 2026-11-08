@@ -273,14 +273,14 @@ Write menggunakan atomic rename (`file.tmp` → `file`) untuk menghindari corrup
 ## Development
 
 ```bash
-# Terminal 1 — backend
+# Terminal 1 - backend
 go run .
 
-# Terminal 2 — frontend (Vite dev server dengan proxy ke backend)
+# Terminal 2 - frontend (Vite dev server dengan proxy ke backend)
 pnpm dev
 ```
 
-Vite dikonfigurasi untuk proxy `/api`, `/login`, `/logout`, `/healthz` ke `http://localhost:8082`. Frontend dev server berjalan di port 4321.
+Vite dikonfigurasi untuk proxy `/api`, `/login`, `/logout`, `/healthz` ke `http://localhost:8083`. Frontend dev server berjalan di port 4321.
 
 ```bash
 # Rebuild setelah perubahan Go

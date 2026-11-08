@@ -74,7 +74,7 @@ func initAuth() error {
 		if err := os.WriteFile(usersFile, data, 0600); err != nil {
 			return err
 		}
-		logMsg("akun administrator default dibuat — username: administrator | password: P@ssw0rd")
+		logMsg("akun administrator default dibuat - username: administrator | password: P@ssw0rd")
 		logMsg("segera ganti password melalui halaman pengaturan")
 	}
 	go cleanupSessions()

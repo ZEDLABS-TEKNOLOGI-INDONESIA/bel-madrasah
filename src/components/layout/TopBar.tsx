@@ -1,5 +1,8 @@
-import { Moon, Music2, Sun } from "lucide-react";
+import { LogOut, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useServiceStatus } from "../../hooks/useConfig";
+import { logout } from "../../lib/auth";
+import { BAR_H } from "../../lib/layout";
 import { getTheme, toggleTheme } from "../../lib/theme";
 
 declare const __FOOTER_CONFIG__: {
@@ -36,30 +39,70 @@ function IconLink({
       target="_blank"
       rel="noreferrer"
       title={title}
+      className="row-hover"
       style={{
         color: "var(--text-muted)",
         display: "flex",
         alignItems: "center",
-        padding: "6px 6px",
+        padding: 7,
         borderRadius: "var(--radius)",
-        transition: "color 0.15s",
       }}
-      onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--text)")}
-      onMouseLeave={(e) =>
-        ((e.currentTarget as HTMLAnchorElement).style.color = "var(--text-muted)")
-      }
     >
       {children}
     </a>
   );
 }
 
-interface TopBarProps {
-  isMobile: boolean;
+function StatusPill() {
+  const { data } = useServiceStatus();
+  if (!data) return null;
+  const running = Boolean(data.running);
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        height: 28,
+        padding: "0 10px",
+        border: "1px solid var(--border)",
+        borderRadius: 99,
+        fontSize: 12,
+        color: "var(--text-muted)",
+      }}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: running ? "var(--success)" : "var(--danger)",
+          flexShrink: 0,
+        }}
+      />
+      <span>{running ? "Scheduler aktif" : "Scheduler berhenti"}</span>
+    </div>
+  );
 }
 
-export function TopBar({ isMobile }: TopBarProps) {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+function Divider() {
+  return <div style={{ width: 1, height: 18, background: "var(--border)", margin: "0 8px" }} />;
+}
+
+const squareButton: React.CSSProperties = {
+  background: "var(--bg-tertiary)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius)",
+  cursor: "pointer",
+  color: "var(--text-muted)",
+  display: "flex",
+  alignItems: "center",
+  padding: "6px 8px",
+  marginLeft: 4,
+};
+
+export function TopBar({ isMobile }: { isMobile: boolean }) {
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [title, setTitle] = useState(() => {
     if (typeof window === "undefined") return "Dashboard";
     return PATH_TITLE[window.location.pathname] ?? "Bel Madrasah";
@@ -98,46 +141,55 @@ export function TopBar({ isMobile }: TopBarProps) {
   return (
     <div
       style={{
-        height: 56,
+        height: BAR_H,
+        boxSizing: "border-box",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 16px",
+        padding: isMobile ? "0 12px" : "0 24px",
         borderBottom: "1px solid var(--border)",
-        background: "var(--card-gloss), var(--card-bg)",
-        backdropFilter: "var(--glass-blur)",
-        WebkitBackdropFilter: "var(--glass-blur)",
+        background: "var(--panel)",
         position: "sticky",
         top: 0,
         zIndex: 50,
         flexShrink: 0,
       }}
     >
-      {/* Kiri: logo + judul */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
         {isMobile && (
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: "var(--accent)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <Music2 size={16} color="#fff" />
-          </div>
+          <img
+            src="/icon.svg"
+            alt="Bel Madrasah"
+            width={28}
+            height={28}
+            style={{ flexShrink: 0, display: "block" }}
+          />
         )}
-        <span style={{ fontWeight: 600, fontSize: 15 }}>{title}</span>
-      </div>
-
-      {/* Kanan: ikon sosmed (desktop only) + tombol theme */}
-      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
         {!isMobile && (
           <>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Bel Madrasah</span>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/</span>
+          </>
+        )}
+        <span
+          style={{
+            fontWeight: 600,
+            fontSize: 14,
+            color: "var(--text)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {title}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <StatusPill />
+        {!isMobile && (
+          <>
+            <Divider />
             <IconLink href={cfg.instagramUrl} title="Instagram">
               <svg
                 width="16"
@@ -154,7 +206,6 @@ export function TopBar({ isMobile }: TopBarProps) {
                 <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
               </svg>
             </IconLink>
-
             <IconLink href={cfg.youtubeUrl} title="YouTube">
               <svg
                 width="16"
@@ -174,7 +225,6 @@ export function TopBar({ isMobile }: TopBarProps) {
                 />
               </svg>
             </IconLink>
-
             <IconLink href={cfg.uploadUrl} title="Upload Dokumentasi">
               <svg
                 width="16"
@@ -191,53 +241,38 @@ export function TopBar({ isMobile }: TopBarProps) {
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
             </IconLink>
-
             <IconLink
               href={cfg.githubUrl}
-              title={`GitHub${cfg.developerName ? ` — ${cfg.developerName}` : ""}`}
+              title={`GitHub${cfg.developerName ? ` - ${cfg.developerName}` : ""}`}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z" />
               </svg>
             </IconLink>
-
             <IconLink
               href={cfg.developerLinkedinUrl}
-              title={`LinkedIn${cfg.developerName ? ` — ${cfg.developerName}` : ""}`}
+              title={`LinkedIn${cfg.developerName ? ` - ${cfg.developerName}` : ""}`}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
               </svg>
             </IconLink>
-
-            {/* Divider */}
-            <div
-              style={{
-                width: 1,
-                height: 18,
-                background: "var(--border)",
-                margin: "0 6px",
-              }}
-            />
+            <Divider />
           </>
         )}
-
-        {/* Tombol dark/light */}
         <button
           onClick={handleToggle}
-          style={{
-            background: "var(--bg-tertiary)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius)",
-            cursor: "pointer",
-            color: "var(--text-muted)",
-            display: "flex",
-            alignItems: "center",
-            padding: "6px 8px",
-          }}
+          className="btn"
+          title={theme === "dark" ? "Tema terang" : "Tema gelap"}
+          style={squareButton}
         >
           {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </button>
+        {isMobile && (
+          <button onClick={logout} className="btn" title="Keluar" style={squareButton}>
+            <LogOut size={16} />
+          </button>
+        )}
       </div>
     </div>
   );
