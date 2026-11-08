@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
 import { Volume1, Volume2, VolumeX } from "lucide-react";
-import { Card } from "../ui/Card";
-import { Slider } from "../ui/Slider";
-import { useVolume, useUpdateVolume } from "../../hooks/useConfig";
-import { Skeleton } from "../ui/Skeleton";
+import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { useUpdateVolume, useVolume } from "../../hooks/useConfig";
+import { Card } from "../ui/Card";
+import { Skeleton } from "../ui/Skeleton";
+import { Slider } from "../ui/Slider";
 
 export function VolumeSlider() {
   const { data, isLoading } = useVolume();
@@ -35,30 +35,21 @@ export function VolumeSlider() {
     return <Volume2 size={16} color="var(--text-muted)" />;
   }
 
-  if (isLoading) return <Skeleton height={100} radius="var(--radius-lg)" />;
+  if (isLoading) return <Skeleton height={150} radius="var(--radius-lg)" />;
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: "var(--text-muted)",
-            textTransform: "uppercase",
-            letterSpacing: 0.5,
-          }}
-        >
-          Volume Output
-        </span>
+    <Card
+      title="Volume output"
+      action={
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <VolumeIcon />
-          <span style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+          <span className="tabular" style={{ fontSize: 16, fontWeight: 600 }}>
             {Math.round(local * 100)}%
           </span>
         </div>
-      </div>
-
+      }
+      bodyStyle={{ display: "flex", flexDirection: "column", gap: 16 }}
+    >
       <Slider
         value={local}
         min={0}
@@ -67,7 +58,6 @@ export function VolumeSlider() {
         onChange={handleChange}
         disabled={update.isPending}
       />
-
       <div
         style={{
           display: "flex",

@@ -1,12 +1,13 @@
-import React, { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { ToneRow } from "./ToneRow";
-import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
-import { SkeletonCard } from "../ui/Skeleton";
-import { useTones, useDeleteTone } from "../../hooks/useTones";
-import { useAudio } from "../../hooks/useAudio";
+import React, { useState } from "react";
 import toast from "react-hot-toast";
+import { useAudio } from "../../hooks/useAudio";
+import { useDeleteTone, useTones } from "../../hooks/useTones";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { SkeletonCard } from "../ui/Skeleton";
+import { ToneRow } from "./ToneRow";
 
 export function ToneList() {
   const [page, setPage] = useState(1);
@@ -51,64 +52,47 @@ export function ToneList() {
   }
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: "var(--text-muted)",
-            textTransform: "uppercase",
-            letterSpacing: 0.5,
-          }}
-        >
-          Daftar Audio
-        </span>
-        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{total} file</span>
-      </div>
-
+    <Card title="Daftar audio" action={<Badge>{total} file</Badge>} bodyStyle={{ padding: 0 }}>
       {tones.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "32px 0",
-            fontSize: 13,
-            color: "var(--text-muted)",
-            fontStyle: "italic",
-          }}
-        >
+        <div style={{ textAlign: "center", padding: 32, fontSize: 13, color: "var(--text-muted)" }}>
           Belum ada file audio. Upload file di atas.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {tones.map((filename) => (
-            <ToneRow
-              key={filename}
-              filename={filename}
-              isPlaying={isPlaying(filename)}
-              onPlay={() => handlePlay(filename)}
-              onStop={handleStop}
-              onDelete={() => handleDelete(filename)}
-              deleteLoading={deleteTone.isPending}
-            />
-          ))}
-        </div>
+        tones.map((filename) => (
+          <ToneRow
+            key={filename}
+            filename={filename}
+            isPlaying={isPlaying(filename)}
+            onPlay={() => handlePlay(filename)}
+            onStop={handleStop}
+            onDelete={() => handleDelete(filename)}
+            deleteLoading={deleteTone.isPending}
+          />
+        ))
       )}
 
       {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: 12,
+          }}
+        >
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             icon={<ChevronLeft size={14} />}
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
           />
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          <span className="tabular" style={{ fontSize: 12, color: "var(--text-muted)" }}>
             {page} / {totalPages}
           </span>
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             icon={<ChevronRight size={14} />}
             disabled={page >= totalPages}

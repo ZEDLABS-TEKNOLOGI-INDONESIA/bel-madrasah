@@ -10,10 +10,10 @@ interface BadgeProps {
 
 const variantStyle: Record<BadgeVariant, React.CSSProperties> = {
   default: { background: "var(--bg-tertiary)", color: "var(--text-muted)" },
-  success: { background: "rgba(26,127,55,0.12)", color: "var(--success)" },
-  danger: { background: "rgba(207,34,46,0.12)", color: "var(--danger)" },
-  warning: { background: "rgba(154,103,0,0.12)", color: "var(--warning)" },
-  accent: { background: "rgba(9,105,218,0.12)", color: "var(--accent)" },
+  success: { background: "var(--success-soft)", color: "var(--success)" },
+  danger: { background: "var(--danger-soft)", color: "var(--danger)" },
+  warning: { background: "var(--warning-soft)", color: "var(--warning)" },
+  accent: { background: "var(--accent-soft)", color: "var(--accent)" },
 };
 
 export function Badge({ children, variant = "default", dot }: BadgeProps) {
@@ -22,11 +22,12 @@ export function Badge({ children, variant = "default", dot }: BadgeProps) {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 5,
-        padding: "2px 8px",
+        gap: 6,
+        padding: "2px 10px",
         borderRadius: 99,
         fontSize: 11,
         fontWeight: 500,
+        whiteSpace: "nowrap",
         ...variantStyle[variant],
       }}
     >

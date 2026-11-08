@@ -39,22 +39,10 @@ export function NowPlayingCard() {
   const serverFile = data?.now_playing as string;
   const isPlaying = serverPlaying || !!browserPlaying;
   const nowPlaying = serverPlaying ? serverFile : browserPlaying;
-
-  const source = serverPlaying ? null : browserPlaying ? "(preview browser)" : null;
+  const source = serverPlaying ? "Speaker server" : browserPlaying ? "Preview browser" : null;
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: "var(--text-muted)",
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-      >
-        Now Playing
-      </span>
+    <Card title="Sedang diputar">
       {isPlaying ? (
         <div
           style={{
@@ -64,15 +52,9 @@ export function NowPlayingCard() {
             gap: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
             <div
-              style={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: 2,
-                height: 20,
-                flexShrink: 0,
-              }}
+              style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 20, flexShrink: 0 }}
             >
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="wave-bar" style={{ height: `${8 + i * 2}px` }} />
@@ -102,9 +84,7 @@ export function NowPlayingCard() {
           </Button>
         </div>
       ) : (
-        <div style={{ fontSize: 13, color: "var(--text-muted)", fontStyle: "italic" }}>
-          Tidak ada audio yang diputar
-        </div>
+        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Tidak ada audio yang diputar</div>
       )}
     </Card>
   );

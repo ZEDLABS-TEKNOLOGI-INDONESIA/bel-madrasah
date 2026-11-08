@@ -5,6 +5,7 @@ import { useLiburNasional, useMutateLibur } from "../../hooks/useLibur";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { PageHeader } from "../ui/PageHeader";
 import { LiburList } from "./LiburList";
 
 interface NasionalItem {
@@ -32,7 +33,6 @@ function LiburNasionalPanel() {
   const cutis = items.filter((i) => !i.is_national_holiday);
 
   const displayed = showCuti ? items : nationals;
-
   const toImport = displayed.filter((i) => !importedDates.has(i.date));
 
   async function handleImport(item: NasionalItem) {
@@ -104,20 +104,9 @@ function LiburNasionalPanel() {
   }
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: "var(--text-muted)",
-            textTransform: "uppercase",
-            letterSpacing: 0.5,
-          }}
-        >
-          Libur Nasional
-        </span>
+    <Card
+      title="Libur nasional"
+      action={
         <select
           value={year}
           onChange={(e) => handleYearChange(Number(e.target.value))}
@@ -129,11 +118,11 @@ function LiburNasionalPanel() {
             </option>
           ))}
         </select>
-      </div>
-
-      {/* Filter tabs: Semua / Libur Nasional / Cuti Bersama */}
+      }
+      bodyStyle={{ display: "flex", flexDirection: "column", gap: 14 }}
+    >
       {!isLoading && items.length > 0 && (
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           {[
             { label: "Semua", value: true, count: items.length },
             { label: "Libur", value: false, count: nationals.length },
@@ -146,17 +135,16 @@ function LiburNasionalPanel() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 5,
+                  gap: 6,
                   padding: "4px 10px",
                   borderRadius: 99,
-                  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
-                  background: active ? "rgba(9,105,218,0.1)" : "var(--bg-secondary)",
+                  border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                  background: active ? "var(--accent-soft)" : "transparent",
                   color: active ? "var(--accent)" : "var(--text-muted)",
                   fontSize: 12,
                   fontWeight: active ? 600 : 400,
                   fontFamily: "var(--font)",
                   cursor: "pointer",
-                  transition: "all 0.15s",
                 }}
               >
                 {tab.label}
@@ -168,7 +156,6 @@ function LiburNasionalPanel() {
                     fontSize: 10,
                     fontWeight: 600,
                     padding: "1px 6px",
-                    transition: "all 0.15s",
                   }}
                 >
                   {tab.count}
@@ -176,24 +163,14 @@ function LiburNasionalPanel() {
               </button>
             );
           })}
-          {/* Badge info jumlah cuti */}
           {cutis.length > 0 && (
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                fontSize: 11,
-                color: "var(--text-muted)",
-                marginLeft: 2,
-              }}
-            >
+            <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 2 }}>
               ({cutis.length} cuti bersama)
             </span>
           )}
         </div>
       )}
 
-      {/* Loading skeleton */}
       {isLoading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[1, 2, 3].map((i) => (
@@ -214,7 +191,6 @@ function LiburNasionalPanel() {
           style={{
             fontSize: 13,
             color: "var(--text-muted)",
-            fontStyle: "italic",
             textAlign: "center",
             padding: "16px 0",
           }}
@@ -223,7 +199,6 @@ function LiburNasionalPanel() {
         </div>
       ) : (
         <>
-          {/* Tombol Import Semua */}
           <Button
             variant="primary"
             size="sm"
@@ -233,51 +208,41 @@ function LiburNasionalPanel() {
             onClick={handleImportAll}
             style={{ alignSelf: "flex-start" }}
           >
-            Import Semua ({toImport.length})
+            Import semua ({toImport.length})
           </Button>
 
-          {/* Daftar */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 1,
               maxHeight: 380,
               overflowY: "auto",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
             }}
           >
-            {displayed.map((item) => {
+            {displayed.map((item, i) => {
               const imported = importedDates.has(item.date);
               const isCuti = !item.is_national_holiday;
               return (
                 <div
                   key={item.date}
+                  className="row-hover"
                   style={{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: 8,
-                    padding: "8px 0",
-                    borderBottom: "1px solid var(--border)",
+                    padding: "8px 12px",
+                    borderBottom: i === displayed.length - 1 ? "none" : "1px solid var(--border)",
                     opacity: imported ? 0.5 : 1,
-                    transition: "opacity 0.2s",
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
                     <div
                       style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
                     >
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 500,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {item.name}
-                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</span>
                       {isCuti && <Badge variant="warning">Cuti</Badge>}
                     </div>
                     <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
@@ -292,7 +257,7 @@ function LiburNasionalPanel() {
                     disabled={imported || importingAll}
                     style={{ flexShrink: 0 }}
                   >
-                    {imported ? "✓" : "Import"}
+                    {imported ? "Terimpor" : "Import"}
                   </Button>
                 </div>
               );
@@ -311,7 +276,7 @@ function LiburNasionalPanel() {
         }}
       >
         <ExternalLink size={10} />
-        Sumber: libur.deno.dev
+        Sumber: api.kemendesa.link
       </div>
     </Card>
   );
@@ -319,12 +284,15 @@ function LiburNasionalPanel() {
 
 export function LiburPage() {
   return (
-    <div className="grid grid-cols-12 gap-4">
-      <div className="col-span-12 md:col-span-7">
-        <LiburList />
-      </div>
-      <div className="col-span-12 md:col-span-5">
-        <LiburNasionalPanel />
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <PageHeader title="Hari libur" description="Bel tidak berbunyi pada tanggal yang terdaftar" />
+      <div className="grid grid-cols-12 gap-4">
+        <div className="col-span-12 md:col-span-7">
+          <LiburList />
+        </div>
+        <div className="col-span-12 md:col-span-5">
+          <LiburNasionalPanel />
+        </div>
       </div>
     </div>
   );

@@ -7,55 +7,57 @@ interface CardProps {
   hover?: boolean;
   onClick?: () => void;
   style?: React.CSSProperties;
+  title?: string;
+  action?: React.ReactNode;
+  bodyStyle?: React.CSSProperties;
 }
 
 export function Card({
   children,
   className = "",
-  glossy = true,
   hover = false,
   onClick,
   style,
+  title,
+  action,
+  bodyStyle,
 }: CardProps) {
-  const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
+  const hasHeader = Boolean(title || action);
+  const cls = [className, hover ? "card-hover" : ""].filter(Boolean).join(" ");
 
   return (
     <div
       onClick={onClick}
-      className={className}
+      className={cls || undefined}
       style={{
-        background:
-          glossy && !isMobile ? "var(--card-gloss), var(--card-bg)" : "var(--bg-secondary)",
+        background: "var(--card-bg)",
         border: "1px solid var(--card-border)",
-        boxShadow: isMobile ? "none" : "var(--card-shadow)",
-        backdropFilter: isMobile ? "none" : "var(--glass-blur)",
-        WebkitBackdropFilter: isMobile ? "none" : "var(--glass-blur)",
         borderRadius: "var(--radius-lg)",
-        padding: "16px",
-        transition: "transform 0.2s, box-shadow 0.2s",
         cursor: onClick ? "pointer" : undefined,
+        ...(hasHeader
+          ? { display: "flex", flexDirection: "column", overflow: "hidden" }
+          : { padding: 16 }),
         ...style,
       }}
-      onMouseEnter={
-        hover
-          ? (e) => {
-              const el = e.currentTarget as HTMLDivElement;
-              el.style.transform = "translateY(-2px)";
-              el.style.boxShadow = "0 8px 32px rgba(0,0,0,0.12)";
-            }
-          : undefined
-      }
-      onMouseLeave={
-        hover
-          ? (e) => {
-              const el = e.currentTarget as HTMLDivElement;
-              el.style.transform = "translateY(0)";
-              el.style.boxShadow = "var(--card-shadow)";
-            }
-          : undefined
-      }
     >
-      {children}
+      {hasHeader && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            minHeight: 48,
+            padding: "8px 16px",
+            borderBottom: "1px solid var(--border)",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{title}</span>
+          {action}
+        </div>
+      )}
+      {hasHeader ? <div style={{ padding: 16, flex: 1, ...bodyStyle }}>{children}</div> : children}
     </div>
   );
 }

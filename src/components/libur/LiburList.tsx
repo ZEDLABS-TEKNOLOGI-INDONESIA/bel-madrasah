@@ -1,12 +1,12 @@
+import { CalendarOff, Plus, Trash2 } from "lucide-react";
 import React, { useState } from "react";
-import { Plus, Trash2, CalendarOff } from "lucide-react";
-import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
-import { Badge } from "../ui/Badge";
-import { LiburModal } from "./LiburModal";
-import { SkeletonCard } from "../ui/Skeleton";
-import { useLibur, useMutateLibur } from "../../hooks/useLibur";
 import toast from "react-hot-toast";
+import { useLibur, useMutateLibur } from "../../hooks/useLibur";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { SkeletonCard } from "../ui/Skeleton";
+import { LiburModal } from "./LiburModal";
 
 interface LiburDate {
   date: string;
@@ -53,32 +53,23 @@ export function LiburList() {
 
   return (
     <>
-      <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <Card
+        title="Libur lokal"
+        action={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-              }}
+            <Badge>{libur.length}</Badge>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus size={13} />}
+              onClick={() => setModalOpen(true)}
             >
-              Libur Lokal
-            </span>
-            <Badge variant="default">{libur.length}</Badge>
+              Tambah
+            </Button>
           </div>
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<Plus size={13} />}
-            onClick={() => setModalOpen(true)}
-          >
-            Tambah
-          </Button>
-        </div>
-
+        }
+        bodyStyle={{ padding: 0 }}
+      >
         {libur.length === 0 ? (
           <div
             style={{
@@ -86,60 +77,53 @@ export function LiburList() {
               flexDirection: "column",
               alignItems: "center",
               gap: 10,
-              padding: "24px 0",
+              padding: 32,
               color: "var(--text-muted)",
             }}
           >
             <CalendarOff size={28} />
-            <span style={{ fontSize: 13, fontStyle: "italic" }}>Belum ada hari libur</span>
+            <span style={{ fontSize: 13 }}>Belum ada hari libur</span>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {libur.map((item) => {
-              const upcoming = isUpcoming(item.date);
-              return (
-                <div
-                  key={item.date}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    padding: "10px 0",
-                    borderBottom: "1px solid var(--border)",
-                  }}
-                >
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 500,
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {formatDate(item.date)}
-                      </span>
-                      {upcoming && <Badge variant="warning">Mendatang</Badge>}
-                    </div>
-                    {item.keterangan && (
-                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                        {item.keterangan}
-                      </span>
-                    )}
+          libur.map((item, i) => {
+            const upcoming = isUpcoming(item.date);
+            return (
+              <div
+                key={item.date}
+                className="row-hover"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  padding: "10px 16px",
+                  borderBottom: i === libur.length - 1 ? "none" : "1px solid var(--border)",
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="tabular" style={{ fontSize: 13, fontWeight: 500 }}>
+                      {formatDate(item.date)}
+                    </span>
+                    {upcoming && <Badge variant="warning">Mendatang</Badge>}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={<Trash2 size={13} />}
-                    onClick={() => handleDelete(item.date)}
-                    loading={mutate.isPending}
-                    style={{ color: "var(--danger)", flexShrink: 0 }}
-                  />
+                  {item.keterangan && (
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                      {item.keterangan}
+                    </span>
+                  )}
                 </div>
-              );
-            })}
-          </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Trash2 size={13} />}
+                  onClick={() => handleDelete(item.date)}
+                  loading={mutate.isPending}
+                  style={{ color: "var(--danger)", flexShrink: 0 }}
+                />
+              </div>
+            );
+          })
         )}
       </Card>
 

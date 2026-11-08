@@ -1,13 +1,16 @@
 import {
   CalendarDays,
   CalendarOff,
-  ChevronRight,
+  ChevronLeft,
   LayoutDashboard,
+  LogOut,
   Music2,
   ScrollText,
   Settings2,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { logout } from "../../lib/auth";
+import { BAR_H, FOOT_H, SIDEBAR_W, SIDEBAR_W_COLLAPSED } from "../../lib/layout";
 
 type NavItem = { label: string; href: string; Icon: React.ElementType };
 
@@ -40,13 +43,13 @@ function spaGo(href: string) {
 }
 
 function SidebarLink(props: { item: NavItem; cur: string; expanded: boolean }) {
-  const label = props.item.label;
-  const href = props.item.href;
-  const Icon = props.item.Icon;
+  const { label, href, Icon } = props.item;
   const on = isActive(href, props.cur);
   return (
     <a
       href={href}
+      title={label}
+      className={on ? undefined : "row-hover"}
       onClick={(e) => {
         e.preventDefault();
         spaGo(href);
@@ -54,30 +57,26 @@ function SidebarLink(props: { item: NavItem; cur: string; expanded: boolean }) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
-        padding: "8px 16px",
-        margin: "0 6px",
-        borderRadius: "var(--radius)",
-        color: on ? "var(--accent)" : "var(--text-muted)",
-        background: on ? "rgba(9,105,218,0.08)" : "transparent",
+        gap: 12,
+        padding: "9px 20px",
+        borderLeft: `3px solid ${on ? "var(--accent)" : "transparent"}`,
+        color: on ? "var(--text)" : "var(--text-muted)",
+        background: on ? "var(--accent-soft)" : "transparent",
         textDecoration: "none",
         fontWeight: on ? 600 : 400,
         fontSize: 13,
-        transition: "background 0.15s, color 0.15s",
         whiteSpace: "nowrap",
         overflow: "hidden",
       }}
     >
-      <Icon size={18} style={{ flexShrink: 0 }} />
-      <span style={{ opacity: props.expanded ? 1 : 0, transition: "opacity 0.2s" }}>{label}</span>
+      <Icon size={18} style={{ flexShrink: 0, color: on ? "var(--accent)" : "currentColor" }} />
+      {props.expanded && <span>{label}</span>}
     </a>
   );
 }
 
 function BottomLink(props: { item: NavItem; cur: string }) {
-  const label = props.item.label;
-  const href = props.item.href;
-  const Icon = props.item.Icon;
+  const { label, href, Icon } = props.item;
   const on = isActive(href, props.cur);
   return (
     <a
@@ -95,9 +94,9 @@ function BottomLink(props: { item: NavItem; cur: string }) {
         gap: 3,
         textDecoration: "none",
         color: on ? "var(--accent)" : "var(--text-muted)",
+        borderTop: `2px solid ${on ? "var(--accent)" : "transparent"}`,
         fontSize: 10,
         fontWeight: on ? 600 : 400,
-        transition: "color 0.15s",
       }}
     >
       <Icon size={20} />
@@ -106,8 +105,29 @@ function BottomLink(props: { item: NavItem; cur: string }) {
   );
 }
 
+const footButton: React.CSSProperties = {
+  width: "100%",
+  height: FOOT_H,
+  boxSizing: "border-box",
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "0 24px",
+  background: "none",
+  border: "none",
+  borderTop: "1px solid var(--border)",
+  cursor: "pointer",
+  color: "var(--text-muted)",
+  fontFamily: "var(--font)",
+  fontSize: 13,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+};
+
 export function Sidebar(props: { expanded: boolean; onToggle: () => void }) {
   const cur = useCurrentPath();
+  const { expanded } = props;
   return (
     <div
       style={{
@@ -116,10 +136,8 @@ export function Sidebar(props: { expanded: boolean; onToggle: () => void }) {
         left: 0,
         bottom: 0,
         zIndex: 100,
-        width: props.expanded ? 220 : 64,
-        background: "var(--card-gloss), var(--card-bg)",
-        backdropFilter: "var(--glass-blur)",
-        WebkitBackdropFilter: "var(--glass-blur)",
+        width: expanded ? SIDEBAR_W : SIDEBAR_W_COLLAPSED,
+        background: "var(--panel)",
         borderRight: "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
@@ -129,70 +147,64 @@ export function Sidebar(props: { expanded: boolean; onToggle: () => void }) {
     >
       <div
         style={{
-          height: 56,
+          height: BAR_H,
+          boxSizing: "border-box",
           display: "flex",
           alignItems: "center",
-          padding: "0 16px",
           gap: 10,
+          padding: "0 18px",
           borderBottom: "1px solid var(--border)",
           flexShrink: 0,
           overflow: "hidden",
         }}
       >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            flexShrink: 0,
-            background: "var(--accent)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Music2 size={16} color="#fff" />
-        </div>
-        <span
-          style={{
-            fontWeight: 700,
-            fontSize: 14,
-            whiteSpace: "nowrap",
-            color: "var(--text)",
-            opacity: props.expanded ? 1 : 0,
-            transition: "opacity 0.2s",
-          }}
-        >
-          Bel Madrasah
-        </span>
+        <img
+          src="/icon.svg"
+          alt="Bel Madrasah"
+          width={28}
+          height={28}
+          style={{ flexShrink: 0, display: "block" }}
+        />
+        {expanded && (
+          <span
+            style={{
+              fontWeight: 700,
+              fontSize: 14,
+              whiteSpace: "nowrap",
+              color: "var(--text)",
+            }}
+          >
+            Bel Madrasah
+          </span>
+        )}
       </div>
+
       <nav style={{ flex: 1, padding: "8px 0", display: "flex", flexDirection: "column", gap: 2 }}>
         {ITEMS.map((item) => (
-          <SidebarLink key={item.href} item={item} cur={cur} expanded={props.expanded} />
+          <SidebarLink key={item.href} item={item} cur={cur} expanded={expanded} />
         ))}
       </nav>
+
+      <button onClick={logout} className="row-hover" title="Keluar" style={footButton}>
+        <LogOut size={16} style={{ flexShrink: 0 }} />
+        {expanded && <span>Keluar</span>}
+      </button>
+
       <button
         onClick={props.onToggle}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: props.expanded ? "flex-end" : "center",
-          padding: "12px 16px",
-          background: "none",
-          border: "none",
-          borderTop: "1px solid var(--border)",
-          cursor: "pointer",
-          color: "var(--text-muted)",
-          transition: "justify-content 0.25s",
-        }}
+        className="row-hover"
+        title={expanded ? "Ciutkan" : "Perluas"}
+        style={footButton}
       >
-        <ChevronRight
+        <ChevronLeft
           size={16}
           style={{
-            transform: props.expanded ? "rotate(180deg)" : "none",
+            flexShrink: 0,
+            transform: expanded ? "none" : "rotate(180deg)",
             transition: "transform 0.25s",
           }}
         />
+        {expanded && <span>Ciutkan</span>}
       </button>
     </div>
   );
@@ -208,7 +220,7 @@ export function BottomNav() {
         left: 0,
         right: 0,
         zIndex: 100,
-        background: "var(--card-bg)",
+        background: "var(--panel)",
         borderTop: "1px solid var(--border)",
         display: "flex",
         paddingBottom: "env(safe-area-inset-bottom)",

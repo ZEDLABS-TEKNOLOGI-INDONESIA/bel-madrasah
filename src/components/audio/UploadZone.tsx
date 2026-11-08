@@ -1,8 +1,8 @@
-import React, { useRef, useState } from "react";
-import { Upload, FileAudio, CheckCircle2, XCircle } from "lucide-react";
-import { Card } from "../ui/Card";
-import { useUploadTone } from "../../hooks/useTones";
+import { CheckCircle2, FileAudio, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { useUploadTone } from "../../hooks/useTones";
+import { Card } from "../ui/Card";
 
 export function UploadZone() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,24 +40,14 @@ export function UploadZone() {
     } catch (e: any) {
       clearInterval(interval);
       setProgress(null);
-      toast.error(e.message);
+      toast.error(
+        e.message === "Failed to fetch" ? "Koneksi terputus saat upload, coba lagi" : e.message
+      );
     }
   }
 
   return (
-    <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: "var(--text-muted)",
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-      >
-        Upload Audio
-      </span>
-
+    <Card title="Upload audio" bodyStyle={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -71,16 +61,16 @@ export function UploadZone() {
         }}
         onClick={() => inputRef.current?.click()}
         style={{
-          border: `2px dashed ${dragging ? "var(--accent)" : "var(--border)"}`,
+          border: `1px dashed ${dragging ? "var(--accent)" : "var(--border)"}`,
           borderRadius: "var(--radius-lg)",
-          background: dragging ? "rgba(9,105,218,0.04)" : "var(--bg-secondary)",
+          background: dragging ? "var(--accent-soft)" : "var(--bg-secondary)",
           padding: "28px 16px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           gap: 10,
           cursor: "pointer",
-          transition: "all 0.15s",
+          transition: "background 0.15s, border-color 0.15s",
         }}
       >
         {progress === 100 ? (
@@ -98,10 +88,10 @@ export function UploadZone() {
               color: dragging ? "var(--accent)" : "var(--text)",
             }}
           >
-            {upload.isPending ? "Mengupload..." : "Drag & drop atau klik untuk pilih file"}
+            {upload.isPending ? "Mengupload..." : "Drag dan drop atau klik untuk pilih file"}
           </div>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-            MP3, WAV, OGG — maks 32MB
+            MP3, WAV, OGG, maks 32MB
           </div>
         </div>
         <input
@@ -124,7 +114,7 @@ export function UploadZone() {
             }}
           >
             <span>{progress === 100 ? "Selesai" : "Mengupload..."}</span>
-            <span>{progress}%</span>
+            <span className="tabular">{progress}%</span>
           </div>
           <div
             style={{

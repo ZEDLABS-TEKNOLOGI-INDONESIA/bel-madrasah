@@ -17,14 +17,18 @@ const variantStyle: Record<Variant, React.CSSProperties> = {
     color: "var(--text)",
     border: "1px solid var(--border)",
   },
-  danger: { background: "var(--danger)", color: "#fff", border: "1px solid transparent" },
+  danger: {
+    background: "var(--danger-soft)",
+    color: "var(--danger)",
+    border: "1px solid var(--danger-border)",
+  },
   ghost: { background: "transparent", color: "var(--text-muted)", border: "1px solid transparent" },
 };
 
 const sizeStyle: Record<Size, React.CSSProperties> = {
-  sm: { padding: "4px 10px", fontSize: "12px", height: "28px" },
-  md: { padding: "6px 14px", fontSize: "13px", height: "34px" },
-  lg: { padding: "10px 20px", fontSize: "14px", height: "42px" },
+  sm: { padding: "0 10px", fontSize: 12, height: 28 },
+  md: { padding: "0 14px", fontSize: 13, height: 34 },
+  lg: { padding: "0 20px", fontSize: 14, height: 42 },
 };
 
 export function Button({
@@ -34,43 +38,29 @@ export function Button({
   icon,
   children,
   style,
+  className,
   ...props
 }: ButtonProps) {
+  const blocked = loading || props.disabled;
   return (
     <button
       {...props}
-      disabled={loading || props.disabled}
+      className={["btn", className].filter(Boolean).join(" ")}
+      disabled={blocked}
       style={{
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        gap: "6px",
+        gap: 6,
         borderRadius: "var(--radius)",
         fontFamily: "var(--font)",
         fontWeight: 500,
-        cursor: loading || props.disabled ? "not-allowed" : "pointer",
+        cursor: blocked ? "not-allowed" : "pointer",
         opacity: props.disabled ? 0.5 : 1,
-        transition: "opacity 0.15s, transform 0.1s, box-shadow 0.15s",
         whiteSpace: "nowrap",
         ...variantStyle[variant],
         ...sizeStyle[size],
         ...style,
-      }}
-      onMouseEnter={(e) => {
-        if (!props.disabled && !loading) {
-          (e.currentTarget as HTMLButtonElement).style.opacity = "0.85";
-        }
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.opacity = props.disabled ? "0.5" : "1";
-      }}
-      onMouseDown={(e) => {
-        if (!props.disabled && !loading) {
-          (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)";
-        }
-      }}
-      onMouseUp={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
       }}
     >
       {loading ? (

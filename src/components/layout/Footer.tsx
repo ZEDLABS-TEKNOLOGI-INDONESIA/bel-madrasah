@@ -1,3 +1,5 @@
+import { FOOT_H } from "../../lib/layout";
+
 interface FooterProps {
   schoolName: string;
   schoolYear: string;
@@ -13,12 +15,11 @@ export function Footer({ schoolName, schoolYear, poweredBy, poweredByUrl }: Foot
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 24px",
-        height: 44,
-        borderTop: "1px solid var(--border)",
-        background: "var(--card-gloss), var(--card-bg)",
-        backdropFilter: "var(--glass-blur)",
-        WebkitBackdropFilter: "var(--glass-blur)",
+        height: FOOT_H,
+        boxSizing: "border-box",
         flexShrink: 0,
+        borderTop: "1px solid var(--border)",
+        background: "var(--panel)",
       }}
     >
       <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
