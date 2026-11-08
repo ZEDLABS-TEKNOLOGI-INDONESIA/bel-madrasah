@@ -4,9 +4,10 @@ import { APP } from "../lib/app.config";
 
 interface Props {
   title: string;
+  description?: string;
 }
 
-const { title } = Astro.props;
+const { title, description } = Astro.props;
 const fullTitle = `${title} - ${APP.name}`;
 ---
 
@@ -20,6 +21,11 @@ const fullTitle = `${title} - ${APP.name}`;
     <meta name="theme-color" content={APP.themeColor} />
     <link rel="manifest" href="/manifest.json" />
     <title>{fullTitle}</title>
+    {description && <meta name="description" content={description} />}
+    <meta property="og:site_name" content={APP.name} />
+    <meta property="og:title" content={fullTitle} />
+    {description && <meta property="og:description" content={description} />}
+    <meta property="og:type" content="website" />
   </head>
   <body>
     <slot />

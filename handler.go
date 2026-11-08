@@ -66,7 +66,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", handleHealth)
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
-	mux.HandleFunc("/", requireAuth(handlePages))
+	registerLandingRoutes(mux, requireAuth(handlePages))
 
 	mux.HandleFunc("/api/jadwal", requireAuth(handleJadwal))
 	mux.HandleFunc("/api/jadwal/entry", requireAuth(handleJadwalEntry))

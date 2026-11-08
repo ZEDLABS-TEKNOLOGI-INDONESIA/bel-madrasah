@@ -28,6 +28,8 @@ export const ROUTES: readonly RouteDef[] = [
   { key: "settings", path: "/settings", label: "Pengaturan", title: "Pengaturan", icon: Settings2 },
 ];
 
+export const GUEST_PATHS: readonly string[] = ["/login", "/landing"];
+
 export const PATHS: string[] = ROUTES.map((r) => r.path);
 
 export const PATH_TO_KEY: Record<string, PageKey> = Object.fromEntries(
