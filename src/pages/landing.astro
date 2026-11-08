@@ -1,0 +1,9 @@
+---
+import { LandingPage } from "../components/landing/LandingPage";
+import Layout from "../layouts/Layout.astro";
+import { LANDING } from "../lib/landing";
+---
+
+<Layout title="Beranda" description={LANDING.description}>
+  <LandingPage client:only="react" />
+</Layout>

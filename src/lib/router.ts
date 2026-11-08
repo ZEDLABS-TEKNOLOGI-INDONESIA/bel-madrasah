@@ -1,16 +1,20 @@
 import { APP } from "./app.config";
-import { PATHS } from "./routes";
+import { GUEST_PATHS, PATHS } from "./routes";
 
 const TTL = 5 * 60_000;
 const known = new Set(PATHS);
 const pageCache = new Map<string, { html: string; at: number }>();
+
+function isGuestRedirect(res: Response): boolean {
+  return res.redirected && GUEST_PATHS.includes(new URL(res.url).pathname);
+}
 
 async function fetchPage(url: string): Promise<string | null> {
   const hit = pageCache.get(url);
   if (hit && Date.now() - hit.at < TTL) return hit.html;
   try {
     const res = await fetch(url, { credentials: "include" });
-    if (res.status === 401 || (res.redirected && new URL(res.url).pathname === "/login")) {
+    if (res.status === 401 || isGuestRedirect(res)) {
       window.location.href = "/login";
       return null;
     }

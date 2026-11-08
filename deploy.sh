@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HOST="${HOST:-dhnembol}"
+HOST="${HOST:-zedlabs}"
 SERVICE="${SERVICE:-bel-madrasah}"
 REMOTE="/opt/bel-madrasah"
 BIN="bel-madrasah-arm64"
