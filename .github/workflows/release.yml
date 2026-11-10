@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Pastikan tag ada di main
         run: |
@@ -37,14 +37,14 @@ jobs:
       - name: Catatan rilis
         run: scripts/release-notes.sh "$GITHUB_REF_NAME" > release-notes.md
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Pasang pnpm
         run: npm install -g pnpm@${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: go.sum
