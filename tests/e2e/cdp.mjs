@@ -23,6 +23,7 @@ export async function launchChrome(profileDir, port = 9339) {
       "--disable-gpu",
       "--hide-scrollbars",
       "--autoplay-policy=no-user-gesture-required",
+      ...(process.env.CI ? ["--no-sandbox"] : []),
       `--user-data-dir=${profileDir}`,
       "about:blank",
     ],

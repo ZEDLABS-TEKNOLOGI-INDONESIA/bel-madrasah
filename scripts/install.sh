@@ -337,7 +337,9 @@ build_binary() {
         cd "$BUILD_DIR"
         export PATH="$PATH:/usr/local/go/bin"
         go mod tidy
-        CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${PROJECT_DIR}/bel-madrasah" ./server
+        local version
+        version="$(git describe --tags --always 2>/dev/null || echo dev)"
+        CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${version}" -o "${PROJECT_DIR}/bel-madrasah" ./server
         if cmd_exists upx; then
             upx --best --lzma "${PROJECT_DIR}/bel-madrasah" && success "Binary dikompres dengan UPX."
         else
@@ -551,6 +553,49 @@ copy_audio() {
     fi
 }
 
+install_updater() {
+    info "Memasang updater otomatis..."
+    local updater="/usr/local/sbin/bel-madrasah-update"
+    install -o root -g root -m 755 "${BUILD_DIR}/scripts/update.sh" "$updater"
+    if [ ! -f /etc/default/bel-madrasah-update ]; then
+        cat > /etc/default/bel-madrasah-update <<CONF
+BEL_UPDATE_DISABLED=0
+BEL_UPDATE_REPO=ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah
+BEL_PROJECT_DIR=${PROJECT_DIR}
+BEL_SERVICE=${SERVICE_NAME}
+BEL_HEALTH_URL=http://127.0.0.1:8083/healthz
+CONF
+    fi
+    cat > /etc/systemd/system/bel-madrasah-update.service <<UNIT
+[Unit]
+Description=Pasang release terbaru Bel Madrasah
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=${updater}
+StandardOutput=journal
+StandardError=journal
+UNIT
+    cat > /etc/systemd/system/bel-madrasah-update.timer <<UNIT
+[Unit]
+Description=Cek release Bel Madrasah setiap jam
+
+[Timer]
+OnBootSec=10min
+OnCalendar=hourly
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+    systemctl daemon-reload
+    systemctl enable --now bel-madrasah-update.timer
+    success "Updater aktif: cek release tiap jam (nonaktifkan lewat /etc/default/bel-madrasah-update)."
+}
+
 copy_uninstaller() {
     if [ -f "${BUILD_DIR}/scripts/uninstall.sh" ]; then
         cp "${BUILD_DIR}/scripts/uninstall.sh" "${PROJECT_DIR}/uninstall.sh"
@@ -629,6 +674,11 @@ show_summary() {
     echo "  sudo systemctl restart ${SERVICE_NAME}"
     echo "  sudo journalctl -u ${SERVICE_NAME} -f"
     echo
+    echo "Update otomatis:"
+    echo "  sudo bel-madrasah-update --check"
+    echo "  systemctl list-timers bel-madrasah-update.timer"
+    echo "  sudo journalctl -u bel-madrasah-update"
+    echo
     [ -f "${PROJECT_DIR}/uninstall.sh" ] && echo "Untuk menghapus: sudo ${PROJECT_DIR}/uninstall.sh"
     echo
 }
@@ -661,6 +711,7 @@ main() {
     create_service
     copy_audio
     copy_uninstaller
+    install_updater
     set_permissions
     verify_installation
     start_service

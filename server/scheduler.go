@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,9 +37,30 @@ func sleepOrStop(stop <-chan struct{}, d time.Duration) bool {
 	}
 }
 
+func playedKey(mode, hari, waktu string) string {
+	return mode + "|" + hari + "|" + waktu
+}
+
+func playedToday(logs []ActivityLog, now time.Time) map[string]bool {
+	today := now.Format("2006-01-02")
+	played := map[string]bool{}
+	for _, l := range logs {
+		if strings.HasPrefix(l.Time, today) {
+			played[playedKey(l.Mode, l.Hari, l.Waktu)] = true
+		}
+	}
+	return played
+}
+
 func runScheduler(stop <-chan struct{}) {
 	logMsg("scheduler dimulai")
-	played := make(map[string]bool)
+	played := map[string]bool{}
+	if logs, err := readLog(); err == nil {
+		played = playedToday(logs, time.Now())
+		if len(played) > 0 {
+			logMsg(fmt.Sprintf("%d bel hari ini sudah berbunyi, tidak diulang", len(played)))
+		}
+	}
 	lastDay := ""
 	lastWeeklyClean := time.Now()
 
@@ -137,7 +159,7 @@ func runScheduler(stop <-chan struct{}) {
 
 		waktu := now.Format("15:04")
 		for _, e := range entries {
-			key := mode + "|" + hari + "|" + e.Waktu
+			key := playedKey(mode, hari, e.Waktu)
 			if waktu == e.Waktu && !played[key] {
 				logMsg(fmt.Sprintf("[%s] %s [%s]", mode, filepath.Base(e.Audio), e.Waktu))
 				go playSound(e.Audio)

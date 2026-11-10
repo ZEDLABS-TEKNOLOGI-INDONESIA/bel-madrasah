@@ -32,7 +32,14 @@ func resolveFfmpeg() string {
 	return ""
 }
 
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println(version)
+		return
+	}
+	logMsg("bel-madrasah " + version)
 	ffmpegPath = resolveFfmpeg()
 	if ffmpegPath == "" {
 		log.Fatal("ffmpeg tidak ditemukan di sistem")

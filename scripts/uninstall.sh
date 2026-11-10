@@ -45,6 +45,15 @@ else
     warning "Service ${SERVICE_NAME} tidak terdaftar di systemd."
 fi
 
+# --- Hapus updater otomatis ---
+if systemctl list-unit-files 2>/dev/null | grep -q "^bel-madrasah-update.timer"; then
+    systemctl disable --now bel-madrasah-update.timer 2>/dev/null || true
+fi
+rm -f /etc/systemd/system/bel-madrasah-update.service /etc/systemd/system/bel-madrasah-update.timer
+rm -f /usr/local/sbin/bel-madrasah-update /etc/default/bel-madrasah-update
+systemctl daemon-reload
+success "Updater otomatis dihapus."
+
 # --- Hapus unit file systemd ---
 if [ -f "$SERVICE_FILE" ]; then
     rm -f "$SERVICE_FILE"

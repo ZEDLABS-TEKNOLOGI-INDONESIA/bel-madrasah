@@ -48,7 +48,9 @@ bel-madrasah/
 │   └── styles/global.css
 ├── public/                  # Ikon, manifest, service worker
 ├── tests/                   # Uji unit frontend (*.test.mjs) dan tests/e2e/
-├── scripts/                 # install.sh, uninstall.sh, deploy.sh, generate.sh
+├── scripts/                 # install, uninstall, update, deploy, package, precompress, release-notes
+├── .github/workflows/       # ci.yml, release.yml
+├── CHANGELOG.md             # Catatan per release, dipakai workflow Release
 ├── tone/                    # File audio bawaan
 ├── konsep.md                # Standar frontend dan kontrak backend
 └── go.mod                   # Modul Go di root, build dengan ./server
@@ -130,13 +132,59 @@ pnpm e2e      # build, jalankan server sementara, uji tampilan 360px/1280px dan 
 
 Uji backend dan e2e memakai direktori sementara (`setBaseDir` / `BEL_BASE_DIR`), sehingga tidak menyentuh `/opt/bel-madrasah`. Uji e2e membutuhkan Go dan Chromium atau Chrome (atur `CHROME_BIN` bila tidak di lokasi standar).
 
-### Deploy
+### Deploy manual
 
 ```bash
 HOST=server-ssh ./scripts/deploy.sh
 ```
 
-Membangun frontend dan backend arm64, mengunggah, mengganti binary dengan cadangan, lalu mengecek `/healthz`.
+Jalur cadangan bila tidak memakai release: membangun frontend dan backend arm64 dari working tree, mengunggah lewat SSH, mengganti binary dengan cadangan, lalu mengecek `/healthz`. Jalur utama adalah release dan update otomatis.
+
+---
+
+## CI/CD dan Update Otomatis
+
+```
+push ke main ──► CI: format, lint skrip, tsc, go vet, unit test, e2e
+tag vX.Y.Z   ──► CI ──► Release: paket linux-amd64/arm64/armv7 + checksums.txt
+                                  │
+server bel ◄── timer tiap jam ────┘  unduh, verifikasi, pasang, health check, rollback
+```
+
+### Membuat release
+
+1. Tambahkan bagian `## vX.Y.Z` di `CHANGELOG.md` dan commit ke `main`.
+2. Buat dan push tag:
+
+```bash
+git tag -a v2.1.0 -m "v2.1.0"
+git push origin v2.1.0
+```
+
+Workflow `Release` menjalankan seluruh CI, membangun paket (`scripts/package.sh`), memverifikasi checksum dan versi binary, lalu menerbitkan GitHub Release dengan catatan dari `CHANGELOG.md`. Tag yang bukan commit di `main` atau tidak punya catatan di changelog ditolak.
+
+### Update otomatis di server
+
+Installer memasang `/usr/local/sbin/bel-madrasah-update` dan timer systemd `bel-madrasah-update.timer` (10 menit setelah boot, lalu setiap jam dengan jeda acak hingga 15 menit). Setiap kali berjalan, updater:
+
+1. Membandingkan `bel-madrasah --version` dengan release terbaru di GitHub
+2. Mengunduh paket sesuai arsitektur dan memverifikasi SHA-256 dari `checksums.txt`
+3. Mencadangkan binary dan `static/`, mengganti keduanya, lalu menjalankan ulang service
+4. Mengecek `/healthz`; bila gagal dalam 20 detik, versi lama dipulihkan
+
+`data/` dan `tone/` tidak pernah disentuh. Restart aman kapan saja: bel yang sudah berbunyi hari ini dibaca ulang dari log aktivitas sehingga tidak berbunyi dua kali.
+
+```bash
+sudo bel-madrasah-update --check          # versi terpasang dan terbaru
+sudo bel-madrasah-update --dry-run        # unduh dan verifikasi tanpa memasang
+sudo bel-madrasah-update                  # pasang sekarang
+sudo bel-madrasah-update --version v2.0.0 # pasang versi tertentu (rollback manual)
+sudo journalctl -u bel-madrasah-update    # riwayat update
+```
+
+Konfigurasi ada di `/etc/default/bel-madrasah-update`. Set `BEL_UPDATE_DISABLED=1` untuk menghentikan update otomatis.
+
+Server yang dipasang sebelum v2.0.0 belum memiliki updater; jalankan `sudo ./scripts/install.sh` sekali dari clone terbaru.
 
 ---
 
