@@ -329,7 +329,7 @@ backup_data() {
 
 build_binary() {
     info "Membangun binary..."
-    local required_files=("main.go" "auth.go" "handler.go" "storage.go" "pwa.go" "go.mod")
+    local required_files=("go.mod" "server/main.go" "server/routes.go")
     for f in "${required_files[@]}"; do
         [ -f "${BUILD_DIR}/${f}" ] || error "${f} tidak ditemukan di ${BUILD_DIR}."
     done
@@ -337,7 +337,7 @@ build_binary() {
         cd "$BUILD_DIR"
         export PATH="$PATH:/usr/local/go/bin"
         go mod tidy
-        CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${PROJECT_DIR}/bel-madrasah" .
+        CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${PROJECT_DIR}/bel-madrasah" ./server
         if cmd_exists upx; then
             upx --best --lzma "${PROJECT_DIR}/bel-madrasah" && success "Binary dikompres dengan UPX."
         else
@@ -552,8 +552,8 @@ copy_audio() {
 }
 
 copy_uninstaller() {
-    if [ -f "${BUILD_DIR}/uninstall.sh" ]; then
-        cp "${BUILD_DIR}/uninstall.sh" "${PROJECT_DIR}/uninstall.sh"
+    if [ -f "${BUILD_DIR}/scripts/uninstall.sh" ]; then
+        cp "${BUILD_DIR}/scripts/uninstall.sh" "${PROJECT_DIR}/uninstall.sh"
         chmod +x "${PROJECT_DIR}/uninstall.sh"
         success "Uninstaller disalin."
     fi

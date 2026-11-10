@@ -26,8 +26,6 @@ export const MODE_VARIANT: Record<string, Tone> = {
 
 export const HARI: string[] = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
-export const TONE_DIR = "/opt/bel-madrasah/tone";
-
 export function modeLabel(mode: string | undefined): string {
   if (!mode) return "-";
   return MODE_LABELS[mode] ?? mode;

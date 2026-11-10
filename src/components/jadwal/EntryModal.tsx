@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useTones } from "../../hooks/useTones";
-import { TONE_DIR } from "../../lib/constants";
 import { baseName } from "../../lib/format";
 import type { JadwalEntry } from "../../lib/types";
 import { Button } from "../ui/Button";
@@ -16,7 +15,6 @@ interface EntryModalProps {
   initialDays?: string[];
   hariList: string[];
   loading?: boolean;
-  toneDir?: string;
 }
 
 export function EntryModal({
@@ -27,7 +25,6 @@ export function EntryModal({
   initialDays,
   hariList,
   loading,
-  toneDir = TONE_DIR,
 }: EntryModalProps) {
   const [waktu, setWaktu] = useState("");
   const [selectedFilename, setSelectedFilename] = useState("");
@@ -50,7 +47,7 @@ export function EntryModal({
   function handleSave() {
     if (!canSave) return;
     onSave(
-      { waktu, audio: `${toneDir}/${selectedFilename}` },
+      { waktu, audio: selectedFilename },
       hariList.filter((h) => days.includes(h)),
     );
   }

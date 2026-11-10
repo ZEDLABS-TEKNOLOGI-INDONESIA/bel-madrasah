@@ -6,7 +6,7 @@ SERVICE="${SERVICE:-bel-madrasah}"
 REMOTE="/opt/bel-madrasah"
 BIN="bel-madrasah-arm64"
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 size() { du -h "$1" | cut -f1; }
 
@@ -34,7 +34,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
   -tags "netgo,osusergo" \
   -gcflags="all=-l -B" \
   -ldflags="-s -w -buildid= -extldflags=-static" \
-  -o "$BIN" .
+  -o "$BIN" ./server
 echo "ukuran setelah strip: $(size "$BIN")"
 
 if command -v upx >/dev/null 2>&1; then

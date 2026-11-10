@@ -48,18 +48,6 @@ var (
 	loginAttemptsMu sync.Mutex
 )
 
-func hashPassword(p string) (string, error) {
-	h, err := bcrypt.GenerateFromPassword([]byte(p), bcryptCost)
-	if err != nil {
-		return "", err
-	}
-	return string(h), nil
-}
-
-func verifyPassword(hash, p string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(p)) == nil
-}
-
 func initAuth() error {
 	if _, err := os.Stat(usersFile); os.IsNotExist(err) {
 		hash, err := hashPassword("P@ssw0rd")
@@ -82,9 +70,88 @@ func initAuth() error {
 	return nil
 }
 
+func hashPassword(p string) (string, error) {
+	h, err := bcrypt.GenerateFromPassword([]byte(p), bcryptCost)
+	if err != nil {
+		return "", err
+	}
+	return string(h), nil
+}
+
+func verifyPassword(hash, p string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(p)) == nil
+}
+
+func loadUser() (*User, error) {
+	data, err := os.ReadFile(usersFile)
+	if err != nil {
+		return nil, err
+	}
+	var u User
+	if err := json.Unmarshal(data, &u); err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func saveUser(u *User) error {
+	data, err := json.MarshalIndent(u, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(usersFile, data, 0600)
+}
+
+func generateToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
 func tokenKey(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+func createSession(username string) (string, error) {
+	token, err := generateToken()
+	if err != nil {
+		return "", err
+	}
+	sessionsMu.Lock()
+	sessions[tokenKey(token)] = &Session{
+		Username:  username,
+		ExpiresAt: time.Now().Add(sessionTimeout),
+	}
+	persistSessionsLocked()
+	sessionsMu.Unlock()
+	return token, nil
+}
+
+func getSession(r *http.Request) *Session {
+	c, err := r.Cookie(cookieName)
+	if err != nil {
+		return nil
+	}
+	sessionsMu.RLock()
+	s, ok := sessions[tokenKey(c.Value)]
+	sessionsMu.RUnlock()
+	if !ok || time.Now().After(s.ExpiresAt) {
+		return nil
+	}
+	return s
+}
+
+func deleteSession(token string) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	key := tokenKey(token)
+	if _, ok := sessions[key]; ok {
+		delete(sessions, key)
+		persistSessionsLocked()
+	}
 }
 
 func loadSessions() {
@@ -122,16 +189,6 @@ func persistSessionsLocked() {
 	}
 }
 
-func deleteSession(token string) {
-	sessionsMu.Lock()
-	defer sessionsMu.Unlock()
-	key := tokenKey(token)
-	if _, ok := sessions[key]; ok {
-		delete(sessions, key)
-		persistSessionsLocked()
-	}
-}
-
 func cleanupSessions() {
 	ticker := time.NewTicker(sessionCleanInt)
 	defer ticker.Stop()
@@ -159,63 +216,6 @@ func cleanupSessions() {
 		}
 		loginAttemptsMu.Unlock()
 	}
-}
-
-func loadUser() (*User, error) {
-	data, err := os.ReadFile(usersFile)
-	if err != nil {
-		return nil, err
-	}
-	var u User
-	if err := json.Unmarshal(data, &u); err != nil {
-		return nil, err
-	}
-	return &u, nil
-}
-
-func saveUser(u *User) error {
-	data, err := json.MarshalIndent(u, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(usersFile, data, 0600)
-}
-
-func generateToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
-}
-
-func createSession(username string) (string, error) {
-	token, err := generateToken()
-	if err != nil {
-		return "", err
-	}
-	sessionsMu.Lock()
-	sessions[tokenKey(token)] = &Session{
-		Username:  username,
-		ExpiresAt: time.Now().Add(sessionTimeout),
-	}
-	persistSessionsLocked()
-	sessionsMu.Unlock()
-	return token, nil
-}
-
-func getSession(r *http.Request) *Session {
-	c, err := r.Cookie(cookieName)
-	if err != nil {
-		return nil
-	}
-	sessionsMu.RLock()
-	s, ok := sessions[tokenKey(c.Value)]
-	sessionsMu.RUnlock()
-	if !ok || time.Now().After(s.ExpiresAt) {
-		return nil
-	}
-	return s
 }
 
 func clientIP(r *http.Request) string {
@@ -270,11 +270,6 @@ func resetLoginFailures(ip string) {
 	delete(loginAttempts, ip)
 }
 
-func isJSONRequest(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "application/json") ||
-		strings.Contains(r.Header.Get("Content-Type"), "application/json")
-}
-
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if getSession(r) == nil {
@@ -287,15 +282,4 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
-}
-
-func jsonError(w http.ResponseWriter, msg string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	fmt.Fprintf(w, `{"error":%q}`, msg)
-}
-
-func jsonOK(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(v)
 }

@@ -4,9 +4,8 @@ export interface BrowserEqualizer {
   enabled: boolean;
   gains: readonly number[];
   frequencies: readonly number[];
+  q: number;
 }
-
-const TWO_OCTAVE_Q = 2 / 3;
 
 class AudioManager {
   private audio: HTMLAudioElement | null = null;
@@ -44,7 +43,7 @@ class AudioManager {
         const node = ctx.createBiquadFilter();
         node.type = i === 0 ? "lowshelf" : i === last ? "highshelf" : "peaking";
         node.frequency.value = freq;
-        node.Q.value = TWO_OCTAVE_Q;
+        node.Q.value = eq.q;
         return node;
       });
       const limiter = ctx.createDynamicsCompressor();

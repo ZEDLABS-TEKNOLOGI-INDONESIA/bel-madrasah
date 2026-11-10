@@ -1,4 +1,5 @@
 #!/bin/bash
+cd "$(dirname "$0")/.." || exit 1
 OUTPUT="draft.md"
 > "$OUTPUT"
 echo "# SOURCE CODE" >> "$OUTPUT"
