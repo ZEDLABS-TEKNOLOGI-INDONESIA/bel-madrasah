@@ -1,6 +1,6 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from "@tanstack/react-query";
 
-const STORAGE_KEY = "app-query-cache-v1";
+const STORAGE_KEY = "app-query-cache-v2";
 const MAX_AGE = 24 * 60 * 60_000;
 const PERSISTED = new Set([
   "config",

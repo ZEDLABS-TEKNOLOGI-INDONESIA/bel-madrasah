@@ -103,6 +103,14 @@ export interface NasionalItem {
   is_national_holiday: boolean;
 }
 
+export interface NasionalResponse {
+  year: number;
+  holidays: NasionalItem[];
+  source: string;
+  stale: boolean;
+  fetched_at?: string;
+}
+
 export interface EqualizerSettings {
   enabled: boolean;
   gains: number[];

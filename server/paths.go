@@ -17,6 +17,7 @@ var (
 	configFile   string
 	usersFile    string
 	sessionsFile string
+	holidaysFile string
 )
 
 func setBaseDir(dir string) {
@@ -29,6 +30,7 @@ func setBaseDir(dir string) {
 	configFile = filepath.Join(dataDir, "config.json")
 	usersFile = filepath.Join(dataDir, "users.json")
 	sessionsFile = filepath.Join(dataDir, "sessions.json")
+	holidaysFile = filepath.Join(dataDir, "holidays.json")
 }
 
 func init() {

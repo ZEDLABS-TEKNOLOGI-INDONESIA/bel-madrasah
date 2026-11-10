@@ -1,6 +1,6 @@
 import { api } from "../lib/api";
 import { POLICY, createResource, useApiMutation } from "../lib/createResource";
-import type { LiburBody, LiburResponse, NasionalItem } from "../lib/types";
+import type { LiburBody, LiburResponse, NasionalResponse } from "../lib/types";
 
 export const useLibur = createResource<LiburResponse>({
   key: "libur",
@@ -8,7 +8,7 @@ export const useLibur = createResource<LiburResponse>({
   ...POLICY.schedule,
 });
 
-const useLiburNasionalResource = createResource<NasionalItem[], number>({
+const useLiburNasionalResource = createResource<NasionalResponse, number>({
   key: "libur-nasional",
   path: (year) => `/api/libur/nasional?year=${year}`,
   ...POLICY.holiday,

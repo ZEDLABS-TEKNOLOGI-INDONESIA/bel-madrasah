@@ -3,25 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
-
-type kemendesaHoliday struct {
-	Date          string `json:"date"`
-	Name          string `json:"name"`
-	IsCutiBersama bool   `json:"is_cuti_bersama"`
-}
-
-type liburNasionalItem struct {
-	Date              string `json:"date"`
-	Name              string `json:"name"`
-	IsNationalHoliday bool   `json:"is_national_holiday"`
-}
 
 func handleLibur(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -102,80 +89,38 @@ func handleLibur(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func parseKemendesaHolidays(body []byte) ([]kemendesaHoliday, error) {
-	var list []kemendesaHoliday
-	if err := json.Unmarshal(body, &list); err == nil {
-		return list, nil
-	}
-	var wrapped struct {
-		Data []kemendesaHoliday `json:"data"`
-	}
-	if err := json.Unmarshal(body, &wrapped); err != nil {
-		return nil, err
-	}
-	return wrapped.Data, nil
-}
-
 func handleLiburNasional(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
 		return
 	}
-	year := r.URL.Query().Get("year")
-	if year == "" {
-		year = strconv.Itoa(time.Now().Year())
-	}
-	y, err := strconv.Atoi(year)
-	if err != nil || y < 2000 || y > 2100 {
-		jsonError(w, "tahun tidak valid", http.StatusBadRequest)
-		return
-	}
-
-	apiURL := "https://api.kemendesa.link/libur-nasional/api/holidays/" + strconv.Itoa(y) + ".json"
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(apiURL)
-	if err != nil {
-		logMsg("gagal mengambil libur nasional: " + err.Error())
-		jsonError(w, "gagal mengambil data libur nasional", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		jsonOK(w, []liburNasionalItem{})
-		return
-	}
-	if resp.StatusCode != http.StatusOK {
-		logMsg(fmt.Sprintf("libur nasional: status %d dari sumber", resp.StatusCode))
-		jsonError(w, "sumber data libur nasional bermasalah", http.StatusBadGateway)
-		return
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		jsonError(w, "gagal membaca response", http.StatusBadGateway)
-		return
-	}
-
-	raw, err := parseKemendesaHolidays(body)
-	if err != nil {
-		logMsg("libur nasional: format respons tidak dikenali: " + err.Error())
-		jsonError(w, "format data libur nasional tidak dikenali", http.StatusBadGateway)
-		return
-	}
-
-	items := make([]liburNasionalItem, 0, len(raw))
-	for _, h := range raw {
-		if _, err := time.Parse("2006-01-02", h.Date); err != nil {
-			continue
+	year := time.Now().Year()
+	if q := r.URL.Query().Get("year"); q != "" {
+		y, err := strconv.Atoi(q)
+		if err != nil || y < 2000 || y > 2100 {
+			jsonError(w, "tahun tidak valid", http.StatusBadRequest)
+			return
 		}
-		items = append(items, liburNasionalItem{
-			Date:              h.Date,
-			Name:              h.Name,
-			IsNationalHoliday: !h.IsCutiBersama,
-		})
+		year = y
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Date < items[j].Date })
 
-	jsonOK(w, items)
+	set, stale, err := nationalHolidays(r.Context(), year)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	items := set.Items
+	if items == nil {
+		items = []liburNasionalItem{}
+	}
+	resp := map[string]any{
+		"year":     year,
+		"holidays": items,
+		"source":   set.Source,
+		"stale":    stale,
+	}
+	if !set.FetchedAt.IsZero() {
+		resp["fetched_at"] = set.FetchedAt.Format(time.RFC3339)
+	}
+	jsonOK(w, resp)
 }

@@ -139,6 +139,15 @@ try {
   const added = lainnya.jadwal.Senin.find((e) => e.waktu === "09:15");
   check("jadwal: add bell with bare filename", added?.audio === join(base, "tone/literasi.mp3"), added?.audio);
 
+  await page.goto(`${BASE}/libur`);
+  const holidayState = await page.waitFor(
+    `/Import semua/.test(document.body.textContent) || !!document.querySelector("[role=alert]")`,
+    15000,
+  );
+  const holidaySource = (await page.api(`/api/libur/nasional?year=${new Date().getFullYear()}`)).source ?? "galat";
+  check("libur nasional: daftar atau galat yang jelas", holidayState, holidaySource);
+  check("libur nasional: tidak ada teks kosong menyesatkan", !(await page.eval(`document.body.textContent.includes("Tidak ada data")`)));
+
   await page.goto(`${BASE}/settings`);
   check("audio: device card rendered", await page.waitFor(`!!document.querySelector("#audio-device")`));
   check(

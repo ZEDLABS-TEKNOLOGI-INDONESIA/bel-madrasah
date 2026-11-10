@@ -6,7 +6,7 @@ export const POLICY = {
   config: { staleTime: 30_000, refetchInterval: 15_000 },
   log: { staleTime: 30_000, refetchInterval: 30_000 },
   schedule: { staleTime: 60_000, refetchInterval: false },
-  holiday: { staleTime: 24 * 60 * 60_000, refetchInterval: false },
+  holiday: { staleTime: 24 * 60 * 60_000, refetchInterval: false, retry: 0 },
 } as const;
 
 interface ResourceConfig<K> {
@@ -14,6 +14,7 @@ interface ResourceConfig<K> {
   path: (param: K) => string;
   staleTime: number;
   refetchInterval?: number | false;
+  retry?: number;
 }
 
 interface ResourceOptions {
@@ -30,6 +31,7 @@ export function createResource<T, K = undefined>(config: ResourceConfig<K>) {
       queryFn: () => api.get<T>(config.path(param as K)),
       staleTime: config.staleTime,
       refetchInterval: config.refetchInterval ?? false,
+      ...(config.retry !== undefined && { retry: config.retry }),
       enabled: options?.enabled ?? true,
       placeholderData: options?.keepPrevious ? keepPreviousData : undefined,
     });
