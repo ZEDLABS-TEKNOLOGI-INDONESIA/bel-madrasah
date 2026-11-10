@@ -30,3 +30,23 @@ struct StaticCfg
     bool enabled = false;
     String ssid, ip, gw, mask, dns;
 };
+
+enum AudioCmdType : uint8_t
+{
+    AC_PLAY,
+    AC_STOP,
+    AC_VOLUME
+};
+
+struct AudioCmd
+{
+    AudioCmdType type;
+    uint16_t arg;
+};
+
+enum SlotLookup : uint8_t
+{
+    SLOT_OK,
+    SLOT_MISSING,
+    SLOT_CHANGED
+};

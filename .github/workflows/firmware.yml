@@ -1,0 +1,86 @@
+name: Firmware
+
+on:
+  push:
+    branches: [baremetal]
+    tags: ["fw-v*.*.*"]
+  pull_request:
+    branches: [baremetal]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  ARDUINO_CLI_VERSION: "1.5.1"
+
+jobs:
+  build:
+    name: Uji logika, kompilasi, dan rilis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: bel-madrasah
+
+      - name: Uji logika
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -o logic_test bel-madrasah/tests/logic_test.cpp
+          ./logic_test
+
+      - name: Pasang arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/v${ARDUINO_CLI_VERSION}/install.sh |
+            BINDIR="$HOME/.local/bin" sh -s "${ARDUINO_CLI_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Cache core dan library
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino
+          key: arduino-${{ runner.os }}-${{ hashFiles('bel-madrasah/sketch.yaml') }}
+
+      - name: Kompilasi
+        run: |
+          arduino-cli compile --profile bel-madrasah --warnings default \
+            --build-path build bel-madrasah 2>&1 | tee compile.log
+          if grep -E "bel-madrasah/[^ ]+\.(ino|h):[0-9]+:[0-9]+: warning" compile.log; then
+            echo "Ada peringatan kompilasi di kode sketch"; exit 1
+          fi
+
+      - name: Kemas binary
+        run: |
+          version="$(sed -n 's/^#define FW_VERSION "\(.*\)"/\1/p' bel-madrasah/bel-madrasah.ino)"
+          echo "FW_VERSION=$version" >> "$GITHUB_ENV"
+          mkdir dist
+          cp build/bel-madrasah.ino.merged.bin "dist/bel-madrasah-fw-$version-esp32c3-full.bin"
+          cp build/bel-madrasah.ino.bin "dist/bel-madrasah-fw-$version-esp32c3-app.bin"
+          (cd dist && sha256sum *.bin > checksums.txt)
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: firmware-${{ env.FW_VERSION }}
+          path: dist/
+
+      - name: Publikasikan release
+        if: startsWith(github.ref, 'refs/tags/fw-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          [ "$tag" = "fw-v${FW_VERSION}" ] || { echo "Tag $tag tidak sama dengan FW_VERSION ${FW_VERSION}"; exit 1; }
+          awk -v v="$tag" '/^## / { if (found) exit; if ($2 == v) { found = 1; next } } found { print }' \
+            bel-madrasah/CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "CHANGELOG.md tidak punya bagian ## $tag"; exit 1; }
+          gh release create "$tag" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Firmware ESP32 ${FW_VERSION}" \
+            --notes-file notes.md \
+            --latest=false
