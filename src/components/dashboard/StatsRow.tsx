@@ -81,7 +81,14 @@ export function StatsRow() {
       <Stat
         label="Scheduler"
         icon={<Activity size={13} />}
-        right={<Toggle checked={running} onChange={handleToggle} disabled={toggle.isPending} />}
+        right={
+          <Toggle
+            checked={running}
+            onChange={handleToggle}
+            disabled={toggle.isPending}
+            label={running ? "Hentikan scheduler" : "Jalankan scheduler"}
+          />
+        }
         value={
           <span style={{ color: running ? "var(--success)" : "var(--danger)" }}>
             {running ? "Berjalan" : "Dihentikan"}

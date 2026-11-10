@@ -3,7 +3,8 @@ import { FOOTER } from "../../lib/footer";
 import { LANDING } from "../../lib/landing";
 import { BAR_H } from "../../lib/layout";
 import { BellDemo } from "./BellDemo";
-import { container, eyebrow, primaryLink, secondaryLink } from "./landingStyle";
+import { LinkButton } from "../ui/LinkButton";
+import { container, eyebrow } from "./landingStyle";
 
 export function Hero() {
   const isMobile = useIsMobile();
@@ -38,12 +39,12 @@ export function Hero() {
               {LANDING.lead}
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <a href="/login" className="btn" style={primaryLink}>
+              <LinkButton href="/login" variant="primary" size="lg">
                 {LANDING.primaryCta}
-              </a>
-              <a href="#coba" className="btn" style={secondaryLink}>
+              </LinkButton>
+              <LinkButton href="#coba" size="lg">
                 {LANDING.secondaryCta}
-              </a>
+              </LinkButton>
             </div>
             {FOOTER.poweredBy && (
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>

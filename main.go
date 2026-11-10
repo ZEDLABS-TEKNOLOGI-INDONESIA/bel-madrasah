@@ -15,12 +15,7 @@ import (
 	"time"
 )
 
-const (
-	toneDir   = "/opt/bel-madrasah/tone"
-	dataDir   = "/opt/bel-madrasah/data"
-	staticDir = "/opt/bel-madrasah/static"
-	sleepSec  = 20 * time.Second
-)
+const sleepSec = 20 * time.Second
 
 var (
 	ffmpegPath string
@@ -86,14 +81,6 @@ func alsaDevice() string {
 	return "hw:0,0"
 }
 
-func volumeString() string {
-	cfg, err := loadConfig()
-	if err != nil {
-		return "0.85"
-	}
-	return fmt.Sprintf("%.2f", cfg.Volume)
-}
-
 func playSound(filePath string) {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		logMsg("file tidak ditemukan: " + filePath)
@@ -105,11 +92,14 @@ func playSound(filePath string) {
 	nowPlaying = filePath
 	nowPlayingMu.Unlock()
 
-	vol := volumeString()
+	cfg, err := loadConfig()
+	if err != nil {
+		cfg = defaultConfig()
+	}
 	cmd := exec.Command(ffmpegPath,
 		"-hide_banner", "-loglevel", "error",
 		"-i", filePath,
-		"-filter:a", "volume="+vol,
+		"-filter:a", audioFilterChain(cfg),
 		"-f", "alsa", alsaDevice(),
 	)
 	if err := cmd.Start(); err != nil {

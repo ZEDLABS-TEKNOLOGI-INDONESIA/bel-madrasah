@@ -3,9 +3,10 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { APP } from "../../lib/app.config";
 import { BAR_H } from "../../lib/layout";
-import { NAV_LINKS } from "../../lib/landing";
+import { LANDING, NAV_LINKS } from "../../lib/landing";
 import { getTheme, toggleTheme } from "../../lib/theme";
-import { container, navLink } from "./landingStyle";
+import { LinkButton } from "../ui/LinkButton";
+import { container } from "./landingStyle";
 
 const iconButton: CSSProperties = {
   background: "var(--bg-tertiary)",
@@ -92,9 +93,9 @@ export function LandingNav() {
           >
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </button>
-          <a href="/login" className="btn" style={navLink}>
-            Masuk
-          </a>
+          <LinkButton href="/login" variant="primary" size="sm">
+            {LANDING.navCta}
+          </LinkButton>
         </div>
       </nav>
     </header>

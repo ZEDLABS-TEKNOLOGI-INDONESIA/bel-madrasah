@@ -63,6 +63,7 @@ export const LANDING = {
   headline: "Bel berbunyi tepat waktu. Guru piket tidak perlu menekan apa pun.",
   lead: "Susun jadwal sekali, pilih nada, dan tandai hari libur. Scheduler berjalan di server, jadi bel tetap berbunyi walaupun panel ditutup.",
   primaryCta: "Masuk ke panel",
+  navCta: "Masuk",
   secondaryCta: "Coba demonya",
   madeBy: "Dibuat oleh",
   stepsEyebrow: "Cara kerja",

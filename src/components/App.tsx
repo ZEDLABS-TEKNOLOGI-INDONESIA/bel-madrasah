@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import React, { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "react-hot-toast";
 import { queryClient } from "../lib/queryClient";
 import { initRouter } from "../lib/router";
@@ -20,7 +20,7 @@ const PengaturanPage = lazy(() =>
   import("./pengaturan/PengaturanPage").then((m) => ({ default: m.PengaturanPage })),
 );
 
-const PAGES: Record<PageKey, React.ReactNode> = {
+const PAGES: Record<PageKey, ReactNode> = {
   dashboard: <DashboardPage />,
   jadwal: <JadwalPage />,
   audio: <AudioPage />,

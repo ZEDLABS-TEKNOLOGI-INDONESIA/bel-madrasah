@@ -45,14 +45,17 @@ export function Card({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 12,
+            flexWrap: "wrap",
+            gap: "8px 12px",
             minHeight: 48,
             padding: "8px 16px",
             borderBottom: "1px solid var(--border)",
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{title}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", minWidth: 0 }}>
+            {title}
+          </span>
           {action}
         </div>
       )}

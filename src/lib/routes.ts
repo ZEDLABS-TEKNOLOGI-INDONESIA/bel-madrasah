@@ -15,6 +15,7 @@ export interface RouteDef {
   key: PageKey;
   path: string;
   label: string;
+  short?: string;
   title: string;
   icon: LucideIcon;
 }
@@ -25,7 +26,14 @@ export const ROUTES: readonly RouteDef[] = [
   { key: "audio", path: "/audio", label: "Audio", title: "Audio", icon: Music2 },
   { key: "libur", path: "/libur", label: "Libur", title: "Hari Libur", icon: CalendarOff },
   { key: "log", path: "/log", label: "Log", title: "Log Aktivitas", icon: ScrollText },
-  { key: "settings", path: "/settings", label: "Pengaturan", title: "Pengaturan", icon: Settings2 },
+  {
+    key: "settings",
+    path: "/settings",
+    label: "Pengaturan",
+    short: "Setelan",
+    title: "Pengaturan",
+    icon: Settings2,
+  },
 ];
 
 export const GUEST_PATHS: readonly string[] = ["/login", "/landing"];

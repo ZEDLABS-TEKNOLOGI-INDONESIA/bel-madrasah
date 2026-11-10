@@ -1,15 +1,16 @@
 import { ChevronLeft, LogOut, type LucideIcon } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { APP } from "../../lib/app.config";
 import { logout } from "../../lib/auth";
 import { BAR_H, FOOT_H, SIDEBAR_W, SIDEBAR_W_COLLAPSED } from "../../lib/layout";
 import { prefetch } from "../../lib/router";
 import { ROUTES } from "../../lib/routes";
 
-type NavItem = { label: string; href: string; Icon: LucideIcon };
+type NavItem = { label: string; short: string; href: string; Icon: LucideIcon };
 
 const ITEMS: NavItem[] = ROUTES.map((r) => ({
   label: r.label,
+  short: r.short ?? r.label,
   href: r.path,
   Icon: r.icon,
 }));
@@ -40,6 +41,8 @@ function SidebarLink(props: { item: NavItem; cur: string; expanded: boolean }) {
     <a
       href={href}
       title={label}
+      aria-label={props.expanded ? undefined : label}
+      aria-current={on ? "page" : undefined}
       className={on ? undefined : "row-hover"}
       onMouseEnter={() => prefetch(href)}
       onClick={(e) => {
@@ -68,11 +71,13 @@ function SidebarLink(props: { item: NavItem; cur: string; expanded: boolean }) {
 }
 
 function BottomLink(props: { item: NavItem; cur: string }) {
-  const { label, href, Icon } = props.item;
+  const { label, short, href, Icon } = props.item;
   const on = isActive(href, props.cur);
   return (
     <a
       href={href}
+      aria-label={label}
+      aria-current={on ? "page" : undefined}
       onTouchStart={() => prefetch(href)}
       onClick={(e) => {
         e.preventDefault();
@@ -80,10 +85,11 @@ function BottomLink(props: { item: NavItem; cur: string }) {
       }}
       style={{
         flex: 1,
+        minWidth: 0,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: "8px 0",
+        padding: "8px 2px",
         gap: 3,
         textDecoration: "none",
         color: on ? "var(--accent)" : "var(--text-muted)",
@@ -92,13 +98,22 @@ function BottomLink(props: { item: NavItem; cur: string }) {
         fontWeight: on ? 600 : 400,
       }}
     >
-      <Icon size={20} />
-      {label}
+      <Icon size={20} aria-hidden="true" />
+      <span
+        style={{
+          maxWidth: "100%",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {short}
+      </span>
     </a>
   );
 }
 
-const footButton: React.CSSProperties = {
+const footButton: CSSProperties = {
   width: "100%",
   height: FOOT_H,
   boxSizing: "border-box",
@@ -178,7 +193,13 @@ export function Sidebar(props: { expanded: boolean; onToggle: () => void }) {
         ))}
       </nav>
 
-      <button onClick={logout} className="row-hover" title="Keluar" style={footButton}>
+      <button
+        onClick={logout}
+        className="row-hover"
+        title="Keluar"
+        aria-label="Keluar"
+        style={footButton}
+      >
         <LogOut size={16} style={{ flexShrink: 0 }} />
         {expanded && <span>Keluar</span>}
       </button>
@@ -187,6 +208,8 @@ export function Sidebar(props: { expanded: boolean; onToggle: () => void }) {
         onClick={props.onToggle}
         className="row-hover"
         title={expanded ? "Ciutkan" : "Perluas"}
+        aria-label={expanded ? "Ciutkan sidebar" : "Perluas sidebar"}
+        aria-expanded={expanded}
         style={footButton}
       >
         <ChevronLeft

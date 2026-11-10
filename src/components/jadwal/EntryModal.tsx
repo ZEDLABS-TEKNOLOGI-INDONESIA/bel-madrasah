@@ -4,6 +4,7 @@ import { TONE_DIR } from "../../lib/constants";
 import { baseName } from "../../lib/format";
 import type { JadwalEntry } from "../../lib/types";
 import { Button } from "../ui/Button";
+import { Chip } from "../ui/Chip";
 import { Field } from "../ui/Field";
 import { Modal } from "../ui/Modal";
 
@@ -84,7 +85,15 @@ export function EntryModal({
         </Field>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 4,
+            }}
+          >
             <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
               Berlaku pada hari
             </span>
@@ -98,30 +107,11 @@ export function EntryModal({
             </div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {hariList.map((h) => {
-              const on = days.includes(h);
-              return (
-                <button
-                  key={h}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => toggleDay(h)}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 99,
-                    border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
-                    background: on ? "var(--accent-soft)" : "transparent",
-                    color: on ? "var(--accent)" : "var(--text-muted)",
-                    fontFamily: "var(--font)",
-                    fontSize: 12,
-                    fontWeight: on ? 600 : 400,
-                    cursor: "pointer",
-                  }}
-                >
-                  {h}
-                </button>
-              );
-            })}
+            {hariList.map((h) => (
+              <Chip key={h} active={days.includes(h)} onClick={() => toggleDay(h)}>
+                {h}
+              </Chip>
+            ))}
           </div>
         </div>
 

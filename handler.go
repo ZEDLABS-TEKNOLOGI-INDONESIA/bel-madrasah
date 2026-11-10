@@ -54,7 +54,7 @@ func registerRoutes(mux *http.ServeMux) {
 		w.Header().Set("Cache-Control", "public, max-age=604800")
 		http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
 	})
-	
+
 	for _, name := range []string{"icon.svg", "favicon.ico", "manifest.json", "robots.txt"} {
 		serveFile := filepath.Join(staticDir, name)
 		mux.HandleFunc("/"+name, func(w http.ResponseWriter, r *http.Request) {
@@ -76,12 +76,14 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/tones", requireAuth(handleTones))
 	mux.HandleFunc("/api/tones/upload", requireAuth(handleTonesUpload))
 	mux.HandleFunc("/api/tones/delete", requireAuth(handleTonesDelete))
+	mux.HandleFunc("/api/tones/rename", requireAuth(handleTonesRename))
 	mux.HandleFunc("/api/tones/preview", requireAuth(handleTonesPreview))
 	mux.HandleFunc("/api/tones/stop", requireAuth(handleTonesStop))
 	mux.HandleFunc("/api/tones/", requireAuth(handleTonesFile))
 
 	mux.HandleFunc("/api/config", requireAuth(handleConfig))
 	mux.HandleFunc("/api/volume", requireAuth(handleVolume))
+	mux.HandleFunc("/api/equalizer", requireAuth(handleEqualizer))
 
 	mux.HandleFunc("/api/libur", requireAuth(handleLibur))
 	mux.HandleFunc("/api/libur/nasional", requireAuth(handleLiburNasional))
@@ -190,11 +192,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie(cookieName)
-	if err == nil {
-		sessionsMu.Lock()
-		delete(sessions, c.Value)
-		sessionsMu.Unlock()
+	if c, err := r.Cookie(cookieName); err == nil {
+		deleteSession(c.Value)
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
@@ -278,6 +277,7 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 
 		existing, _ := loadConfig()
 		body.LiburDates = existing.LiburDates
+		body.Equalizer = existing.Equalizer
 		if body.DisabledDays == nil {
 			body.DisabledDays = existing.DisabledDays
 		}
@@ -995,6 +995,88 @@ func handleTonesDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	logMsg("audio dihapus: " + filename)
 	jsonOK(w, map[string]string{"message": "file berhasil dihapus"})
+}
+
+var audioExts = map[string]bool{".mp3": true, ".wav": true, ".ogg": true}
+
+func renameTarget(oldName, newName string) (string, error) {
+	newName = strings.TrimSpace(newName)
+	if strings.ContainsAny(newName, "/\\") {
+		return "", errors.New("nama file tidak boleh mengandung garis miring")
+	}
+	ext := strings.ToLower(filepath.Ext(oldName))
+	if audioExts[strings.ToLower(filepath.Ext(newName))] {
+		newName = strings.TrimSuffix(newName, filepath.Ext(newName))
+	}
+	if newName == "" {
+		return "", errors.New("nama file tidak boleh kosong")
+	}
+	return sanitizeFilename(newName + ext), nil
+}
+
+func handleTonesRename(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct {
+		Filename string `json:"filename"`
+		NewName  string `json:"new_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "request tidak valid", http.StatusBadRequest)
+		return
+	}
+	oldName, ok := safeFilename(body.Filename)
+	if !ok || oldName != body.Filename || !audioExts[strings.ToLower(filepath.Ext(oldName))] {
+		jsonError(w, "nama file tidak valid", http.StatusBadRequest)
+		return
+	}
+	newName, err := renameTarget(oldName, body.NewName)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	oldPath := filepath.Join(toneDir, oldName)
+	newPath := filepath.Join(toneDir, newName)
+	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
+		jsonError(w, "file tidak ditemukan", http.StatusNotFound)
+		return
+	}
+	if newName == oldName {
+		jsonOK(w, map[string]any{"message": "nama file tidak berubah", "filename": newName, "updated": 0})
+		return
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		jsonError(w, "file "+newName+" sudah ada", http.StatusConflict)
+		return
+	}
+	if getNowPlaying() == oldName {
+		stopAllProcs()
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		jsonError(w, "gagal mengganti nama file", http.StatusInternalServerError)
+		return
+	}
+
+	updated := 0
+	err = updateJadwal(func(j ModeJadwal) bool {
+		updated = replaceAudioPath(j, oldPath, newPath)
+		return updated > 0
+	})
+	if err != nil {
+		_ = os.Rename(newPath, oldPath)
+		jsonError(w, "gagal memperbarui jadwal, nama file dikembalikan", http.StatusInternalServerError)
+		return
+	}
+
+	logMsg(fmt.Sprintf("audio diganti nama: %s -> %s (%d jadwal)", oldName, newName, updated))
+	jsonOK(w, map[string]any{
+		"message":  "nama file berhasil diganti",
+		"filename": newName,
+		"updated":  updated,
+	})
 }
 
 func handleTonesPreview(w http.ResponseWriter, r *http.Request) {

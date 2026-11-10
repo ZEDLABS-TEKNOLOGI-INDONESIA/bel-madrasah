@@ -1,10 +1,10 @@
-import React from "react";
+import type { CSSProperties } from "react";
 
 interface SkeletonProps {
   width?: string | number;
   height?: string | number;
   radius?: string | number;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }
 
 export function Skeleton({

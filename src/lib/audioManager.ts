@@ -1,12 +1,67 @@
 type Listener = () => void;
 
+export interface BrowserEqualizer {
+  enabled: boolean;
+  gains: readonly number[];
+  frequencies: readonly number[];
+}
+
+const TWO_OCTAVE_Q = 2 / 3;
+
 class AudioManager {
   private audio: HTMLAudioElement | null = null;
   private _playing: string | null = null;
   private listeners = new Set<Listener>();
+  private ctx: AudioContext | null = null;
+  private filters: BiquadFilterNode[] = [];
+  private eq: BrowserEqualizer | null = null;
 
   private notify() {
     this.listeners.forEach((fn) => fn());
+  }
+
+  setEqualizer(eq: BrowserEqualizer | null): void {
+    this.eq = eq;
+    this.applyGains();
+  }
+
+  private applyGains() {
+    const eq = this.eq;
+    this.filters.forEach((f, i) => {
+      f.gain.value = eq?.enabled ? (eq.gains[i] ?? 0) : 0;
+    });
+  }
+
+  private route(a: HTMLAudioElement) {
+    this.filters = [];
+    const eq = this.eq;
+    if (!eq || typeof AudioContext === "undefined") return;
+    try {
+      this.ctx ??= new AudioContext();
+      const ctx = this.ctx;
+      const last = eq.frequencies.length - 1;
+      const nodes = eq.frequencies.map((freq, i) => {
+        const node = ctx.createBiquadFilter();
+        node.type = i === 0 ? "lowshelf" : i === last ? "highshelf" : "peaking";
+        node.frequency.value = freq;
+        node.Q.value = TWO_OCTAVE_Q;
+        return node;
+      });
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -1;
+      limiter.ratio.value = 20;
+      let tail: AudioNode = ctx.createMediaElementSource(a);
+      for (const node of [...nodes, limiter]) {
+        tail.connect(node);
+        tail = node;
+      }
+      tail.connect(ctx.destination);
+      this.filters = nodes;
+      this.applyGains();
+      void ctx.resume();
+    } catch {
+      this.filters = [];
+    }
   }
 
   async play(filename: string, url: string): Promise<void> {
@@ -17,11 +72,13 @@ class AudioManager {
 
     const a = new Audio(url);
     this.audio = a;
+    this.route(a);
 
     const clear = (name: string) => {
       if (this._playing === name) {
         this._playing = null;
         this.audio = null;
+        this.filters = [];
         this.notify();
       }
     };
@@ -43,6 +100,7 @@ class AudioManager {
       this.audio.pause();
       this.audio = null;
     }
+    this.filters = [];
     this._playing = null;
     this.notify();
   }

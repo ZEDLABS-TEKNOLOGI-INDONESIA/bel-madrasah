@@ -6,10 +6,10 @@ import { ALL_MODES, MODE_LABELS, TONE_DIR } from "../../lib/constants";
 import type { JadwalEntry } from "../../lib/types";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { Chip } from "../ui/Chip";
 import { EmptyState } from "../ui/EmptyState";
 import { PageHeader } from "../ui/PageHeader";
 import { SkeletonCard } from "../ui/Skeleton";
-import { Chip } from "./Chip";
 import { EntryModal } from "./EntryModal";
 import { GroupSection } from "./GroupSection";
 import { buildGroups, type Item } from "./grouping";
@@ -68,11 +68,13 @@ export function JadwalPage() {
         }
       />
 
-      <Card
-        title="Jadwal bel"
-        action={
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label htmlFor="jadwal-mode" style={{ fontSize: 12, color: "var(--text-muted)" }}>
+      <Card title="Jadwal bel" bodyStyle={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 180px" }}>
+            <label
+              htmlFor="jadwal-mode"
+              style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}
+            >
               Mode
             </label>
             <select
@@ -82,7 +84,6 @@ export function JadwalPage() {
                 setMode(e.target.value);
                 setFilter("all");
               }}
-              style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
             >
               {ALL_MODES.map((m) => (
                 <option key={m} value={m}>
@@ -91,19 +92,17 @@ export function JadwalPage() {
                 </option>
               ))}
             </select>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<RotateCcw size={12} />}
-              loading={actions.resetPending}
-              onClick={actions.reset}
-            >
-              Reset ke default
-            </Button>
           </div>
-        }
-        bodyStyle={{ display: "flex", flexDirection: "column", gap: 16 }}
-      >
+          <Button
+            variant="secondary"
+            icon={<RotateCcw size={13} />}
+            loading={actions.resetPending}
+            onClick={actions.reset}
+          >
+            Reset ke default
+          </Button>
+        </div>
+
         {isLoading ? (
           <SkeletonCard />
         ) : (
@@ -116,48 +115,33 @@ export function JadwalPage() {
                 {hariList.map((h) => {
                   const off = disabledDays.includes(h);
                   return (
-                    <button
+                    <Chip
                       key={h}
-                      onClick={() => actions.toggleDay(h, off)}
+                      active={!off}
+                      dot={off ? "var(--danger)" : "var(--success)"}
                       disabled={actions.togglePending}
-                      aria-pressed={!off}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "4px 12px",
-                        borderRadius: 99,
-                        border: "1px solid var(--border)",
-                        background: "transparent",
-                        color: off ? "var(--text-muted)" : "var(--text)",
-                        fontFamily: "var(--font)",
-                        fontSize: 12,
-                        cursor: "pointer",
-                        textDecoration: off ? "line-through" : "none",
-                      }}
+                      title={off ? `Aktifkan ${h}` : `Nonaktifkan ${h}`}
+                      onClick={() => actions.toggleDay(h, off)}
                     >
-                      <span
-                        style={{
-                          width: 7,
-                          height: 7,
-                          borderRadius: "50%",
-                          background: off ? "var(--danger)" : "var(--success)",
-                        }}
-                      />
                       {h}
-                    </button>
+                    </Chip>
                   );
                 })}
               </div>
             </div>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              <Chip active={activeFilter === "all"} onClick={() => setFilter("all")}>
-                Semua ({total})
+              <Chip active={activeFilter === "all"} count={total} onClick={() => setFilter("all")}>
+                Semua
               </Chip>
               {groups.map((g) => (
-                <Chip key={g.key} active={activeFilter === g.key} onClick={() => setFilter(g.key)}>
-                  {g.label} ({g.items.length})
+                <Chip
+                  key={g.key}
+                  active={activeFilter === g.key}
+                  count={g.items.length}
+                  onClick={() => setFilter(g.key)}
+                >
+                  {g.label}
                 </Chip>
               ))}
             </div>

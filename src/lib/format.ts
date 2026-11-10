@@ -22,3 +22,19 @@ export function formatDate(dateStr: string, withYear = true): string {
       : { day: "numeric", month: "long" },
   );
 }
+
+export function formatFrequency(hz: number): string {
+  if (hz < 1000) return `${hz} Hz`;
+  const k = hz / 1000;
+  return `${Number.isInteger(k) ? k : k.toFixed(1)} kHz`;
+}
+
+export function formatGain(db: number): string {
+  if (db === 0) return "0 dB";
+  const text = Number.isInteger(db) ? String(Math.abs(db)) : Math.abs(db).toFixed(1);
+  return `${db > 0 ? "+" : "-"}${text} dB`;
+}
+
+export function stripAudioExt(filename: string): string {
+  return filename.replace(/\.(mp3|wav|ogg)$/i, "");
+}

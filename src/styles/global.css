@@ -294,3 +294,23 @@ button {
   background: transparent;
   color: var(--text-muted);
 }
+
+.slider-input:focus-visible + .slider-thumb {
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.select-sm {
+  width: auto;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  input:not([type="range"]),
+  select,
+  textarea,
+  .select-sm {
+    font-size: 16px;
+  }
+}

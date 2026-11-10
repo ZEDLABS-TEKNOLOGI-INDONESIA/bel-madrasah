@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,7 +17,6 @@ import (
 )
 
 const (
-	usersFile       = dataDir + "/users.json"
 	sessionTimeout  = 8 * time.Hour
 	cookieName      = "bel_session"
 	maxLoginFails   = 5
@@ -31,8 +31,8 @@ type User struct {
 }
 
 type Session struct {
-	Username  string
-	ExpiresAt time.Time
+	Username  string    `json:"username"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 type loginAttempt struct {
@@ -77,8 +77,59 @@ func initAuth() error {
 		logMsg("akun administrator default dibuat - username: administrator | password: P@ssw0rd")
 		logMsg("segera ganti password melalui halaman pengaturan")
 	}
+	loadSessions()
 	go cleanupSessions()
 	return nil
+}
+
+func tokenKey(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func loadSessions() {
+	data, err := os.ReadFile(sessionsFile)
+	if err != nil {
+		return
+	}
+	var stored map[string]*Session
+	if err := json.Unmarshal(data, &stored); err != nil {
+		logMsg("sessions.json tidak valid, diabaikan")
+		return
+	}
+	now := time.Now()
+	n := 0
+	sessionsMu.Lock()
+	for key, s := range stored {
+		if s != nil && now.Before(s.ExpiresAt) {
+			sessions[key] = s
+			n++
+		}
+	}
+	sessionsMu.Unlock()
+	if n > 0 {
+		logMsg(fmt.Sprintf("%d sesi dipulihkan", n))
+	}
+}
+
+func persistSessionsLocked() {
+	data, err := json.Marshal(sessions)
+	if err != nil {
+		return
+	}
+	if err := atomicWrite(sessionsFile, data, 0600); err != nil {
+		logMsg("gagal menyimpan sesi: " + err.Error())
+	}
+}
+
+func deleteSession(token string) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	key := tokenKey(token)
+	if _, ok := sessions[key]; ok {
+		delete(sessions, key)
+		persistSessionsLocked()
+	}
 }
 
 func cleanupSessions() {
@@ -88,16 +139,20 @@ func cleanupSessions() {
 		now := time.Now()
 
 		sessionsMu.Lock()
-		for token, s := range sessions {
+		removed := false
+		for key, s := range sessions {
 			if now.After(s.ExpiresAt) {
-				delete(sessions, token)
+				delete(sessions, key)
+				removed = true
 			}
+		}
+		if removed {
+			persistSessionsLocked()
 		}
 		sessionsMu.Unlock()
 
 		loginAttemptsMu.Lock()
 		for ip, a := range loginAttempts {
-
 			if now.After(a.lockUntil) {
 				delete(loginAttempts, ip)
 			}
@@ -140,10 +195,11 @@ func createSession(username string) (string, error) {
 		return "", err
 	}
 	sessionsMu.Lock()
-	sessions[token] = &Session{
+	sessions[tokenKey(token)] = &Session{
 		Username:  username,
 		ExpiresAt: time.Now().Add(sessionTimeout),
 	}
+	persistSessionsLocked()
 	sessionsMu.Unlock()
 	return token, nil
 }
@@ -154,7 +210,7 @@ func getSession(r *http.Request) *Session {
 		return nil
 	}
 	sessionsMu.RLock()
-	s, ok := sessions[c.Value]
+	s, ok := sessions[tokenKey(c.Value)]
 	sessionsMu.RUnlock()
 	if !ok || time.Now().After(s.ExpiresAt) {
 		return nil

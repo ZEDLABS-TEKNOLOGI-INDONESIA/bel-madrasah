@@ -9,6 +9,7 @@ import type { NasionalItem } from "../../lib/types";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { Chip } from "../ui/Chip";
 import { EmptyState } from "../ui/EmptyState";
 import { ListRow } from "../ui/ListRow";
 import { PageHeader } from "../ui/PageHeader";
@@ -110,8 +111,8 @@ function LiburNasionalPanel() {
         <select
           value={year}
           aria-label="Tahun"
+          className="select-sm"
           onChange={(e) => handleYearChange(Number(e.target.value))}
-          style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
         >
           {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
             <option key={y} value={y}>
@@ -124,44 +125,16 @@ function LiburNasionalPanel() {
     >
       {!isLoading && items.length > 0 && (
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          {tabs.map((tab) => {
-            const active = showCuti === tab.value;
-            return (
-              <button
-                key={tab.label}
-                onClick={() => setShowCuti(tab.value)}
-                aria-pressed={active}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "4px 10px",
-                  borderRadius: 99,
-                  border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-                  background: active ? "var(--accent-soft)" : "transparent",
-                  color: active ? "var(--accent)" : "var(--text-muted)",
-                  fontSize: 12,
-                  fontWeight: active ? 600 : 400,
-                  fontFamily: "var(--font)",
-                  cursor: "pointer",
-                }}
-              >
-                {tab.label}
-                <span
-                  style={{
-                    background: active ? "var(--accent)" : "var(--bg-tertiary)",
-                    color: active ? "#fff" : "var(--text-muted)",
-                    borderRadius: 99,
-                    fontSize: 10,
-                    fontWeight: 600,
-                    padding: "1px 6px",
-                  }}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
+          {tabs.map((tab) => (
+            <Chip
+              key={tab.label}
+              active={showCuti === tab.value}
+              count={tab.count}
+              onClick={() => setShowCuti(tab.value)}
+            >
+              {tab.label}
+            </Chip>
+          ))}
           {cutis.length > 0 && (
             <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 2 }}>
               ({cutis.length} cuti bersama)
