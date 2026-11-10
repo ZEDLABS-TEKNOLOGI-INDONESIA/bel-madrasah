@@ -22,6 +22,7 @@ Rilis pertama yang diterbitkan dari branch `baremetal`. Mencakup semua perbaikan
 - Pembaruan firmware dari file atau dari GitHub Releases (verifikasi TLS dan SHA-256), otomatis setiap 6 jam saat aman, dengan rollback bila firmware baru gagal berjalan
 - Backup dan pulihkan jadwal, nama track, mode, hari libur, dan pengaturan
 - Jadwal hari ini dengan bel berikutnya, bel terakhir, sumber waktu, dan versi firmware di Dashboard
+- Jadwal bawaan disamakan dengan aplikasi server (branch `main`), termasuk jadwal Ramadhan, PTS, dan PAS. Jadwal bawaan hanya dipakai bila perangkat belum punya jadwal tersimpan
 
 ### Perbaikan logika
 
