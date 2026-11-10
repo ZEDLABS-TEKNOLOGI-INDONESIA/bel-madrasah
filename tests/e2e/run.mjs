@@ -57,7 +57,7 @@ try {
   check("login", Boolean(token));
 
   chrome = await launchChrome(join(work, "profile"));
-  const page = await CdpPage.open(chrome.port);
+  const page = await CdpPage.open(chrome);
 
   await page.goto(`${BASE}/login`);
   await page.eval(`localStorage.setItem("install-dismissed-at", String(Date.now()))`);

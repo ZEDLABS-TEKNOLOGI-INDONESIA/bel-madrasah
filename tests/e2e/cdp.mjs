@@ -27,22 +27,31 @@ export async function launchChrome(profileDir, port = 9339) {
       `--user-data-dir=${profileDir}`,
       "about:blank",
     ],
-    { stdio: "ignore" },
+    { stdio: ["ignore", "ignore", "pipe"] },
   );
-  return { port, kill: () => proc.kill() };
+  let stderr = "";
+  let exited = null;
+  proc.stderr.on("data", (d) => (stderr = (stderr + d).slice(-4000)));
+  proc.on("exit", (code) => (exited = code));
+  return {
+    port,
+    kill: () => proc.kill(),
+    diagnostics: () => `exit=${exited ?? "masih berjalan"}\n${stderr}`,
+  };
 }
 
 export class CdpPage {
-  static async open(port) {
+  static async open(chrome) {
+    const port = chrome.port;
     let target;
-    for (let i = 0; i < 100 && !target; i++) {
+    for (let i = 0; i < 300 && !target; i++) {
       try {
         const list = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
         target = list.find((t) => t.type === "page");
       } catch {}
       if (!target) await sleep(100);
     }
-    if (!target) throw new Error("Chromium tidak merespons");
+    if (!target) throw new Error(`Chromium tidak merespons dalam 30 detik\n${chrome.diagnostics()}`);
     const page = new CdpPage(new WebSocket(target.webSocketDebuggerUrl));
     await new Promise((r) => (page.ws.onopen = r));
     await page.send("Page.enable");
