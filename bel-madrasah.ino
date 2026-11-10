@@ -15,7 +15,10 @@
 #include <HardwareSerial.h>
 #include <DFRobotDFPlayerMini.h>
 #include "types.h"
+#include "bell_logic.h"
 #include "index_html.h"
+
+#define FW_VERSION "1.1.0"
 
 #define I2C_SDA_PIN 8
 #define I2C_SCL_PIN 9
@@ -37,9 +40,15 @@ const char *TRACKS_FILE = "/tracks.json";
 
 const size_t MAX_SLOTS = 300;
 const size_t MAX_TRACKS = 60;
-const size_t SCHED_DOC_SIZE = 49152;
+const uint16_t MAX_TRACK_NO = 2999;
 const unsigned long NTP_SYNC_INTERVAL = 3600000UL;
+const unsigned long NTP_RETRY_INTERVAL = 60000UL;
 const unsigned long DFP_RETRY_INTERVAL = 5000UL;
+const unsigned long RTC_CHECK_INTERVAL = 5000UL;
+const int RTC_STOP_LIMIT = 3;
+const unsigned long PLAY_TIMEOUT = 15UL * 60UL * 1000UL;
+const unsigned long BELL_TICK_MS = 300;
+const time_t SYSTEM_TIME_VALID_AFTER = 1735689600;
 
 const char *modeCode(ScheduleMode m)
 {
@@ -56,6 +65,10 @@ ScheduleMode modeFromCode(const String &s)
         return MODE_PAS;
     return MODE_REGULER;
 }
+bool validModeCode(const String &s)
+{
+    return s == "reguler" || s == "ramadhan" || s == "pts" || s == "pas";
+}
 
 RTC_DS1307 rtc;
 Adafruit_SSD1306 oled(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
@@ -67,18 +80,18 @@ DFRobotDFPlayerMini dfPlayer;
 std::vector<BellSlot> schedule;
 std::vector<TrackInfo> trackList;
 StaticCfg staticCfg;
-int currentVolume = 20;
-bool holidayMode = false;
-ScheduleMode activeMode = MODE_REGULER;
+volatile int currentVolume = 20;
+volatile bool holidayMode = false;
+volatile ScheduleMode activeMode = MODE_REGULER;
 
-// BARU: pengaturan mode tidur (jam disimpan sebagai menit sejak 00:00)
 volatile bool sleepEnabled = false;
-volatile int sleepStartMin = 22 * 60;
+volatile int sleepStartMin = 18 * 60;
 volatile int sleepEndMin = 5 * 60;
 volatile bool sleepOledOff = true;
-volatile bool sleeping = false; // status saat ini, diperbarui di bellTask
+volatile bool sleeping = false;
 
 volatile bool dfpReady = false;
+volatile bool sdPresent = true;
 volatile bool wifiSetupDone = false;
 bool apActive = false;
 volatile bool restartPending = false;
@@ -89,47 +102,67 @@ unsigned long lastNtpAttempt = 0;
 bool ntpLastOk = false;
 uint32_t lastTriggeredMinute = 0;
 
-// Penanda kepercayaan waktu
-const int MIN_VALID_YEAR = 2025;
 volatile bool timeTrusted = false;
 volatile bool rtcPresent = false;
-volatile uint32_t lastUnixSeen = 0;
+bell::TimeGuard timeGuard;
 
 volatile bool audioPlaying = false;
-uint16_t playingTrack = 0;
+volatile uint16_t playingTrack = 0;
 unsigned long playStartedAt = 0;
+String lastDfpError;
+String lastBell;
 
 SemaphoreHandle_t i2cMutex;
 SemaphoreHandle_t dataMutex;
-SemaphoreHandle_t dfpMutex;
+SemaphoreHandle_t timeMutex;
+SemaphoreHandle_t cfgMutex;
+SemaphoreHandle_t infoMutex;
+
+QueueHandle_t audioQueue;
 
 struct Lock
 {
     SemaphoreHandle_t m;
-    Lock(SemaphoreHandle_t mm)
-        : m(mm)
-    {
-        xSemaphoreTake(m, portMAX_DELAY);
-    }
-    ~Lock()
-    {
-        xSemaphoreGive(m);
-    }
+    explicit Lock(SemaphoreHandle_t mm) : m(mm) { xSemaphoreTake(m, portMAX_DELAY); }
+    ~Lock() { xSemaphoreGive(m); }
 };
 
-DateTime getNow()
+void setInfo(String &field, const String &value)
+{
+    Lock l(infoMutex);
+    field = value;
+}
+String getInfo(const String &field)
+{
+    Lock l(infoMutex);
+    return field;
+}
+
+bool queueAudio(AudioCmdType type, uint16_t arg = 0)
+{
+    AudioCmd c{type, arg};
+    return xQueueSend(audioQueue, &c, 0) == pdTRUE;
+}
+
+DateTime readRtc()
 {
     Lock l(i2cMutex);
     return rtc.now();
 }
 
-void setRtc(const DateTime &dt)
+DateTime readSystemClock()
 {
-    {
-        Lock l(i2cMutex);
-        rtc.adjust(dt);
-    }
-    lastUnixSeen = 0; // reset baseline supaya lompatan sah tidak dianggap anomali
+    time_t t = time(nullptr);
+    if (t < SYSTEM_TIME_VALID_AFTER)
+        return DateTime((uint32_t)0);
+    struct tm ti;
+    localtime_r(&t, &ti);
+    return DateTime(ti.tm_year + 1900, ti.tm_mon + 1, ti.tm_mday, ti.tm_hour, ti.tm_min, ti.tm_sec);
+}
+
+DateTime getNow()
+{
+    return rtcPresent ? readRtc() : readSystemClock();
 }
 
 bool rtcRunning()
@@ -138,8 +171,6 @@ bool rtcRunning()
     return rtc.isrunning();
 }
 
-// Penanda "waktu pernah diverifikasi" disimpan di NVRAM DS1307.
-// NVRAM ikut hilang saat listrik padam tanpa baterai, jadi penanda otomatis terhapus.
 const uint8_t TRUST_ADDR = 0;
 const uint8_t TRUST_MAGIC = 0xA5;
 
@@ -158,47 +189,18 @@ void setTrusted(bool t)
         markTrusted(t);
 }
 
-void validateTime(const DateTime &now)
+void applyVerifiedTime(const DateTime *dt)
 {
-    if (now.year() < MIN_VALID_YEAR || now.year() > 2099)
+    Lock t(timeMutex);
+    if (dt && rtcPresent)
     {
-        if (timeTrusted)
-            Serial.printf("Waktu tidak valid (tahun %d), bel dikunci\n", now.year());
-        setTrusted(false);
-        lastUnixSeen = 0;
-        return;
+        Lock l(i2cMutex);
+        rtc.adjust(*dt);
     }
-
-    uint32_t u = now.unixtime();
-    if (lastUnixSeen != 0)
-    {
-        long d = (long)u - (long)lastUnixSeen;
-        // Loop berjalan ~300 ms. Mundur atau lompat > 120 dtk = anomali
-        if (d < 0 || d > 120)
-        {
-            if (timeTrusted)
-                Serial.printf("Lompatan waktu terdeteksi (%ld dtk), bel dikunci\n", d);
-            setTrusted(false);
-        }
-    }
-    lastUnixSeen = u;
+    timeGuard.reset();
+    setTrusted(true);
 }
 
-// BARU: apakah jam saat ini masuk rentang tidur (mendukung lewat tengah malam)
-bool isSleepTime(const DateTime &now)
-{
-    if (!sleepEnabled)
-        return false;
-    int s = sleepStartMin, e = sleepEndMin;
-    if (s == e)
-        return false;
-    int m = now.hour() * 60 + now.minute();
-    if (s < e)
-        return m >= s && m < e;
-    return m >= s || m < e;
-}
-
-// BARU: matikan/nyalakan panel OLED
 bool oledIsOff = false;
 void oledPower(bool on)
 {
@@ -223,21 +225,7 @@ void oledDrawCentered(const String &text, int y, uint8_t size)
     oled.print(text);
 }
 
-void oledDrawValue(String text, bool big)
-{
-    if (big)
-    {
-        oledDrawCentered(text, 14, 2);
-    }
-    else
-    {
-        if (text.length() > 21)
-            text = text.substring(0, 21);
-        oledDrawCentered(text, 18, 1);
-    }
-}
-
-void oledShow(const String &label, const String &value, bool big = false)
+void oledShow(const String &label, String value, bool big = false)
 {
     Lock l(i2cMutex);
     if (!oledReady)
@@ -245,7 +233,14 @@ void oledShow(const String &label, const String &value, bool big = false)
     oled.clearDisplay();
     oled.setTextColor(SSD1306_WHITE);
     oledDrawCentered(label, 0, 1);
-    oledDrawValue(value, big);
+    if (big)
+        oledDrawCentered(value, 14, 2);
+    else
+    {
+        if (value.length() > 21)
+            value = value.substring(0, 21);
+        oledDrawCentered(value, 18, 1);
+    }
     oled.display();
 }
 
@@ -253,7 +248,6 @@ void oledTask(void *param)
 {
     for (;;)
     {
-        // BARU: matikan layar saat mode tidur (jika opsi aktif)
         bool wantOff = sleeping && sleepOledOff;
         if (wantOff != oledIsOff)
         {
@@ -276,7 +270,7 @@ void oledTask(void *param)
             snprintf(tb, sizeof(tb), "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
             if (!timeTrusted)
                 oledShow("WAKTU BELUM VALID", tb, false);
-            else if (sleeping) // BARU: layar tidur (jika OLED tidak dimatikan)
+            else if (sleeping)
             {
                 char eb[16];
                 snprintf(eb, sizeof(eb), "s/d %02d:%02d", sleepEndMin / 60, sleepEndMin % 60);
@@ -286,61 +280,13 @@ void oledTask(void *param)
                 oledShow("WAKTU", tb, true);
         }
         else if (screen == 1)
-        {
             oledShow("IP ADDRESS", sta ? WiFi.localIP().toString() : WiFi.softAPIP().toString());
-        }
         else
-        {
             oledShow("NAMA WIFI", sta ? WiFi.SSID() : String(AP_SSID));
-        }
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
-const char *dayCode(int dow)
-{
-    static const char *codes[] = {"sun", "mon", "tue", "wed", "thu", "fri", "sat"};
-    return (dow >= 0 && dow <= 6) ? codes[dow] : "";
-}
-bool dayMatches(const String &d, int dow)
-{
-    if (d == "all")
-        return true;
-    if (d == "mon-sat")
-        return dow >= 1 && dow <= 6;
-    if (d == "mon-fri" || d == "weekday")
-        return dow >= 1 && dow <= 5;
-    if (d == "mon-thu")
-        return dow >= 1 && dow <= 4;
-    return d == dayCode(dow);
-}
-bool validDay(const String &d)
-{
-    static const char *ok[] = {"all", "mon-sat", "mon-fri", "mon-thu",
-                               "mon", "tue", "wed", "thu", "fri", "sat", "sun"};
-    for (auto s : ok)
-        if (d == s)
-            return true;
-    return false;
-}
-bool validTime(const String &t)
-{
-    if (t.length() != 5 || t[2] != ':')
-        return false;
-    if (!isdigit(t[0]) || !isdigit(t[1]) || !isdigit(t[3]) || !isdigit(t[4]))
-        return false;
-    int h = t.substring(0, 2).toInt();
-    int m = t.substring(3, 5).toInt();
-    return h >= 0 && h < 24 && m >= 0 && m < 60;
-}
-
-// BARU: konversi "HH:MM" <-> menit
-int strToMin(const String &t, int def)
-{
-    if (!validTime(t))
-        return def;
-    return t.substring(0, 2).toInt() * 60 + t.substring(3, 5).toInt();
-}
 String minToStr(int m)
 {
     char b[8];
@@ -352,14 +298,18 @@ String postParam(AsyncWebServerRequest *r, const char *n)
 {
     return r->hasParam(n, true) ? r->getParam(n, true)->value() : String();
 }
-void sendResult(AsyncWebServerRequest *r, bool ok, const String &msg, int code = 0)
+void sendJson(AsyncWebServerRequest *r, JsonDocument &d, int code = 200)
 {
-    StaticJsonDocument<256> d;
-    d["ok"] = ok;
-    d["msg"] = msg;
     String out;
     serializeJson(d, out);
-    r->send(code ? code : (ok ? 200 : 400), "application/json", out);
+    r->send(code, "application/json", out);
+}
+void sendResult(AsyncWebServerRequest *r, bool ok, const String &msg, int code = 0)
+{
+    JsonDocument d;
+    d["ok"] = ok;
+    d["msg"] = msg;
+    sendJson(r, d, code ? code : (ok ? 200 : 400));
 }
 uint32_t ip2u(const IPAddress &ip)
 {
@@ -399,25 +349,55 @@ bool fsWriteText(const char *path, const String &txt)
     return LittleFS.rename(tmp, path);
 }
 
-bool saveConfig()
+void fillConfigJson(JsonObject d, bool includeNetwork)
 {
-    StaticJsonDocument<1024> d; // UBAH: dari 768
-    d["volume"] = currentVolume;
-    d["holiday"] = holidayMode;
+    d["volume"] = (int)currentVolume;
+    d["holiday"] = (bool)holidayMode;
     d["mode"] = modeCode(activeMode);
-    JsonObject s = d.createNestedObject("static");
-    s["enabled"] = staticCfg.enabled;
-    s["ssid"] = staticCfg.ssid;
-    s["ip"] = staticCfg.ip;
-    s["gw"] = staticCfg.gw;
-    s["mask"] = staticCfg.mask;
-    s["dns"] = staticCfg.dns;
-    // BARU: pengaturan mode tidur
-    JsonObject sl = d.createNestedObject("sleep");
+    if (includeNetwork)
+    {
+        JsonObject s = d["static"].to<JsonObject>();
+        s["enabled"] = staticCfg.enabled;
+        s["ssid"] = staticCfg.ssid;
+        s["ip"] = staticCfg.ip;
+        s["gw"] = staticCfg.gw;
+        s["mask"] = staticCfg.mask;
+        s["dns"] = staticCfg.dns;
+    }
+    JsonObject sl = d["sleep"].to<JsonObject>();
     sl["enabled"] = (bool)sleepEnabled;
     sl["start"] = minToStr(sleepStartMin);
     sl["end"] = minToStr(sleepEndMin);
     sl["oled"] = (bool)sleepOledOff;
+}
+
+void applyConfigJson(JsonObjectConst d, bool includeNetwork)
+{
+    currentVolume = constrain((int)(d["volume"] | 20), 0, 30);
+    holidayMode = d["holiday"] | false;
+    activeMode = modeFromCode(d["mode"] | "reguler");
+    if (includeNetwork)
+    {
+        JsonObjectConst s = d["static"];
+        staticCfg.enabled = s["enabled"] | false;
+        staticCfg.ssid = s["ssid"] | "";
+        staticCfg.ip = s["ip"] | "";
+        staticCfg.gw = s["gw"] | "";
+        staticCfg.mask = s["mask"] | "";
+        staticCfg.dns = s["dns"] | "";
+    }
+    JsonObjectConst sl = d["sleep"];
+    sleepEnabled = sl["enabled"] | false;
+    sleepStartMin = bell::timeToMin(sl["start"] | "18:00", 18 * 60);
+    sleepEndMin = bell::timeToMin(sl["end"] | "05:00", 5 * 60);
+    sleepOledOff = sl["oled"] | true;
+}
+
+bool saveConfig()
+{
+    Lock c(cfgMutex);
+    JsonDocument d;
+    fillConfigJson(d.to<JsonObject>(), true);
     String out;
     serializeJson(d, out);
     return fsWriteText(CONFIG_FILE, out);
@@ -431,45 +411,26 @@ void loadConfig()
         saveConfig();
         return;
     }
-    StaticJsonDocument<1024> d; // UBAH: dari 768
+    JsonDocument d;
     if (deserializeJson(d, txt))
         return;
-    currentVolume = constrain((int)(d["volume"] | 20), 0, 30);
-    holidayMode = d["holiday"] | false;
-    activeMode = modeFromCode(d["mode"] | "reguler");
-    JsonObject s = d["static"];
-    staticCfg.enabled = s["enabled"] | false;
-    staticCfg.ssid = s["ssid"] | "";
-    staticCfg.ip = s["ip"] | "";
-    staticCfg.gw = s["gw"] | "";
-    staticCfg.mask = s["mask"] | "";
-    staticCfg.dns = s["dns"] | "";
-    // BARU: pengaturan mode tidur
-    JsonObject sl = d["sleep"];
-    sleepEnabled = sl["enabled"] | false;
-    sleepStartMin = strToMin(String((const char *)(sl["start"] | "18:00")), 18 * 60);
-    sleepEndMin = strToMin(String((const char *)(sl["end"] | "05:00")), 5 * 60);
-    sleepOledOff = sl["oled"] | true;
+    Lock c(cfgMutex);
+    applyConfigJson(d.as<JsonObjectConst>(), true);
 }
 
-int dayRank(const String &d)
-{
-    static const char *o[] = {"all", "mon-sat", "mon-fri", "mon-thu",
-                              "mon", "tue", "wed", "thu", "fri", "sat", "sun"};
-    for (int i = 0; i < 11; i++)
-        if (d == o[i])
-            return i;
-    return 99;
-}
-
-void sortSchedule()
+void sortScheduleLocked()
 {
     std::stable_sort(schedule.begin(), schedule.end(), [](const BellSlot &a, const BellSlot &b)
                      {
-    if (a.mode != b.mode) return a.mode < b.mode;
-    int da = dayRank(a.day), db = dayRank(b.day);
-    if (da != db) return da < db;
-    return a.time < b.time; });
+        if (a.mode != b.mode) return a.mode < b.mode;
+        int da = bell::dayRank(a.day.c_str()), db = bell::dayRank(b.day.c_str());
+        if (da != db) return da < db;
+        return a.time < b.time; });
+}
+
+uint32_t slotSig(const BellSlot &s)
+{
+    return bell::slotSignature((int)s.mode, s.day.c_str(), s.time.c_str(), s.track);
 }
 
 enum TrackId
@@ -513,32 +474,32 @@ void addSlot(std::vector<BellSlot> &v, ScheduleMode m, const char *time, const c
 
 std::vector<TrackInfo> defaultTracks()
 {
-    std::vector<TrackInfo> v;
-    v.push_back({T_SHOLAWAT, "sholawat"});
-    v.push_back({T_MARS, "mars-madrasah"});
-    v.push_back({T_UPACARA, "upacara"});
-    v.push_back({T_ISTIRAHAT1, "istirahat-1"});
-    v.push_back({T_ISTIRAHAT2, "istirahat-2"});
-    v.push_back({T_KEBERSIHAN, "kebersihan"});
-    v.push_back({T_LITERASI, "literasi"});
-    v.push_back({T_PEL1, "pelajaran-1"});
-    v.push_back({T_PEL2, "pelajaran-2"});
-    v.push_back({T_PEL3, "pelajaran-3"});
-    v.push_back({T_PEL4, "pelajaran-4"});
-    v.push_back({T_PEL5, "pelajaran-5"});
-    v.push_back({T_PEL6, "pelajaran-6"});
-    v.push_back({T_PEL7, "pelajaran-7"});
-    v.push_back({T_PEL8, "pelajaran-8"});
-    v.push_back({T_PEL9, "pelajaran-9"});
-    v.push_back({T_PEL10, "pelajaran-10"});
-    v.push_back({T_SELESAI, "pelajaran-selesai"});
-    v.push_back({T_INDONESIA_RAYA, "indonesia-raya"});
-    v.push_back({T_TANAH_AIRKU, "tanah-airku"});
-    v.push_back({T_HYMNE, "hymne-madrasah"});
-    v.push_back({T_ROHANI, "rohani"});
-    v.push_back({T_AKHIR_PEKAN, "akhir-pekan"});
-    v.push_back({T_PRAMUKA, "pramuka"});
-    return v;
+    return {
+        {T_SHOLAWAT, "sholawat"},
+        {T_MARS, "mars-madrasah"},
+        {T_UPACARA, "upacara"},
+        {T_ISTIRAHAT1, "istirahat-1"},
+        {T_ISTIRAHAT2, "istirahat-2"},
+        {T_KEBERSIHAN, "kebersihan"},
+        {T_LITERASI, "literasi"},
+        {T_PEL1, "pelajaran-1"},
+        {T_PEL2, "pelajaran-2"},
+        {T_PEL3, "pelajaran-3"},
+        {T_PEL4, "pelajaran-4"},
+        {T_PEL5, "pelajaran-5"},
+        {T_PEL6, "pelajaran-6"},
+        {T_PEL7, "pelajaran-7"},
+        {T_PEL8, "pelajaran-8"},
+        {T_PEL9, "pelajaran-9"},
+        {T_PEL10, "pelajaran-10"},
+        {T_SELESAI, "pelajaran-selesai"},
+        {T_INDONESIA_RAYA, "indonesia-raya"},
+        {T_TANAH_AIRKU, "tanah-airku"},
+        {T_HYMNE, "hymne-madrasah"},
+        {T_ROHANI, "rohani"},
+        {T_AKHIR_PEKAN, "akhir-pekan"},
+        {T_PRAMUKA, "pramuka"},
+    };
 }
 
 std::vector<BellSlot> defaultSchedule()
@@ -579,46 +540,87 @@ std::vector<BellSlot> defaultSchedule()
     return v;
 }
 
-bool saveScheduleLocked()
+void fillScheduleJson(JsonArray a, bool withIds)
 {
-    DynamicJsonDocument d(SCHED_DOC_SIZE);
-    JsonArray a = d.createNestedArray("slots");
     for (size_t i = 0; i < schedule.size(); i++)
     {
-        BellSlot &s = schedule[i];
-        JsonObject o = a.createNestedObject();
+        const BellSlot &s = schedule[i];
+        JsonObject o = a.add<JsonObject>();
+        if (withIds)
+        {
+            o["id"] = i;
+            o["sig"] = slotSig(s);
+        }
         o["mode"] = modeCode(s.mode);
         o["time"] = s.time;
         o["day"] = s.day;
         o["track"] = s.track;
         o["enabled"] = s.enabled;
     }
+}
+
+bool parseScheduleJson(JsonArrayConst a, std::vector<BellSlot> &out, String &err)
+{
+    out.clear();
+    for (JsonObjectConst o : a)
+    {
+        BellSlot s;
+        String mode = o["mode"] | "reguler";
+        s.mode = modeFromCode(mode);
+        s.time = o["time"] | "";
+        s.day = o["day"] | "";
+        s.track = o["track"] | 0;
+        s.enabled = o["enabled"] | true;
+        if (!validModeCode(mode) || !bell::validTime(s.time.c_str()) || !bell::validDay(s.day.c_str()) ||
+            s.track == 0 || s.track > MAX_TRACK_NO)
+        {
+            err = "Jadwal ke-" + String(out.size() + 1) + " tidak valid";
+            return false;
+        }
+        if (out.size() >= MAX_SLOTS)
+        {
+            err = "Jadwal melebihi " + String(MAX_SLOTS);
+            return false;
+        }
+        out.push_back(s);
+    }
+    return true;
+}
+
+bool saveScheduleLocked()
+{
+    JsonDocument d;
+    fillScheduleJson(d["slots"].to<JsonArray>(), false);
     String out;
     serializeJson(d, out);
     return fsWriteText(SCHEDULE_FILE, out);
+}
+
+void resetScheduleLocked()
+{
+    schedule = defaultSchedule();
+    sortScheduleLocked();
+    saveScheduleLocked();
 }
 
 void loadSchedule()
 {
     String txt = fsReadText(SCHEDULE_FILE);
     Lock l(dataMutex);
-    schedule.clear();
     if (txt.length() == 0)
     {
-        schedule = defaultSchedule();
-        sortSchedule();
-        saveScheduleLocked();
+        resetScheduleLocked();
         return;
     }
-    DynamicJsonDocument d(SCHED_DOC_SIZE);
+    JsonDocument d;
     if (deserializeJson(d, txt))
     {
-        schedule = defaultSchedule();
-        sortSchedule();
-        saveScheduleLocked();
+        Serial.println("schedule.json rusak, memakai jadwal bawaan");
+        resetScheduleLocked();
         return;
     }
-    for (JsonObject o : d["slots"].as<JsonArray>())
+    schedule.clear();
+    for (JsonObjectConst o : d["slots"].as<JsonArrayConst>())
     {
         BellSlot s;
         s.mode = modeFromCode(o["mode"] | "reguler");
@@ -626,23 +628,50 @@ void loadSchedule()
         s.day = o["day"] | "";
         s.track = o["track"] | 0;
         s.enabled = o["enabled"] | true;
-        if (validTime(s.time) && validDay(s.day) && s.track > 0 && schedule.size() < MAX_SLOTS)
+        if (bell::validTime(s.time.c_str()) && bell::validDay(s.day.c_str()) && s.track > 0 && schedule.size() < MAX_SLOTS)
             schedule.push_back(s);
     }
-    sortSchedule();
+    sortScheduleLocked();
+}
+
+void fillTracksJson(JsonArray a)
+{
+    for (const TrackInfo &t : trackList)
+    {
+        JsonObject o = a.add<JsonObject>();
+        o["track"] = t.track;
+        o["label"] = t.label;
+    }
+}
+
+bool parseTracksJson(JsonArrayConst a, std::vector<TrackInfo> &out, String &err)
+{
+    out.clear();
+    for (JsonObjectConst o : a)
+    {
+        TrackInfo t;
+        t.track = o["track"] | 0;
+        t.label = o["label"] | "";
+        t.label.trim();
+        if (t.track == 0 || t.track > MAX_TRACK_NO || t.label.length() == 0 || t.label.length() > 40)
+        {
+            err = "Track ke-" + String(out.size() + 1) + " tidak valid";
+            return false;
+        }
+        if (out.size() >= MAX_TRACKS)
+        {
+            err = "Track melebihi " + String(MAX_TRACKS);
+            return false;
+        }
+        out.push_back(t);
+    }
+    return true;
 }
 
 bool saveTracksLocked()
 {
-    DynamicJsonDocument d(4096);
-    JsonArray a = d.createNestedArray("tracks");
-    for (size_t i = 0; i < trackList.size(); i++)
-    {
-        TrackInfo &t = trackList[i];
-        JsonObject o = a.createNestedObject();
-        o["track"] = t.track;
-        o["label"] = t.label;
-    }
+    JsonDocument d;
+    fillTracksJson(d["tracks"].to<JsonArray>());
     String out;
     serializeJson(d, out);
     return fsWriteText(TRACKS_FILE, out);
@@ -652,73 +681,107 @@ void loadTracks()
 {
     String txt = fsReadText(TRACKS_FILE);
     Lock l(dataMutex);
-    trackList.clear();
-    if (txt.length() == 0)
+    JsonDocument d;
+    std::vector<TrackInfo> parsed;
+    String err;
+    if (txt.length() == 0 || deserializeJson(d, txt) ||
+        !parseTracksJson(d["tracks"].as<JsonArrayConst>(), parsed, err))
     {
         trackList = defaultTracks();
         saveTracksLocked();
         return;
     }
-    DynamicJsonDocument d(4096);
-    if (deserializeJson(d, txt))
-    {
-        trackList = defaultTracks();
-        saveTracksLocked();
-        return;
-    }
-    for (JsonObject o : d["tracks"].as<JsonArray>())
-    {
-        TrackInfo t;
-        t.track = o["track"] | 0;
-        t.label = o["label"] | "";
-        if (t.track > 0 && t.label.length() && trackList.size() < MAX_TRACKS)
-            trackList.push_back(t);
-    }
+    trackList = parsed;
 }
 
 void dfpBegin()
 {
-    Lock l(dfpMutex);
     dfpSerial.end();
     dfpSerial.begin(9600, SERIAL_8N1, DFP_RX_PIN, DFP_TX_PIN);
     dfpReady = dfPlayer.begin(dfpSerial, true, true);
     if (dfpReady)
     {
+        sdPresent = true;
         dfPlayer.volume(currentVolume);
         dfPlayer.EQ(DFPLAYER_EQ_NORMAL);
         dfPlayer.outputDevice(DFPLAYER_DEVICE_SD);
+        setInfo(lastDfpError, "");
         Serial.println("DFPlayer siap");
     }
     else
-    {
         Serial.println("DFPlayer tidak terdeteksi/kartu SD DFPlayer tidak ada");
+}
+
+bool audioReady()
+{
+    return dfpReady && sdPresent;
+}
+
+String dfpErrorText(int code)
+{
+    switch (code)
+    {
+    case Busy:
+        return "DFPlayer sibuk atau kartu SD belum siap";
+    case Sleeping:
+        return "DFPlayer dalam mode tidur";
+    case SerialWrongStack:
+    case CheckSumNotMatch:
+        return "Komunikasi serial DFPlayer terganggu";
+    case FileIndexOut:
+    case FileMismatch:
+        return "File track " + String(playingTrack) + " tidak ada di kartu SD (mp3/" +
+               String(playingTrack < 10 ? "000" : playingTrack < 100 ? "00" : playingTrack < 1000 ? "0" : "") +
+               String(playingTrack) + ".mp3)";
+    default:
+        return "DFPlayer error " + String(code);
     }
 }
 
 void dfpTick()
 {
-    Lock l(dfpMutex);
     if (!dfPlayer.available())
         return;
     uint8_t type = dfPlayer.readType();
-    if (type == DFPlayerPlayFinished)
+    int value = dfPlayer.read();
+    switch (type)
     {
+    case DFPlayerPlayFinished:
         audioPlaying = false;
         playingTrack = 0;
+        break;
+    case DFPlayerError:
+    {
+        String e = dfpErrorText(value);
+        setInfo(lastDfpError, e);
+        Serial.println(e);
+        audioPlaying = false;
+        playingTrack = 0;
+        break;
     }
-    else if (type == DFPlayerError)
-    {
+    case DFPlayerCardRemoved:
+        sdPresent = false;
         audioPlaying = false;
         playingTrack = 0;
-        Serial.println("DFPlayer error: " + String(dfPlayer.read()));
+        setInfo(lastDfpError, "Kartu SD DFPlayer dicabut");
+        Serial.println("Kartu SD DFPlayer dicabut");
+        break;
+    case DFPlayerCardInserted:
+    case DFPlayerCardOnline:
+        sdPresent = true;
+        setInfo(lastDfpError, "");
+        Serial.println("Kartu SD DFPlayer terpasang");
+        break;
+    default:
+        break;
     }
 }
 
 void playTrack(uint16_t track)
 {
-    if (!dfpReady || track == 0)
+    if (!audioReady() || track == 0)
         return;
-    Lock l(dfpMutex);
+    setInfo(lastDfpError, "");
     dfPlayer.playMp3Folder(track);
     audioPlaying = true;
     playingTrack = track;
@@ -729,29 +792,31 @@ void playTrack(uint16_t track)
 void stopTrack()
 {
     if (dfpReady)
-    {
-        Lock l(dfpMutex);
         dfPlayer.stop();
-    }
     audioPlaying = false;
     playingTrack = 0;
 }
 
-void setDfpVolume()
+void handleAudioCmd(const AudioCmd &c)
 {
-    if (!dfpReady)
-        return;
-    Lock l(dfpMutex);
-    dfPlayer.volume(currentVolume);
+    switch (c.type)
+    {
+    case AC_PLAY:
+        playTrack(c.arg);
+        break;
+    case AC_STOP:
+        stopTrack();
+        break;
+    case AC_VOLUME:
+        if (dfpReady)
+            dfPlayer.volume(c.arg);
+        break;
+    }
 }
 
 void checkSchedule(const DateTime &now)
 {
-    if (holidayMode || !dfpReady)
-        return;
-    if (!timeTrusted) // jangan bunyi kalau waktu belum tepercaya
-        return;
-    if (sleeping) // BARU: jangan bunyi saat mode tidur
+    if (holidayMode || !audioReady() || !timeTrusted || sleeping)
         return;
 
     uint32_t minuteKey = now.unixtime() / 60;
@@ -765,29 +830,28 @@ void checkSchedule(const DateTime &now)
     uint16_t track = 0;
     {
         Lock l(dataMutex);
-        for (size_t i = 0; i < schedule.size(); i++)
-        {
-            BellSlot &s = schedule[i];
-            if (s.mode != activeMode)
-                continue;
-            if (!s.enabled || s.time != timeBuf || !dayMatches(s.day, dow))
-                continue;
-            track = s.track;
-            break;
-        }
+        std::vector<bell::SlotView> views;
+        views.reserve(schedule.size());
+        for (const BellSlot &s : schedule)
+            views.push_back({(int)s.mode, s.day.c_str(), s.time.c_str(), s.track, s.enabled});
+        int idx = bell::pickSlot(views.data(), views.size(), (int)activeMode, timeBuf, dow);
+        if (idx >= 0)
+            track = schedule[idx].track;
     }
     if (track)
     {
         lastTriggeredMinute = minuteKey;
         Serial.printf("Memicu bel %s: track %d (uptime %lus)\n", timeBuf, track, millis() / 1000UL);
+        setInfo(lastBell, String(timeBuf) + " #" + String(track));
         playTrack(track);
     }
 }
 
 void bellTask(void *param)
 {
-    unsigned long lastDfpTry = 0;
+    unsigned long lastDfpTry = millis();
     unsigned long lastRtcCheck = 0;
+    int rtcStopped = 0;
     for (;;)
     {
         if (!dfpReady && millis() - lastDfpTry > DFP_RETRY_INTERVAL)
@@ -796,40 +860,66 @@ void bellTask(void *param)
             dfpBegin();
         }
 
-        // cek RTC masih berjalan, tiap 5 detik
-        if (millis() - lastRtcCheck > 5000)
+        if (rtcPresent && millis() - lastRtcCheck > RTC_CHECK_INTERVAL)
         {
             lastRtcCheck = millis();
-            if (!rtcPresent || !rtcRunning())
+            rtcStopped = rtcRunning() ? 0 : rtcStopped + 1;
+            if (rtcStopped >= RTC_STOP_LIMIT)
             {
                 if (timeTrusted)
-                    Serial.println("RTC berhenti/tidak terbaca, bel dikunci");
+                    Serial.println("RTC berhenti berjalan, bel dikunci");
+                Lock t(timeMutex);
                 setTrusted(false);
             }
         }
 
-        DateTime now = getNow();
-        validateTime(now);
-
-        // BARU: perbarui status tidur (hanya jika waktu tepercaya)
-        bool nowSleep = timeTrusted && isSleepTime(now);
-        if (nowSleep && !sleeping)
+        DateTime now;
+        bool usable = false;
         {
-            Serial.println("Masuk mode tidur");
-            if (audioPlaying)
-                stopTrack();
+            Lock t(timeMutex);
+            now = getNow();
+            bell::TimeGuard::Result r = timeGuard.feed(now.unixtime(), now.year());
+            if (r == bell::TimeGuard::DISTRUST)
+            {
+                if (timeTrusted)
+                    Serial.printf("Waktu tidak konsisten (%04d-%02d-%02d %02d:%02d), bel dikunci\n",
+                                  now.year(), now.month(), now.day(), now.hour(), now.minute());
+                setTrusted(false);
+            }
+            usable = r == bell::TimeGuard::OK;
         }
-        else if (!nowSleep && sleeping)
-        {
-            Serial.println("Keluar mode tidur");
-        }
-        sleeping = nowSleep;
 
-        checkSchedule(now);
+        if (usable)
+        {
+            bool nowSleep = timeTrusted &&
+                            bell::inSleepWindow(sleepEnabled, sleepStartMin, sleepEndMin, now.hour() * 60 + now.minute());
+            if (nowSleep && !sleeping)
+            {
+                Serial.println("Masuk mode tidur");
+                if (audioPlaying)
+                    stopTrack();
+            }
+            else if (!nowSleep && sleeping)
+                Serial.println("Keluar mode tidur");
+            sleeping = nowSleep;
+            checkSchedule(now);
+        }
 
         if (dfpReady)
             dfpTick();
-        vTaskDelay(pdMS_TO_TICKS(300));
+        if (audioPlaying && millis() - playStartedAt > PLAY_TIMEOUT)
+        {
+            audioPlaying = false;
+            playingTrack = 0;
+        }
+
+        AudioCmd cmd;
+        if (xQueueReceive(audioQueue, &cmd, pdMS_TO_TICKS(BELL_TICK_MS)) == pdTRUE)
+        {
+            handleAudioCmd(cmd);
+            while (xQueueReceive(audioQueue, &cmd, 0) == pdTRUE)
+                handleAudioCmd(cmd);
+        }
     }
 }
 
@@ -838,20 +928,21 @@ void syncTimeFromNTP()
     lastNtpAttempt = millis();
     configTime(7 * 3600, 0, "pool.ntp.org", "time.google.com");
     struct tm ti;
-    if (getLocalTime(&ti, 5000) && (ti.tm_year + 1900) >= MIN_VALID_YEAR)
+    if (getLocalTime(&ti, 5000) && (ti.tm_year + 1900) >= bell::MIN_VALID_YEAR)
     {
         DateTime ntp(ti.tm_year + 1900, ti.tm_mon + 1, ti.tm_mday, ti.tm_hour, ti.tm_min, ti.tm_sec);
-        long diff = (long)ntp.unixtime() - (long)getNow().unixtime();
-        if (diff > 2 || diff < -2)
+        if (rtcPresent)
         {
-            setRtc(ntp);
-            Serial.println("RTC disinkronkan via NTP");
+            long diff = (long)ntp.unixtime() - (long)readRtc().unixtime();
+            bool adjust = diff > 2 || diff < -2;
+            applyVerifiedTime(adjust ? &ntp : nullptr);
+            Serial.println(adjust ? "RTC disinkronkan via NTP" : "NTP OK, RTC sudah akurat");
         }
         else
         {
-            Serial.println("NTP OK, RTC sudah akurat");
+            applyVerifiedTime(nullptr);
+            Serial.println("NTP OK, memakai jam sistem (RTC tidak ada)");
         }
-        setTrusted(true);
         ntpLastOk = true;
     }
     else
@@ -937,24 +1028,32 @@ void connectWiFi()
     wm.setEnableConfigPortal(!hadSaved);
     wm.setAPStaticIPConfig(AP_IP, AP_IP, AP_MASK);
 
-    if (staticCfg.enabled)
+    bool disableStatic = false;
     {
-        IPAddress ip, gw, mask, dns;
-        bool valid = ip.fromString(staticCfg.ip) && gw.fromString(staticCfg.gw) && mask.fromString(staticCfg.mask);
-        if (!dns.fromString(staticCfg.dns))
-            dns = gw;
-        String saved = storedSsid();
-        if (valid && saved.length() && saved == staticCfg.ssid)
+        Lock c(cfgMutex);
+        if (staticCfg.enabled)
         {
-            wm.setSTAStaticIPConfig(ip, gw, mask, dns);
-            Serial.println("Memakai IP statis: " + staticCfg.ip);
+            IPAddress ip, gw, mask, dns;
+            bool valid = ip.fromString(staticCfg.ip) && gw.fromString(staticCfg.gw) && mask.fromString(staticCfg.mask);
+            if (!dns.fromString(staticCfg.dns))
+                dns = gw;
+            String saved = storedSsid();
+            if (valid && saved.length() && saved == staticCfg.ssid)
+            {
+                wm.setSTAStaticIPConfig(ip, gw, mask, dns);
+                Serial.println("Memakai IP statis: " + staticCfg.ip);
+            }
+            else
+            {
+                staticCfg.enabled = false;
+                disableStatic = true;
+            }
         }
-        else
-        {
-            staticCfg.enabled = false;
-            saveConfig();
-            Serial.println("IP statis dinonaktifkan (jaringan berbeda)");
-        }
+    }
+    if (disableStatic)
+    {
+        saveConfig();
+        Serial.println("IP statis dinonaktifkan (jaringan berbeda)");
     }
 
     bool ok = wm.autoConnect(AP_SSID, AP_PASS);
@@ -973,380 +1072,455 @@ void connectWiFi()
 
 bool parseSlot(AsyncWebServerRequest *r, BellSlot &s, String &err)
 {
-    s.mode = modeFromCode(postParam(r, "mode"));
+    String mode = postParam(r, "mode");
+    s.mode = modeFromCode(mode);
     s.day = postParam(r, "day");
     s.time = postParam(r, "time");
-    s.track = postParam(r, "track").toInt();
+    long track = postParam(r, "track").toInt();
     s.enabled = postParam(r, "enabled") != "0";
-    if (!validDay(s.day))
+    if (!validModeCode(mode))
+    {
+        err = "Mode tidak valid";
+        return false;
+    }
+    if (!bell::validDay(s.day.c_str()))
     {
         err = "Hari tidak valid";
         return false;
     }
-    if (!validTime(s.time))
+    if (!bell::validTime(s.time.c_str()))
     {
         err = "Jam tidak valid";
         return false;
     }
-    if (s.track == 0 || s.track > 2999)
+    if (track <= 0 || track > MAX_TRACK_NO)
     {
         err = "Nomor track tidak valid";
         return false;
     }
+    s.track = (uint16_t)track;
     return true;
+}
+
+SlotLookup findSlotLocked(AsyncWebServerRequest *r, int &id)
+{
+    id = postParam(r, "id").toInt();
+    if (id < 0 || id >= (int)schedule.size())
+        return SLOT_MISSING;
+    String sig = postParam(r, "sig");
+    if (sig.length() && strtoul(sig.c_str(), nullptr, 10) != slotSig(schedule[id]))
+        return SLOT_CHANGED;
+    return SLOT_OK;
+}
+
+void sendSlotLookupError(AsyncWebServerRequest *r, SlotLookup res)
+{
+    if (res == SLOT_CHANGED)
+        sendResult(r, false, "Jadwal sudah berubah di perangkat. Muat ulang halaman lalu coba lagi.", 409);
+    else
+        sendResult(r, false, "Jadwal tidak ditemukan", 404);
 }
 
 const char *DFP_MISSING = "DFPlayer/kartu SD tidak terdeteksi";
 
+void handleRestore(AsyncWebServerRequest *r)
+{
+    String data = postParam(r, "data");
+    if (data.length() == 0)
+        return sendResult(r, false, "File backup kosong");
+    JsonDocument d;
+    if (deserializeJson(d, data))
+        return sendResult(r, false, "File backup bukan JSON yang valid");
+    if (!d["schedule"].is<JsonArrayConst>() || !d["tracks"].is<JsonArrayConst>() || !d["config"].is<JsonObjectConst>())
+        return sendResult(r, false, "Format backup tidak dikenali");
+
+    std::vector<BellSlot> slots;
+    std::vector<TrackInfo> tracks;
+    String err;
+    if (!parseScheduleJson(d["schedule"].as<JsonArrayConst>(), slots, err) ||
+        !parseTracksJson(d["tracks"].as<JsonArrayConst>(), tracks, err))
+        return sendResult(r, false, err);
+
+    bool ok = true;
+    {
+        Lock l(dataMutex);
+        schedule = slots;
+        sortScheduleLocked();
+        trackList = tracks;
+        ok = saveScheduleLocked() && saveTracksLocked();
+    }
+    {
+        Lock c(cfgMutex);
+        applyConfigJson(d["config"].as<JsonObjectConst>(), false);
+    }
+    ok = saveConfig() && ok;
+    queueAudio(AC_VOLUME, currentVolume);
+    sendResult(r, ok, ok ? "Backup dipulihkan: " + String(slots.size()) + " jadwal, " + String(tracks.size()) + " track"
+                         : "Backup dipulihkan sebagian, gagal menyimpan ke memori");
+}
+
 void setupWebServer()
 {
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *r)
-              { r->send_P(200, "text/html", INDEX_HTML); });
+              { r->send(200, "text/html", (const uint8_t *)INDEX_HTML, strlen(INDEX_HTML)); });
 
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *r)
               {
-    DateTime now = getNow();
-    char tb[24];
-    snprintf(tb, sizeof(tb), "%04d-%02d-%02d %02d:%02d:%02d",
-             now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
-    bool sta = WiFi.status() == WL_CONNECTED;
-    StaticJsonDocument<640> d; // UBAH: dari 448
-    d["time"] = tb;
-    d["dow"] = now.dayOfTheWeek();
-    d["mode"] = sta ? "STA" : "AP";
-    d["ip"] = sta ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
-    d["rssi"] = sta ? WiFi.RSSI() : 0;
-    d["volume"] = currentVolume;
-    d["holiday"] = holidayMode;
-    d["sched_mode"] = modeCode(activeMode);
-    d["dfp"] = (bool)dfpReady;
-    d["playing"] = (bool)audioPlaying;
-    d["track"] = playingTrack;
-    d["trusted"] = (bool)timeTrusted;
-    d["sleeping"] = (bool)sleeping;               // BARU
-    d["sleep_on"] = (bool)sleepEnabled;           // BARU
-    d["sleep_start"] = minToStr(sleepStartMin);   // BARU
-    d["sleep_end"] = minToStr(sleepEndMin);       // BARU
-    String out;
-    serializeJson(d, out);
-    r->send(200, "application/json", out); });
+        DateTime now = getNow();
+        char tb[24];
+        snprintf(tb, sizeof(tb), "%04d-%02d-%02d %02d:%02d:%02d",
+                 now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
+        bool sta = WiFi.status() == WL_CONNECTED;
+        JsonDocument d;
+        d["version"] = FW_VERSION;
+        d["time"] = tb;
+        d["dow"] = now.dayOfTheWeek();
+        d["clock"] = rtcPresent ? "rtc" : "ntp";
+        d["mode"] = sta ? "STA" : "AP";
+        d["ip"] = sta ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+        d["rssi"] = sta ? WiFi.RSSI() : 0;
+        d["volume"] = (int)currentVolume;
+        d["holiday"] = (bool)holidayMode;
+        d["sched_mode"] = modeCode(activeMode);
+        d["dfp"] = (bool)dfpReady;
+        d["sd"] = (bool)sdPresent;
+        d["dfp_error"] = getInfo(lastDfpError);
+        d["playing"] = (bool)audioPlaying;
+        d["track"] = (int)playingTrack;
+        d["last_bell"] = getInfo(lastBell);
+        d["trusted"] = (bool)timeTrusted;
+        d["sleeping"] = (bool)sleeping;
+        d["sleep_on"] = (bool)sleepEnabled;
+        d["sleep_start"] = minToStr(sleepStartMin);
+        d["sleep_end"] = minToStr(sleepEndMin);
+        sendJson(r, d); });
 
-    // BARU: baca pengaturan mode tidur
     server.on("/api/sleep", HTTP_GET, [](AsyncWebServerRequest *r)
               {
-    StaticJsonDocument<256> d;
-    d["enabled"] = (bool)sleepEnabled;
-    d["start"] = minToStr(sleepStartMin);
-    d["end"] = minToStr(sleepEndMin);
-    d["oled"] = (bool)sleepOledOff;
-    d["sleeping"] = (bool)sleeping;
-    String out;
-    serializeJson(d, out);
-    r->send(200, "application/json", out); });
+        JsonDocument d;
+        d["enabled"] = (bool)sleepEnabled;
+        d["start"] = minToStr(sleepStartMin);
+        d["end"] = minToStr(sleepEndMin);
+        d["oled"] = (bool)sleepOledOff;
+        d["sleeping"] = (bool)sleeping;
+        sendJson(r, d); });
 
-    // BARU: simpan pengaturan mode tidur
     server.on("/api/sleep", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    bool en = postParam(r, "enabled") == "1";
-    String st = postParam(r, "start");
-    String ed = postParam(r, "end");
-    bool oledOff = postParam(r, "oled") == "1";
-    if (!validTime(st) || !validTime(ed))
-      return sendResult(r, false, "Format jam tidak valid");
-    int sm = strToMin(st, 0), em = strToMin(ed, 0);
-    if (en && sm == em)
-      return sendResult(r, false, "Jam mulai dan selesai tidak boleh sama");
-    sleepStartMin = sm;
-    sleepEndMin = em;
-    sleepOledOff = oledOff;
-    sleepEnabled = en;
-    bool saved = saveConfig();
-    sendResult(r, true, String(en ? "Mode tidur aktif " + st + " - " + ed : "Mode tidur nonaktif") + (saved ? "" : " (gagal disimpan)")); });
+        bool en = postParam(r, "enabled") == "1";
+        String st = postParam(r, "start");
+        String ed = postParam(r, "end");
+        bool oledOff = postParam(r, "oled") == "1";
+        if (!bell::validTime(st.c_str()) || !bell::validTime(ed.c_str()))
+            return sendResult(r, false, "Format jam tidak valid");
+        int sm = bell::timeToMin(st.c_str(), 0), em = bell::timeToMin(ed.c_str(), 0);
+        if (en && sm == em)
+            return sendResult(r, false, "Jam mulai dan selesai tidak boleh sama");
+        {
+            Lock c(cfgMutex);
+            sleepStartMin = sm;
+            sleepEndMin = em;
+            sleepOledOff = oledOff;
+            sleepEnabled = en;
+        }
+        bool saved = saveConfig();
+        sendResult(r, true, String(en ? "Mode tidur aktif " + st + " - " + ed : "Mode tidur nonaktif") + (saved ? "" : " (gagal disimpan)")); });
 
     server.on("/api/ring", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    if (!dfpReady) return sendResult(r, false, DFP_MISSING);
-    int track = postParam(r, "track").toInt();
-    if (track <= 0) return sendResult(r, false, "Nomor track tidak valid");
-    playTrack(track);
-    sendResult(r, true, "Memutar track " + String(track)); });
+        if (!audioReady()) return sendResult(r, false, DFP_MISSING);
+        long track = postParam(r, "track").toInt();
+        if (track <= 0 || track > MAX_TRACK_NO) return sendResult(r, false, "Nomor track tidak valid");
+        if (!queueAudio(AC_PLAY, (uint16_t)track)) return sendResult(r, false, "Perangkat sibuk, coba lagi");
+        sendResult(r, true, "Memutar track " + String(track)); });
 
     server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    stopTrack();
-    sendResult(r, true, "Bel dihentikan"); });
+        queueAudio(AC_STOP);
+        sendResult(r, true, "Bel dihentikan"); });
 
     server.on("/api/time/set", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    // format: date=YYYY-MM-DD, time=HH:MM
-    String date = postParam(r, "date");
-    String tm = postParam(r, "time");
-    if (date.length() != 10 || date[4] != '-' || date[7] != '-' || !validTime(tm))
-      return sendResult(r, false, "Format tanggal/jam tidak valid");
-    int y = date.substring(0, 4).toInt();
-    int mo = date.substring(5, 7).toInt();
-    int d = date.substring(8, 10).toInt();
-    if (y < MIN_VALID_YEAR || y > 2099 || mo < 1 || mo > 12 || d < 1 || d > 31)
-      return sendResult(r, false, "Tanggal tidak valid");
-    if (!rtcPresent) return sendResult(r, false, "RTC tidak terdeteksi");
-    setRtc(DateTime(y, mo, d, tm.substring(0, 2).toInt(), tm.substring(3, 5).toInt(), 0));
-    setTrusted(true);
-    sendResult(r, true, "Waktu diatur"); });
+        String date = postParam(r, "date");
+        String tm = postParam(r, "time");
+        if (date.length() != 10 || date[4] != '-' || date[7] != '-' || !bell::validTime(tm.c_str()))
+            return sendResult(r, false, "Format tanggal/jam tidak valid");
+        int y = date.substring(0, 4).toInt();
+        int mo = date.substring(5, 7).toInt();
+        int d = date.substring(8, 10).toInt();
+        static const uint8_t daysIn[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        if (y < bell::MIN_VALID_YEAR || y > bell::MAX_VALID_YEAR || mo < 1 || mo > 12 || d < 1 || d > daysIn[mo - 1] ||
+            (mo == 2 && d == 29 && !((y % 4 == 0 && y % 100 != 0) || y % 400 == 0)))
+            return sendResult(r, false, "Tanggal tidak valid");
+        if (!rtcPresent) return sendResult(r, false, "RTC tidak terdeteksi, waktu hanya dapat diatur lewat NTP");
+        DateTime dt(y, mo, d, tm.substring(0, 2).toInt(), tm.substring(3, 5).toInt(), 0);
+        applyVerifiedTime(&dt);
+        sendResult(r, true, "Waktu diatur"); });
 
     server.on("/api/volume", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    currentVolume = constrain(postParam(r, "value").toInt(), 0, 30);
-    setDfpVolume();
-    bool saved = saveConfig();
-    sendResult(r, true, "Volume " + String(currentVolume) + "/30" + (saved ? "" : " (gagal disimpan)")); });
+        currentVolume = constrain((int)postParam(r, "value").toInt(), 0, 30);
+        queueAudio(AC_VOLUME, currentVolume);
+        bool saved = saveConfig();
+        sendResult(r, true, "Volume " + String(currentVolume) + "/30" + (saved ? "" : " (gagal disimpan)")); });
 
     server.on("/api/holiday", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    holidayMode = postParam(r, "value") == "1";
-    bool saved = saveConfig();
-    sendResult(r, true, String(holidayMode ? "Mode libur aktif" : "Mode libur nonaktif") + (saved ? "" : " (gagal disimpan)")); });
+        holidayMode = postParam(r, "value") == "1";
+        bool saved = saveConfig();
+        sendResult(r, true, String(holidayMode ? "Mode libur aktif" : "Mode libur nonaktif") + (saved ? "" : " (gagal disimpan)")); });
 
     server.on("/api/mode", HTTP_GET, [](AsyncWebServerRequest *r)
               {
-    StaticJsonDocument<128> d;
-    d["mode"] = modeCode(activeMode);
-    String out;
-    serializeJson(d, out);
-    r->send(200, "application/json", out); });
+        JsonDocument d;
+        d["mode"] = modeCode(activeMode);
+        sendJson(r, d); });
     server.on("/api/mode", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    activeMode = modeFromCode(postParam(r, "value"));
-    bool saved = saveConfig();
-    sendResult(r, true, String("Mode aktif: ") + modeCode(activeMode) + (saved ? "" : " (gagal disimpan)")); });
+        String v = postParam(r, "value");
+        if (!validModeCode(v)) return sendResult(r, false, "Mode tidak valid");
+        activeMode = modeFromCode(v);
+        bool saved = saveConfig();
+        sendResult(r, true, String("Mode aktif: ") + modeCode(activeMode) + (saved ? "" : " (gagal disimpan)")); });
 
     server.on("/api/schedule", HTTP_GET, [](AsyncWebServerRequest *r)
               {
-    ScheduleMode filter = MODE_REGULER;
-    bool hasFilter = r->hasParam("mode");
-    if (hasFilter) filter = modeFromCode(r->getParam("mode")->value());
-
-    DynamicJsonDocument d(SCHED_DOC_SIZE);
-    JsonArray a = d.createNestedArray("slots");
-    {
-      Lock l(dataMutex);
-      int i = 0;
-      for (size_t k = 0; k < schedule.size(); k++) {
-        BellSlot &s = schedule[k];
-        if (hasFilter && s.mode != filter) {
-          i++;
-          continue;
+        bool hasFilter = r->hasParam("mode");
+        ScheduleMode filter = hasFilter ? modeFromCode(r->getParam("mode")->value()) : MODE_REGULER;
+        JsonDocument d;
+        JsonArray a = d["slots"].to<JsonArray>();
+        {
+            Lock l(dataMutex);
+            for (size_t i = 0; i < schedule.size(); i++) {
+                const BellSlot &s = schedule[i];
+                if (hasFilter && s.mode != filter) continue;
+                JsonObject o = a.add<JsonObject>();
+                o["id"] = i;
+                o["sig"] = slotSig(s);
+                o["mode"] = modeCode(s.mode);
+                o["day"] = s.day;
+                o["time"] = s.time;
+                o["track"] = s.track;
+                o["enabled"] = s.enabled;
+            }
         }
-        JsonObject o = a.createNestedObject();
-        o["id"] = i++;
-        o["mode"] = modeCode(s.mode);
-        o["day"] = s.day;
-        o["time"] = s.time;
-        o["track"] = s.track;
-        o["enabled"] = s.enabled;
-      }
-    }
-    d["max"] = MAX_SLOTS;
-    AsyncResponseStream *res = r->beginResponseStream("application/json");
-    serializeJson(d, *res);
-    r->send(res); });
+        d["max"] = MAX_SLOTS;
+        AsyncResponseStream *res = r->beginResponseStream("application/json");
+        serializeJson(d, *res);
+        r->send(res); });
 
     server.on("/api/schedule/add", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    BellSlot s;
-    String err;
-    if (!parseSlot(r, s, err)) return sendResult(r, false, err);
-    bool full = false, saved = true;
-    {
-      Lock l(dataMutex);
-      if (schedule.size() >= MAX_SLOTS) full = true;
-      else {
-        schedule.push_back(s);
-        sortSchedule();
-        saved = saveScheduleLocked();
-      }
-    }
-    if (full) return sendResult(r, false, "Jadwal penuh (maks " + String(MAX_SLOTS) + ")");
-    if (!saved) return sendResult(r, false, "Gagal menyimpan jadwal");
-    sendResult(r, true, "Jadwal ditambahkan"); });
+        BellSlot s;
+        String err;
+        if (!parseSlot(r, s, err)) return sendResult(r, false, err);
+        bool full = false, saved = true;
+        {
+            Lock l(dataMutex);
+            if (schedule.size() >= MAX_SLOTS) full = true;
+            else {
+                schedule.push_back(s);
+                sortScheduleLocked();
+                saved = saveScheduleLocked();
+            }
+        }
+        if (full) return sendResult(r, false, "Jadwal penuh (maks " + String(MAX_SLOTS) + ")");
+        if (!saved) return sendResult(r, false, "Gagal menyimpan jadwal");
+        sendResult(r, true, "Jadwal ditambahkan"); });
 
     server.on("/api/schedule/update", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    BellSlot s;
-    String err;
-    if (!parseSlot(r, s, err)) return sendResult(r, false, err);
-    int id = postParam(r, "id").toInt();
-    bool found = false, saved = true;
-    {
-      Lock l(dataMutex);
-      if (id >= 0 && id < (int)schedule.size()) {
-        schedule[id] = s;
-        sortSchedule();
-        saved = saveScheduleLocked();
-        found = true;
-      }
-    }
-    if (!found) return sendResult(r, false, "Jadwal tidak ditemukan");
-    if (!saved) return sendResult(r, false, "Gagal menyimpan jadwal");
-    sendResult(r, true, "Jadwal disimpan"); });
+        BellSlot s;
+        String err;
+        if (!parseSlot(r, s, err)) return sendResult(r, false, err);
+        SlotLookup res;
+        bool saved = true;
+        {
+            Lock l(dataMutex);
+            int id;
+            res = findSlotLocked(r, id);
+            if (res == SLOT_OK) {
+                schedule[id] = s;
+                sortScheduleLocked();
+                saved = saveScheduleLocked();
+            }
+        }
+        if (res != SLOT_OK) return sendSlotLookupError(r, res);
+        if (!saved) return sendResult(r, false, "Gagal menyimpan jadwal");
+        sendResult(r, true, "Jadwal disimpan"); });
 
     server.on("/api/schedule/delete", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    int id = postParam(r, "id").toInt();
-    bool found = false, saved = true;
-    {
-      Lock l(dataMutex);
-      if (id >= 0 && id < (int)schedule.size()) {
-        schedule.erase(schedule.begin() + id);
-        saved = saveScheduleLocked();
-        found = true;
-      }
-    }
-    if (!found) return sendResult(r, false, "Jadwal tidak ditemukan");
-    if (!saved) return sendResult(r, false, "Gagal menyimpan jadwal");
-    sendResult(r, true, "Jadwal dihapus"); });
+        SlotLookup res;
+        bool saved = true;
+        {
+            Lock l(dataMutex);
+            int id;
+            res = findSlotLocked(r, id);
+            if (res == SLOT_OK) {
+                schedule.erase(schedule.begin() + id);
+                saved = saveScheduleLocked();
+            }
+        }
+        if (res != SLOT_OK) return sendSlotLookupError(r, res);
+        if (!saved) return sendResult(r, false, "Gagal menyimpan jadwal");
+        sendResult(r, true, "Jadwal dihapus"); });
 
     server.on("/api/tracks", HTTP_GET, [](AsyncWebServerRequest *r)
               {
-    DynamicJsonDocument d(4096);
-    JsonArray a = d.createNestedArray("tracks");
-    {
-      Lock l(dataMutex);
-      for (size_t i = 0; i < trackList.size(); i++) {
-        TrackInfo &t = trackList[i];
-        JsonObject o = a.createNestedObject();
-        o["track"] = t.track;
-        o["label"] = t.label;
-      }
-    }
-    AsyncResponseStream *res = r->beginResponseStream("application/json");
-    serializeJson(d, *res);
-    r->send(res); });
+        JsonDocument d;
+        {
+            Lock l(dataMutex);
+            fillTracksJson(d["tracks"].to<JsonArray>());
+        }
+        AsyncResponseStream *res = r->beginResponseStream("application/json");
+        serializeJson(d, *res);
+        r->send(res); });
 
     server.on("/api/tracks/add", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    int track = postParam(r, "track").toInt();
-    String label = postParam(r, "label");
-    label.trim();
-    if (track <= 0 || track > 2999) return sendResult(r, false, "Nomor track tidak valid");
-    if (label.length() == 0 || label.length() > 40) return sendResult(r, false, "Nama tidak valid");
-    bool full = false, saved = true;
-    {
-      Lock l(dataMutex);
-      bool replaced = false;
-      for (size_t i = 0; i < trackList.size(); i++) {
-        if (trackList[i].track == track) {
-          trackList[i].label = label;
-          replaced = true;
-          break;
+        long track = postParam(r, "track").toInt();
+        String label = postParam(r, "label");
+        label.trim();
+        if (track <= 0 || track > MAX_TRACK_NO) return sendResult(r, false, "Nomor track tidak valid");
+        if (label.length() == 0 || label.length() > 40) return sendResult(r, false, "Nama tidak valid");
+        bool full = false, saved = true;
+        {
+            Lock l(dataMutex);
+            bool replaced = false;
+            for (TrackInfo &t : trackList) {
+                if (t.track == track) {
+                    t.label = label;
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                if (trackList.size() >= MAX_TRACKS) full = true;
+                else trackList.push_back({(uint16_t)track, label});
+            }
+            if (!full) saved = saveTracksLocked();
         }
-      }
-      if (!replaced) {
-        if (trackList.size() >= MAX_TRACKS) full = true;
-        else {
-          TrackInfo t;
-          t.track = (uint16_t)track;
-          t.label = label;
-          trackList.push_back(t);
-        }
-      }
-      if (!full) saved = saveTracksLocked();
-    }
-    if (full) return sendResult(r, false, "Daftar track penuh (maks " + String(MAX_TRACKS) + ")");
-    if (!saved) return sendResult(r, false, "Gagal menyimpan");
-    sendResult(r, true, "Nama track disimpan"); });
+        if (full) return sendResult(r, false, "Daftar track penuh (maks " + String(MAX_TRACKS) + ")");
+        if (!saved) return sendResult(r, false, "Gagal menyimpan");
+        sendResult(r, true, "Nama track disimpan"); });
 
     server.on("/api/tracks/delete", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    int track = postParam(r, "track").toInt();
-    bool used = false, saved = true;
-    {
-      Lock l(dataMutex);
-      for (size_t i = 0; i < schedule.size(); i++) {
-        if (schedule[i].track == track) {
-          used = true;
-          break;
+        long track = postParam(r, "track").toInt();
+        bool used = false, saved = true;
+        {
+            Lock l(dataMutex);
+            for (const BellSlot &s : schedule) {
+                if (s.track == track) {
+                    used = true;
+                    break;
+                }
+            }
+            if (!used) {
+                trackList.erase(std::remove_if(trackList.begin(), trackList.end(),
+                                               [track](const TrackInfo &t) { return t.track == track; }),
+                                trackList.end());
+                saved = saveTracksLocked();
+            }
         }
-      }
-      if (!used) {
-        std::vector<TrackInfo> filtered;
-        for (size_t i = 0; i < trackList.size(); i++)
-          if (trackList[i].track != track) filtered.push_back(trackList[i]);
-        trackList = filtered;
-        saved = saveTracksLocked();
-      }
-    }
-    if (used) return sendResult(r, false, "Track masih dipakai jadwal. Ubah/hapus jadwalnya dulu.");
-    sendResult(r, saved, saved ? "Nama track dihapus" : "Gagal menyimpan"); });
+        if (used) return sendResult(r, false, "Track masih dipakai jadwal. Ubah/hapus jadwalnya dulu.");
+        sendResult(r, saved, saved ? "Nama track dihapus" : "Gagal menyimpan"); });
+
+    server.on("/api/backup", HTTP_GET, [](AsyncWebServerRequest *r)
+              {
+        JsonDocument d;
+        d["app"] = "bel-madrasah-baremetal";
+        d["version"] = FW_VERSION;
+        {
+            Lock c(cfgMutex);
+            fillConfigJson(d["config"].to<JsonObject>(), false);
+        }
+        {
+            Lock l(dataMutex);
+            fillScheduleJson(d["schedule"].to<JsonArray>(), false);
+            fillTracksJson(d["tracks"].to<JsonArray>());
+        }
+        AsyncResponseStream *res = r->beginResponseStream("application/json");
+        res->addHeader("Content-Disposition", "attachment; filename=\"bel-madrasah-backup.json\"");
+        serializeJsonPretty(d, *res);
+        r->send(res); });
+
+    server.on("/api/restore", HTTP_POST, handleRestore);
 
     server.on("/api/network", HTTP_GET, [](AsyncWebServerRequest *r)
               {
-    StaticJsonDocument<512> d;
-    bool sta = WiFi.status() == WL_CONNECTED;
-    d["mode"] = sta ? "STA" : "AP";
-    d["ssid"] = sta ? WiFi.SSID() : String(AP_SSID);
-    d["ip"] = sta ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
-    if (sta) {
-      uint32_t m = ip2u(WiFi.subnetMask());
-      uint32_t n = ip2u(WiFi.localIP()) & m;
-      uint32_t b = n | ~m;
-      d["gateway"] = WiFi.gatewayIP().toString();
-      d["mask"] = WiFi.subnetMask().toString();
-      d["range_start"] = u2ip(n + 1).toString();
-      d["range_end"] = u2ip(b - 1).toString();
-    }
-    d["static_enabled"] = staticCfg.enabled;
-    d["static_ip"] = staticCfg.ip;
-    String out;
-    serializeJson(d, out);
-    r->send(200, "application/json", out); });
+        JsonDocument d;
+        bool sta = WiFi.status() == WL_CONNECTED;
+        d["mode"] = sta ? "STA" : "AP";
+        d["ssid"] = sta ? WiFi.SSID() : String(AP_SSID);
+        d["ip"] = sta ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+        if (sta) {
+            uint32_t m = ip2u(WiFi.subnetMask());
+            uint32_t n = ip2u(WiFi.localIP()) & m;
+            uint32_t b = n | ~m;
+            d["gateway"] = WiFi.gatewayIP().toString();
+            d["mask"] = WiFi.subnetMask().toString();
+            d["range_start"] = u2ip(n + 1).toString();
+            d["range_end"] = u2ip(b - 1).toString();
+        }
+        {
+            Lock c(cfgMutex);
+            d["static_enabled"] = staticCfg.enabled;
+            d["static_ip"] = staticCfg.ip;
+        }
+        sendJson(r, d); });
 
     server.on("/api/network/static", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    bool en = postParam(r, "enabled") == "1";
-    String newIp = "";
-    if (!en) {
-      staticCfg.enabled = false;
-    } else {
-      if (WiFi.status() != WL_CONNECTED) return sendResult(r, false, "Harus terhubung ke WiFi untuk mengatur IP statis");
-      IPAddress ip;
-      if (!ip.fromString(postParam(r, "ip"))) return sendResult(r, false, "Format IP tidak valid");
+        bool en = postParam(r, "enabled") == "1";
+        String newIp = "";
+        if (!en) {
+            Lock c(cfgMutex);
+            staticCfg.enabled = false;
+        } else {
+            if (WiFi.status() != WL_CONNECTED) return sendResult(r, false, "Harus terhubung ke WiFi untuk mengatur IP statis");
+            IPAddress ip;
+            if (!ip.fromString(postParam(r, "ip"))) return sendResult(r, false, "Format IP tidak valid");
 
-      IPAddress cur = WiFi.localIP(), mask = WiFi.subnetMask(), gw = WiFi.gatewayIP();
-      uint32_t m = ip2u(mask), n = ip2u(cur) & m, b = n | ~m, v = ip2u(ip);
-      if ((v & m) != n) return sendResult(r, false, "IP di luar rentang jaringan (" + u2ip(n + 1).toString() + " - " + u2ip(b - 1).toString() + ")");
-      if (v == n || v == b) return sendResult(r, false, "IP tidak boleh alamat network/broadcast");
-      if (ip == gw) return sendResult(r, false, "IP sama dengan gateway");
+            IPAddress cur = WiFi.localIP(), mask = WiFi.subnetMask(), gw = WiFi.gatewayIP();
+            uint32_t m = ip2u(mask), n = ip2u(cur) & m, b = n | ~m, v = ip2u(ip);
+            if ((v & m) != n) return sendResult(r, false, "IP di luar rentang jaringan (" + u2ip(n + 1).toString() + " - " + u2ip(b - 1).toString() + ")");
+            if (v == n || v == b) return sendResult(r, false, "IP tidak boleh alamat network/broadcast");
+            if (ip == gw) return sendResult(r, false, "IP sama dengan gateway");
 
-      IPAddress dns = WiFi.dnsIP();
-      if (ip2u(dns) == 0) dns = gw;
-      staticCfg.enabled = true;
-      staticCfg.ssid = WiFi.SSID();
-      staticCfg.ip = ip.toString();
-      staticCfg.gw = gw.toString();
-      staticCfg.mask = mask.toString();
-      staticCfg.dns = dns.toString();
-      newIp = staticCfg.ip;
-    }
-    if (!saveConfig()) return sendResult(r, false, "Gagal menyimpan konfigurasi");
-    restartPending = true;
-    restartAt = millis() + 1500;
+            IPAddress dns = WiFi.dnsIP();
+            if (ip2u(dns) == 0) dns = gw;
+            Lock c(cfgMutex);
+            staticCfg.enabled = true;
+            staticCfg.ssid = WiFi.SSID();
+            staticCfg.ip = ip.toString();
+            staticCfg.gw = gw.toString();
+            staticCfg.mask = mask.toString();
+            staticCfg.dns = dns.toString();
+            newIp = staticCfg.ip;
+        }
+        if (!saveConfig()) return sendResult(r, false, "Gagal menyimpan konfigurasi");
+        restartAt = millis() + 1500;
+        restartPending = true;
 
-    StaticJsonDocument<256> d;
-    d["ok"] = true;
-    d["msg"] = en ? "Tersimpan. Restart, buka http://" + newIp : "IP statis dimatikan. Restart (IP dari DHCP).";
-    d["new_ip"] = newIp;
-    String out;
-    serializeJson(d, out);
-    r->send(200, "application/json", out); });
+        JsonDocument d;
+        d["ok"] = true;
+        d["msg"] = en ? "Tersimpan. Restart, buka http://" + newIp : "IP statis dimatikan. Restart (IP dari DHCP).";
+        d["new_ip"] = newIp;
+        sendJson(r, d); });
 
     server.on("/api/network/reset", HTTP_POST, [](AsyncWebServerRequest *r)
               {
-    staticCfg.enabled = false;
-    saveConfig();
-    wifiResetPending = true;
-    restartPending = true;
-    restartAt = millis() + 1500;
-    sendResult(r, true, "WiFi direset, restart... Sambung ke AP 192.168.4.1"); });
+        {
+            Lock c(cfgMutex);
+            staticCfg.enabled = false;
+        }
+        saveConfig();
+        wifiResetPending = true;
+        restartAt = millis() + 1500;
+        restartPending = true;
+        sendResult(r, true, "WiFi direset, restart... Sambung ke AP 192.168.4.1"); });
 
     server.onNotFound([](AsyncWebServerRequest *r)
                       { sendResult(r, false, "Tidak ditemukan", 404); });
@@ -1367,10 +1541,14 @@ void setup()
     setCpuFrequencyMhz(80);
     Serial.begin(115200);
     delay(1000);
+    Serial.println("Bel Madrasah firmware " FW_VERSION);
 
     i2cMutex = xSemaphoreCreateMutex();
     dataMutex = xSemaphoreCreateMutex();
-    dfpMutex = xSemaphoreCreateMutex();
+    timeMutex = xSemaphoreCreateMutex();
+    cfgMutex = xSemaphoreCreateMutex();
+    infoMutex = xSemaphoreCreateMutex();
+    audioQueue = xQueueCreate(8, sizeof(AudioCmd));
 
     Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
@@ -1378,13 +1556,12 @@ void setup()
     if (!oledReady)
         Serial.println("OLED SSD1306 tidak terdeteksi!");
     else
-        oledShow("BEL MADRASAH", "Memulai...");
+        oledShow("BEL MADRASAH", "v" FW_VERSION);
 
-    // Inisialisasi RTC dengan penanda kepercayaan di NVRAM
     rtcPresent = rtc.begin();
     if (!rtcPresent)
     {
-        Serial.println("RTC DS1307 tidak terdeteksi! Bel dikunci sampai waktu valid");
+        Serial.println("RTC DS1307 tidak terdeteksi. Bel menunggu waktu dari NTP");
         timeTrusted = false;
     }
     else if (!rtc.isrunning())
@@ -1397,16 +1574,14 @@ void setup()
     else
     {
         DateTime n = rtc.now();
-        bool yearOk = (n.year() >= MIN_VALID_YEAR && n.year() <= 2099);
-        timeTrusted = yearOk && (rtc.readnvram(TRUST_ADDR) == TRUST_MAGIC);
+        bool yearOk = n.year() >= bell::MIN_VALID_YEAR && n.year() <= bell::MAX_VALID_YEAR;
+        timeTrusted = yearOk && rtc.readnvram(TRUST_ADDR) == TRUST_MAGIC;
         if (!timeTrusted)
             Serial.println("Waktu RTC belum pernah diverifikasi, bel dikunci");
     }
 
     if (!LittleFS.begin(true))
-    {
         Serial.println("LittleFS gagal mount");
-    }
     loadConfig();
     loadSchedule();
     loadTracks();
@@ -1424,12 +1599,12 @@ void loop()
 
     if (wifiSetupDone && WiFi.status() == WL_CONNECTED)
     {
-        unsigned long interval = ntpLastOk ? NTP_SYNC_INTERVAL : 60000UL;
+        unsigned long interval = ntpLastOk ? NTP_SYNC_INTERVAL : NTP_RETRY_INTERVAL;
         if (lastNtpAttempt == 0 || millis() - lastNtpAttempt > interval)
             syncTimeFromNTP();
     }
 
-    if (restartPending && millis() >= restartAt)
+    if (restartPending && (long)(millis() - restartAt) >= 0)
     {
         if (wifiResetPending)
         {

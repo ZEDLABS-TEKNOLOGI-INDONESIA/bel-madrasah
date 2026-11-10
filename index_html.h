@@ -66,6 +66,7 @@ footer a:hover{text-decoration:underline}
 <header><h1>Bel Madrasah</h1><div class="clk" id="hTime">-</div></header>
 <div class="wrap">
 <div class="warn" id="dfWarn">DFPlayer / kartu SD tidak terdeteksi. Bel tidak akan berbunyi. Periksa kabel dan kartu SD di modul DFPlayer.</div>
+<div class="warn" id="dfErr"></div>
 <div class="warn" id="timeWarn">Waktu perangkat belum tepercaya (RTC bermasalah / belum sinkron). Bel dikunci sampai waktu diperbaiki. Sambungkan ke internet atau atur waktu manual.</div>
 <div class="layout">
 
@@ -76,6 +77,8 @@ footer a:hover{text-decoration:underline}
 <div class="it"><div class="l">IP Address</div><div class="v" id="sIp">-</div></div>
 <div class="it"><div class="l">Sedang Diputar</div><div class="v" id="sPlay">-</div></div>
 <div class="it"><div class="l">DFPlayer</div><div class="v" id="sSd">-</div></div>
+<div class="it"><div class="l">Bel Terakhir</div><div class="v" id="sLast">-</div></div>
+<div class="it"><div class="l">Sumber Waktu</div><div class="v" id="sClock">-</div></div>
 <div class="it"><div class="l">Mode Libur</div><div class="v" id="sHol">-</div></div>
 <div class="it" style="grid-column:1/-1"><div class="l">Mode Tidur</div><div class="v" id="sSleep">-</div></div>
 </div></div>
@@ -116,6 +119,13 @@ footer a:hover{text-decoration:underline}
 <button type="submit" class="full" style="margin-top:0">Simpan Waktu</button>
 <button type="button" class="sec full" onclick="fillNow()">Isi dari perangkat ini</button>
 </form></div>
+
+<div class="card"><h2>Backup</h2>
+<p class="mut" style="margin-top:0">Simpan jadwal, nama track, dan pengaturan ke file. Lakukan sebelum memperbarui firmware.</p>
+<a href="/api/backup" download="bel-madrasah-backup.json"><button type="button" class="full" style="margin-top:0">Unduh Backup</button></a>
+<input type="file" id="rsFile" accept="application/json,.json" style="display:none" onchange="restoreBackup(this)">
+<button type="button" class="sec full" onclick="$('rsFile').click()">Pulihkan dari File</button>
+</div>
 
 <div class="card"><h2>Jaringan</h2>
 <div class="grid">
@@ -170,7 +180,7 @@ footer a:hover{text-decoration:underline}
 
 </div></div>
 
-<footer>Powered By <a href="https://zedlabs.id" target="_blank" rel="noopener noreferrer">ZEDLABS Teknologi Indonesia</a></footer>
+<footer>Firmware <span id="ver">-</span> &middot; Powered By <a href="https://zedlabs.id" target="_blank" rel="noopener noreferrer">ZEDLABS Teknologi Indonesia</a></footer>
 
 <script>
 var $=function(id){return document.getElementById(id);};
@@ -178,7 +188,7 @@ var DAYS={"all":"Setiap hari","mon-sat":"Senin-Sabtu","mon-fri":"Senin-Jumat","m
 var DAY_ORDER=["all","mon-sat","mon-fri","mon-thu","mon","tue","wed","thu","fri","sat","sun"];
 var MODES={"reguler":"Reguler","ramadhan":"Ramadhan","pts":"PTS","pas":"PAS"};
 var DOW=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-var slots=[],tracks=[],editId=-1,dfOk,dayFilter='';
+var slots=[],tracks=[],editId=-1,editSig='',dfOk,dayFilter='';
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function msg(t,ok){var m=$('msg');m.textContent=t;m.className=ok?'ok':'err';m.style.display='block';clearTimeout(msg.t);msg.t=setTimeout(function(){m.style.display='none';},4500);}
 function post(url,data){
@@ -224,15 +234,20 @@ function loadStatus(){
  $('sNet').textContent=s.mode=='STA'?'WiFi ('+s.rssi+' dBm)':'Mode AP';
  $('sIp').textContent=s.ip;
  $('sPlay').textContent=s.playing?('Track '+s.track):'-';
- $('sSd').textContent=s.dfp?'Terpasang':'Tidak ada';
+ $('sSd').textContent=!s.dfp?'Tidak ada':(s.sd?'Terpasang':'Kartu SD dicabut');
+ $('sLast').textContent=s.last_bell||'-';
+ $('sClock').textContent=s.clock=='rtc'?'RTC':'NTP (tanpa RTC)';
+ $('ver').textContent=s.version||'-';
+ $('dfErr').textContent=s.dfp_error||'';
+ $('dfErr').style.display=s.dfp_error?'block':'none';
  $('sHol').textContent=s.holiday?'Aktif':'Nonaktif';
  $('sSleep').textContent=s.sleeping?('Sedang tidur (s/d '+s.sleep_end+')'):(s.sleep_on?('Siaga ('+s.sleep_start+' - '+s.sleep_end+')'):'Nonaktif');
  $('timeWarn').style.display=s.trusted?'none':'block';
- $('dfWarn').style.display=s.dfp?'none':'block';
+ $('dfWarn').style.display=(s.dfp&&s.sd)?'none':'block';
  if(document.activeElement!==$('vol')){$('vol').value=s.volume;$('volVal').textContent=s.volume;}
  $('hol').checked=s.holiday;
  if(document.activeElement!==$('modeSel'))$('modeSel').value=s.sched_mode||'reguler';
- dfOk=s.dfp;
+ dfOk=s.dfp&&s.sd;
  }).catch(function(e){});
 }
 function setVol(v){act('/api/volume',{value:v});}
@@ -297,26 +312,42 @@ function findSlot(id){
 }
 function toggleSlot(id,en){
  var s=findSlot(id);if(!s)return;
- post('/api/schedule/update',{id:id,mode:s.mode,day:s.day,time:s.time,track:s.track,enabled:en?1:0}).then(function(j){msg(j.msg,j.ok);loadSched();});
+ post('/api/schedule/update',{id:id,sig:s.sig,mode:s.mode,day:s.day,time:s.time,track:s.track,enabled:en?1:0}).then(function(j){msg(j.msg,j.ok);loadSched();});
 }
 function delSlot(id){
  if(!confirm('Hapus jadwal ini?'))return;
- post('/api/schedule/delete',{id:id}).then(function(j){msg(j.msg,j.ok);loadSched();});
+ var s=findSlot(id);
+ post('/api/schedule/delete',{id:id,sig:s?s.sig:''}).then(function(j){msg(j.msg,j.ok);loadSched();});
 }
 function editSlot(id){
  var s=findSlot(id);if(!s)return;
- editId=id;
+ editId=id;editSig=s.sig;
  $('fMode').value=s.mode;$('fDay').value=s.day;$('fTime').value=s.time;$('fTrack').value=s.track;$('fEn').checked=s.enabled;
  $('fTitle').textContent='Edit Jadwal';$('fSave').textContent='Simpan';$('fCancel').style.display='block';
  $('fTitle').scrollIntoView({behavior:'smooth'});
 }
-function resetForm(){editId=-1;$('fTitle').textContent='Tambah Jadwal';$('fSave').textContent='Tambah';$('fCancel').style.display='none';$('fEn').checked=true;$('fMode').value=$('viewMode').value;}
+function resetForm(){editId=-1;editSig='';$('fTitle').textContent='Tambah Jadwal';$('fSave').textContent='Tambah';$('fCancel').style.display='none';$('fEn').checked=true;$('fMode').value=$('viewMode').value;}
 function saveSlot(e){
  e.preventDefault();
  var d={mode:$('fMode').value,day:$('fDay').value,time:$('fTime').value,track:$('fTrack').value,enabled:$('fEn').checked?1:0};
  var p;
- if(editId>=0){d.id=editId;p=post('/api/schedule/update',d);}else p=post('/api/schedule/add',d);
- p.then(function(j){msg(j.msg,j.ok);if(j.ok){resetForm();loadSched();}});
+ if(editId>=0){d.id=editId;d.sig=editSig;p=post('/api/schedule/update',d);}else p=post('/api/schedule/add',d);
+ p.then(function(j){msg(j.msg,j.ok);if(j.ok)resetForm();loadSched();});
+}
+
+function restoreBackup(input){
+ var f=input.files[0];input.value='';
+ if(!f)return;
+ if(!confirm('Pulihkan jadwal, nama track, dan pengaturan dari '+f.name+'? Data saat ini akan diganti.'))return;
+ var rd=new FileReader();
+ rd.onload=function(){
+  post('/api/restore',{data:rd.result}).then(function(j){
+   msg(j.msg,j.ok);
+   if(j.ok){loadTracks().then(loadSched).then(loadSleep).then(loadStatus);}
+  });
+ };
+ rd.onerror=function(){msg('File tidak dapat dibaca',false);};
+ rd.readAsText(f);
 }
 
 function loadNet(){

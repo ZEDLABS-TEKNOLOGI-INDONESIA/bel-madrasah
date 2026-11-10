@@ -1,0 +1,4 @@
+build/
+dist/
+logic_test
+*.o

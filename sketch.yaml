@@ -1,0 +1,18 @@
+default_profile: bel-madrasah
+profiles:
+  bel-madrasah:
+    notes: ESP32-C3 Super Mini, partisi Minimal SPIFFS (1.9MB APP dengan OTA, 128KB LittleFS)
+    fqbn: esp32:esp32:esp32c3:CDCOnBoot=cdc,PartitionScheme=min_spiffs
+    platforms:
+      - platform: esp32:esp32 (3.3.12)
+        platform_index_url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+    libraries:
+      - WiFiManager (2.0.17)
+      - ESP Async WebServer (3.12.1)
+      - Async TCP (3.5.0)
+      - ArduinoJson (7.4.3)
+      - RTClib (2.1.4)
+      - Adafruit GFX Library (1.13.0)
+      - Adafruit SSD1306 (2.5.17)
+      - Adafruit BusIO (1.17.4)
+      - DFRobotDFPlayerMini (1.0.6)
