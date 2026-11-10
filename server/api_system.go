@@ -32,6 +32,7 @@ func handleServiceStatus(w http.ResponseWriter, r *http.Request) {
 		"is_playing":  isAudioPlaying(),
 		"now_playing": getNowPlaying(),
 		"volume":      cfg.Volume,
+		"version":     version,
 	})
 }
 

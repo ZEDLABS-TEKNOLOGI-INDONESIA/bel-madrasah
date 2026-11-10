@@ -10,30 +10,21 @@ cd "$(dirname "$0")/.."
 
 size() { du -h "$1" | cut -f1; }
 
+VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+echo "== versi $VERSION"
+
 echo "== build frontend"
 pnpm build
 
 echo "== precompress frontend"
-find dist -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.svg' \
-  -o -name '*.json' -o -name '*.ico' \) ! -name '*.br' ! -name '*.gz' -print0 |
-while IFS= read -r -d '' f; do
-  if command -v brotli >/dev/null 2>&1; then
-    brotli -q 11 -w 24 -f -k "$f"
-  fi
-  if command -v zopfli >/dev/null 2>&1; then
-    zopfli --i50 "$f"
-  else
-    gzip -9 -k -f "$f"
-  fi
-done
-find dist -name '*.map' -delete
+scripts/precompress.sh dist
 
 echo "== build backend (linux/arm64)"
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
   -trimpath \
   -tags "netgo,osusergo" \
   -gcflags="all=-l -B" \
-  -ldflags="-s -w -buildid= -extldflags=-static" \
+  -ldflags="-s -w -buildid= -extldflags=-static -X main.version=$VERSION" \
   -o "$BIN" ./server
 echo "ukuran setelah strip: $(size "$BIN")"
 

@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24"
+  GO_VERSION: "1.24"
+  PNPM_VERSION: "12.16.1"
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Paket dan publikasi
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pastikan tag ada di main
+        run: |
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+            { echo "tag $GITHUB_REF_NAME bukan commit di main"; exit 1; }
+
+      - name: Catatan rilis
+        run: scripts/release-notes.sh "$GITHUB_REF_NAME" > release-notes.md
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Pasang pnpm
+        run: npm install -g pnpm@${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Pasang brotli dan zopfli
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq brotli zopfli
+
+      - name: Pasang dependensi
+        run: pnpm install --frozen-lockfile
+
+      - name: Bangun paket
+        run: scripts/package.sh "$GITHUB_REF_NAME" release
+
+      - name: Verifikasi paket
+        run: |
+          (cd release && sha256sum -c checksums.txt)
+          mkdir -p verify
+          tar -xzf release/bel-madrasah-linux-amd64.tar.gz -C verify
+          test "$(verify/bel-madrasah --version)" = "$GITHUB_REF_NAME"
+          test -f verify/static/index.html
+          test -x verify/bel-madrasah-update
+
+      - name: Publikasikan release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --verify-tag

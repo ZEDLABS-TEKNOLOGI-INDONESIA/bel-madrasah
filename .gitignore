@@ -29,3 +29,6 @@ draft.md
 # local binaries
 /bel-madrasah
 /bel-madrasah-*
+
+# paket hasil scripts/package.sh
+/release/

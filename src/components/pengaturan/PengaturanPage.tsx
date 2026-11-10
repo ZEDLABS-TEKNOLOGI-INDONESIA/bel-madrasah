@@ -210,6 +210,11 @@ function InfoSection() {
       value: data?.is_libur ? "Libur" : "Aktif",
       variant: data?.is_libur ? "warning" : "default",
     },
+    {
+      label: "Versi",
+      value: data?.version ?? "-",
+      variant: "default",
+    },
   ];
 
   const healthVariant: Tone =

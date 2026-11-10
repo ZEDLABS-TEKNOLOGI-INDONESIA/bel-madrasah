@@ -32,7 +32,7 @@ Rujukan baku untuk membangun panel admin berbasis web yang cepat, ringan, dan se
 | Font | @fontsource-variable/lexend (self-hosted) |
 | Bahasa | TypeScript 6 (strict, lewat `astro/tsconfigs/strict`) |
 | Format | Prettier, `printWidth` 100 |
-| Paket | pnpm, Node 22.12 atau lebih baru |
+| Paket | pnpm, Node 22.18 atau lebih baru (type stripping untuk `node:test`) |
 
 Catatan perkakas:
 - Pakai TypeScript 6. `astro check` belum mendukung TypeScript 7 dan membawa dependensi yang bentrok, jadi pemeriksaan tipe memakai `tsc`.
@@ -544,6 +544,16 @@ Acuan terakhir: total sekitar 150 KB brotli. `Modal` sekitar 6 KB, ditambah inti
 
 Berkas `_astro/` diberi cache `immutable` satu tahun karena namanya berhash.
 
+### CI/CD
+
+- `.github/workflows/ci.yml` berjalan pada push ke `main`, pull request, dan dipanggil oleh release. Urutannya: Prettier dan gofmt, `bash -n` dan shellcheck untuk `scripts/`, `pnpm check` dan `go vet`, `pnpm test`, `pnpm e2e`.
+- `.github/workflows/release.yml` berjalan pada tag `vX.Y.Z`. Ia menjalankan CI, menolak tag di luar `main` atau tanpa bagian di `CHANGELOG.md`, lalu memanggil `scripts/package.sh` dan menerbitkan GitHub Release.
+- Paket `bel-madrasah-linux-<arch>.tar.gz` berisi `bel-madrasah` (versi ditanam lewat `-X main.version`), `static/` yang sudah di-precompress, dan `bel-madrasah-update`. `checksums.txt` memuat SHA-256 semua paket.
+- Server menarik release sendiri lewat `bel-madrasah-update` dan timer systemd, sehingga tidak perlu dapat dijangkau dari internet. Updater berjalan sebagai root dari `/usr/local/sbin`, bukan dari direktori proyek yang dimiliki user layanan, dan membaca versi binary terpasang sebagai `nobody`.
+- Updater hanya mengganti binary dan `static/`, mengecek `/healthz`, dan memulihkan cadangan bila gagal. Ia memperbarui dirinya sendiri sebagai langkah terakhir setelah versi baru sehat.
+- Scheduler memulihkan daftar bel yang sudah berbunyi hari ini dari log aktivitas saat start, sehingga restart kapan pun tidak membunyikan bel dua kali.
+- Logika rilis berada di skrip (`package.sh`, `precompress.sh`, `release-notes.sh`), bukan di YAML, agar dapat dijalankan dan diuji di mesin lokal.
+
 ### Kontrak backend
 
 Frontend mengandalkan perilaku berikut dari server:
@@ -610,7 +620,8 @@ Menambah halaman panel hanya menyentuh dua tempat: `routes.ts` dan `PAGES` di `A
 
 ## 21. Daftar Periksa Sebelum Rilis
 
-- `pnpm check` bersih, `pnpm test` dan `pnpm e2e` lulus, `pnpm format` tidak mengubah apa pun
+- `pnpm check` bersih, `pnpm test` dan `pnpm e2e` lulus, `pnpm format` tidak mengubah apa pun (CI memeriksa semuanya)
+- Bagian `## vX.Y.Z` ditambahkan ke `CHANGELOG.md` sebelum tag dibuat
 - Tidak ada `any`, `confirm(`, `window.confirm`, atau `catch (e: any)` di `src`
 - Tidak ada warna heksadesimal di komponen selain `#fff`
 - Tidak ada nama aplikasi atau kalimat pemasaran yang tertulis langsung di komponen
@@ -649,5 +660,6 @@ Dua fitur pada halaman Audio menjadi contoh pola baku untuk pengaturan dan aksi 
 
 Tidak ada penyimpangan yang diketahui dari aturan di atas. Batasan yang disengaja:
 
-- Uji e2e membutuhkan Go dan Chromium di mesin pengembang; belum dijalankan di CI karena repositori belum memiliki pipeline
+- Update otomatis hanya mengganti binary dan frontend. Perubahan pada unit systemd, konfigurasi nginx, atau installer tetap memerlukan menjalankan `scripts/install.sh` ulang
+
 - Unit test frontend hanya menjangkau modul tanpa impor runtime; komponen React diuji lewat e2e, bukan uji komponen terpisah

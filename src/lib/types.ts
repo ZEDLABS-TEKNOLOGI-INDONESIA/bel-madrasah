@@ -23,6 +23,7 @@ export interface ServiceStatus {
   is_libur: boolean;
   active_mode: string;
   volume?: number;
+  version?: string;
 }
 
 export interface VolumeResponse {
