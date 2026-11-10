@@ -1,6 +1,6 @@
 # Bel Madrasah (ESP32-C3 Super Mini)
 
-Bel sekolah otomatis berbasis ESP32-C3 yang memutar file MP3 dari modul DFPlayer Mini sesuai jadwal. Seluruh pengaturan (jadwal, nada bel, volume, mode, waktu, jaringan, mode tidur) dilakukan lewat halaman web.
+Bel sekolah otomatis berbasis ESP32-C3 yang memutar file MP3 dari modul DFPlayer Mini sesuai jadwal. Seluruh pengaturan dilakukan lewat halaman web yang dilindungi login: jadwal per mode, mode otomatis per tanggal, hari libur, log, audio, waktu, jaringan, backup, dan pembaruan firmware.
 
 ## Informasi Perangkat
 
@@ -10,7 +10,8 @@ Bel sekolah otomatis berbasis ESP32-C3 yang memutar file MP3 dari modul DFPlayer
 | Password AP | P@ssw0rd |
 | IP Address AP | 192.168.4.1 |
 | Alamat mDNS | bel-madrasah.local |
-| Versi firmware | lihat `FW_VERSION` di `bel-madrasah.ino`, footer halaman web, atau `/api/status` |
+| Password admin web bawaan | P@ssw0rd (wajib diganti saat login pertama) |
+| Versi firmware | `FW_VERSION` di `bel-madrasah.ino`, footer halaman web, atau perintah `versi` di Serial Monitor |
 
 ## Daftar Isi
 
@@ -29,42 +30,40 @@ Bel sekolah otomatis berbasis ESP32-C3 yang memutar file MP3 dari modul DFPlayer
 ## 1. Fitur
 
 **Penjadwalan**
-- Bel otomatis berdasarkan jam dan hari, memutar track MP3 dari DFPlayer.
-- 4 mode jadwal: Reguler, Ramadhan, PTS, dan PAS. Mode aktif diganti dari web.
-- Pengaturan hari fleksibel: setiap hari, Senin-Sabtu, Senin-Jumat, Senin-Kamis, atau per hari.
-- Aktif atau nonaktif per bel, serta tambah, ubah, dan hapus jadwal (maksimal 300 bel).
-- Bila beberapa bel jatuh pada menit yang sama, hari yang paling spesifik menang (misalnya "Senin" mengalahkan "Senin-Jumat").
-- Mode Libur: menonaktifkan seluruh jadwal dengan satu tombol.
-- Mode Tidur: bel dibungkam pada rentang jam tertentu (boleh melewati tengah malam) dan layar OLED dapat dimatikan.
+- Bel otomatis berdasarkan jam dan hari, memutar track MP3 dari DFPlayer (maksimal 300 bel).
+- 6 mode jadwal: Reguler, Ramadhan, PTS, PAS, Pesantren, dan Lainnya.
+- Mode otomatis berdasarkan rentang tanggal (Ramadhan, PTS, PAS, Pesantren), atau dipilih manual.
+- Hari aktif per mode, misalnya Sabtu dan Minggu dinonaktifkan untuk mode Reguler.
+- Pengaturan hari per bel: setiap hari, Senin-Sabtu, Senin-Jumat, Senin-Kamis, atau per hari. Bila beberapa bel jatuh pada menit yang sama, hari yang paling spesifik menang.
+- Daftar tanggal libur dan impor libur nasional (termasuk cuti bersama) langsung dari perangkat.
+- Libur manual untuk libur mendadak, dan mode tidur pada rentang jam tertentu.
 
 **Audio**
-- Kontrol volume (0-30), tombol Stop Bel, dan tombol Putar untuk menguji tiap track.
-- Daftar track: beri nama pada nomor track agar mudah dipilih di jadwal (maksimal 60 track).
-- Auto-retry DFPlayer setiap 5 detik jika modul atau kartu SD belum terdeteksi.
-- Kartu SD yang dicabut terdeteksi, dan galat DFPlayer (misalnya file track tidak ada) tampil di web.
+- Volume 0-30, preset equalizer DFPlayer (Normal, Pop, Rock, Jazz, Classic, Bass), hentikan bel, dan putar track untuk uji.
+- Nama track agar mudah dipilih di jadwal (maksimal 60 track).
+- Kartu SD dicabut dan galat DFPlayer (misalnya file track tidak ada) terdeteksi dan tampil di web.
+
+**Pemantauan**
+- Dashboard: waktu, mode aktif beserta sumbernya, status hari, bel terakhir, dan jadwal hari ini dengan bel berikutnya.
+- Log aktivitas: bel yang berbunyi dan bel yang gagal berbunyi beserta alasannya (150 entri terakhir).
 
 **Waktu**
-- Sinkronisasi NTP (UTC+7) ke RTC setiap 1 jam bila ada internet.
-- Tanpa internet, waktu tetap berjalan dari RTC DS1307. Tanpa modul RTC, bel memakai jam dari NTP selama perangkat terhubung internet.
-- Pengamanan waktu: bel dikunci bila waktu belum tepercaya (lihat bagian Penjelasan Fitur Penting).
-- Atur waktu manual dari web, termasuk tombol pengisian otomatis dari jam perangkat yang membuka halaman.
+- Sinkronisasi NTP (UTC+7) ke RTC setiap 1 jam bila ada internet. Tanpa modul RTC, bel memakai jam NTP.
+- Pengamanan waktu: bel dikunci bila waktu belum tepercaya.
+- Restart di menit yang sama dengan bel yang sudah berbunyi tidak membunyikannya dua kali.
 
-**Jaringan**
-- WiFi Manager: konfigurasi WiFi lewat portal AP, sambung ulang otomatis, dan fallback ke mode AP bila WiFi tidak tersedia.
-- IP statis opsional dan reset WiFi dari web.
+**Keamanan dan pemeliharaan**
+- Login admin dengan password tersimpan ter-hash, sesi ber-cookie, dan pembatasan percobaan login.
+- Pembaruan firmware lewat web: unggah file, atau unduh otomatis dari GitHub Releases dengan verifikasi TLS dan SHA-256. Firmware baru yang gagal berjalan dikembalikan otomatis ke versi sebelumnya.
+- Backup dan pulihkan jadwal, nama track, mode, hari libur, dan pengaturan.
 
 **Antarmuka**
-- Web dashboard: status waktu, jaringan, IP, track yang diputar, kondisi DFPlayer, mode libur, dan mode tidur.
-- Peringatan di web bila DFPlayer atau kartu SD tidak terdeteksi, atau waktu belum tepercaya.
-- Tampilan OLED bergantian setiap 10 detik: Waktu, IP Address, dan Nama WiFi (rata tengah).
-
-**Penyimpanan**
-- Penyimpanan permanen (LittleFS): konfigurasi, jadwal, dan nama track tidak hilang saat mati listrik.
-- Backup dan pulihkan jadwal, nama track, dan pengaturan dari halaman web.
+- Halaman web responsif dengan tema terang dan gelap, sidebar di desktop dan navigasi bawah di ponsel. Berjalan tanpa internet (mode AP).
+- OLED bergantian setiap 10 detik: Waktu, IP Address, dan Nama WiFi.
 
 ## 2. Kebutuhan Perangkat Keras
 
-- ESP32-C3 Super Mini
+- ESP32-C3 Super Mini (flash 4 MB)
 - Modul DFPlayer Mini
 - OLED 0.91 inci (SSD1306, 128x32, I2C, alamat 0x3C)
 - RTC DS1307 (disarankan dengan baterai CR2032 terpasang)
@@ -132,7 +131,7 @@ Track bawaan:
 | 11 | pelajaran-4 | 23 | akhir-pekan |
 | 12 | pelajaran-5 | 24 | pramuka |
 
-Nama track di web hanya label. Untuk menambah track baru, salin file MP3 ke kartu SD dengan nomor berikutnya, lalu beri nama pada nomor tersebut di kartu "Daftar Track".
+Nama track di web hanya label. ESP32 tidak dapat membaca atau menulis kartu SD DFPlayer, jadi file audio dikelola dengan menyalinnya ke kartu SD dari komputer. Untuk menambah track baru, salin file MP3 dengan nomor berikutnya, lalu beri nama pada nomor tersebut di Jadwal, bagian Daftar track.
 
 ## 5. Library
 
@@ -150,7 +149,7 @@ Versi yang dipakai dan diuji dikunci di `sketch.yaml`:
 | Adafruit BusIO | Adafruit | 1.17.4 |
 | DFRobotDFPlayerMini | DFRobot | 1.0.6 |
 
-Core: esp32 by Espressif 3.3.12. Library bawaan core (tidak perlu dipasang): `WiFi`, `ESPmDNS`, `Wire`, `LittleFS`, `HardwareSerial`.
+Core: esp32 by Espressif 3.3.12. Library bawaan core (tidak perlu dipasang): `WiFi`, `ESPmDNS`, `Wire`, `LittleFS`, `HardwareSerial`, `NetworkClientSecure`, `HTTPClient`, `Update`.
 
 Catatan:
 - Gunakan ESP Async WebServer dan Async TCP dari ESP32Async. Versi lama dari me-no-dev tidak kompatibel dengan core ESP32 terbaru.
@@ -164,10 +163,12 @@ Catatan:
 Unduh `bel-madrasah-fw-<versi>-esp32c3-full.bin` dari halaman Releases (tag `fw-v...`), lalu flash ke offset `0x0`:
 
 ```bash
-esptool.py --chip esp32c3 --port /dev/ttyACM0 write_flash 0x0 bel-madrasah-fw-1.1.0-esp32c3-full.bin
+esptool.py --chip esp32c3 --port /dev/ttyACM0 write_flash 0x0 bel-madrasah-fw-2.0.0-esp32c3-full.bin
 ```
 
 Atau lewat browser di https://espressif.github.io/esptool-js/ dengan alamat `0x0`. Cocokkan SHA-256 file dengan `checksums.txt` di release yang sama.
+
+Setelah firmware 2.0.0 terpasang, pembaruan berikutnya tidak memerlukan kabel USB (lihat bagian 9, Pembaruan firmware).
 
 ### Pilihan B: arduino-cli
 
@@ -189,38 +190,49 @@ Profil di `sketch.yaml` memasang core dan library dengan versi yang tepat secara
 | Partition Scheme | **Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS)** |
 | Baud Serial Monitor | 115200 |
 
-Firmware berukuran sekitar 1,4 MB dan tidak muat di partisi bawaan (1,2 MB).
+Firmware berukuran sekitar 1,7 MB dan tidak muat di partisi bawaan (1,2 MB). Partisi ini juga menyediakan dua slot aplikasi yang dibutuhkan pembaruan firmware lewat web.
 
-### Memperbarui perangkat yang sudah terpasang
+### Memperbarui perangkat dengan firmware lama (sebelum 2.0.0)
 
-Mengganti skema partisi menghapus isi LittleFS (jadwal, nama track, pengaturan). Sebelum flashing:
-
-1. Buka halaman web perangkat, kartu **Backup**, tekan **Unduh Backup**. Firmware sebelum 1.1.0 belum punya tombol ini; catat jadwal secara manual.
-2. Flash firmware baru.
-3. Atur WiFi lagi bila diminta, lalu di kartu **Backup** tekan **Pulihkan dari File**.
-
-Pengaturan jaringan (IP statis) tidak ikut dipulihkan agar perangkat tidak terkunci dari jaringan baru.
+Firmware lama memakai partisi bawaan. Mengganti skema partisi menghapus isi LittleFS (jadwal, nama track, pengaturan), dan firmware lama belum punya tombol backup. Sebelum flashing, catat jadwal secara manual. Setelah flashing, atur WiFi lagi, masuk dengan password bawaan, ganti password, lalu masukkan jadwal kembali.
 
 ## 7. Struktur Berkas
 
-| Berkas | Fungsi |
+Sketch dipecah per bagian. Arduino menggabungkan semua tab `.ino` saat kompilasi; variabel global ada di berkas utama dan semua tipe di `types.h`.
+
+| Berkas | Isi |
 |---|---|
-| `bel-madrasah.ino` | Program utama: bel, RTC, WiFi, web server, OLED, DFPlayer |
-| `bell_logic.h` | Logika murni tanpa ketergantungan Arduino: hari, jam, mode tidur, pemilihan bel, penjaga waktu |
-| `index_html.h` | Halaman web (HTML, CSS, JavaScript) dalam bentuk string PROGMEM |
+| `bel-madrasah.ino` | Include, konstanta, variabel global, `setup()`, `loop()` |
+| `schedule.ino` | Mode, jadwal, nama track, pemilihan bel, task bel |
+| `clock.ino` | RTC, jam NTP, penjaga waktu, NVRAM |
+| `audio.ino` | DFPlayer, antrean perintah audio, equalizer |
+| `holidays.ino` | Tanggal libur dan impor libur nasional |
+| `activity.ino` | Log aktivitas |
+| `auth.ino` | Password admin, sesi login, pembatasan percobaan, perintah Serial |
+| `ota.ino` | Pembaruan firmware dari web dan GitHub, verifikasi dan rollback |
+| `rollback.cpp` | Menunda penandaan firmware sehat sampai perangkat terbukti berjalan normal |
+| `web.ino` | Seluruh endpoint HTTP |
+| `network.ino` | WiFi, AP cadangan, IP statis |
+| `display.ino` | Layar OLED |
+| `storage.ino` | Penulisan berkas atomik dan konfigurasi |
+| `bell_logic.h` | Logika murni tanpa ketergantungan Arduino: hari, jam, tanggal, mode, pemilihan bel, penjaga waktu, versi, pengurai kalender |
 | `types.h` | Definisi tipe data bersama |
+| `index_html.h` | Halaman web (HTML, CSS, JavaScript) |
 | `sketch.yaml` | Profil build `arduino-cli`: board, partisi, versi core dan library |
 | `tests/logic_test.cpp` | Uji `bell_logic.h` yang berjalan di komputer biasa |
 | `.github/workflows/firmware.yml` | CI: uji logika, kompilasi, dan rilis binary pada tag `fw-vX.Y.Z` |
 | `CHANGELOG.md` | Catatan per versi firmware |
 
-Berkas yang dibuat otomatis di LittleFS pada perangkat:
+Berkas di LittleFS pada perangkat:
 
 | Berkas | Isi |
 |---|---|
-| `/config.json` | Volume, mode libur, mode jadwal aktif, IP statis, mode tidur |
+| `/config.json` | Volume, equalizer, libur manual, mode dan rentang tanggal, hari aktif per mode, mode tidur, IP statis, pembaruan otomatis |
 | `/schedule.json` | Seluruh jadwal bel |
 | `/tracks.json` | Nama track |
+| `/holidays.json` | Tanggal libur |
+| `/log.jsonl` | Log aktivitas |
+| `/auth.json` | Hash password admin (tidak ikut backup) |
 
 ### Pengujian
 
@@ -234,105 +246,113 @@ g++ -std=c++17 -Wall -Wextra -Werror -o logic_test tests/logic_test.cpp && ./log
 2. Tambahkan bagian `## fw-vX.Y.Z` di `CHANGELOG.md`.
 3. Commit ke `baremetal`, lalu buat dan push tag `fw-vX.Y.Z`.
 
-Workflow memverifikasi tag sama dengan `FW_VERSION`, lalu menerbitkan release berisi binary penuh, binary aplikasi, dan `checksums.txt`. Release firmware tidak ditandai "Latest" agar tidak tertukar dengan release aplikasi server di branch `main`.
+Workflow memverifikasi tag sama dengan `FW_VERSION`, lalu menerbitkan release berisi binary penuh, binary aplikasi, dan `checksums.txt`. Perangkat dengan pembaruan otomatis aktif memasang release ini sendiri. Release firmware tidak ditandai "Latest" agar tidak tertukar dengan release aplikasi server di branch `main`.
 
 ## 8. Cara Pakai
 
-1. Upload sketch lalu nyalakan perangkat.
-2. Sambungkan HP atau laptop ke WiFi BELL MADRASAH V0.1.0 (password P@ssw0rd).
-3. Buka `http://192.168.4.1`.
-4. Jika ingin sinkronisasi waktu otomatis, atur WiFi lewat portal WiFi Manager. Setelah tersimpan, perangkat restart dan terhubung ke WiFi tersebut. Alamat web dapat dilihat di layar OLED atau dibuka lewat `http://bel-madrasah.local`.
-5. Periksa waktu. Jika muncul peringatan "Waktu perangkat belum tepercaya", sambungkan ke internet atau gunakan kartu "Atur Waktu".
-6. Pilih mode jadwal aktif, atur volume, lalu sesuaikan jadwal bel.
-7. Uji tiap track dengan tombol "Putar" di kartu "Daftar Track".
+1. Flash firmware lalu nyalakan perangkat.
+2. Sambungkan HP atau laptop ke WiFi BELL MADRASAH V0.1.0 (password P@ssw0rd), lalu atur WiFi sekolah lewat portal yang muncul. Setelah tersimpan, perangkat restart dan terhubung ke WiFi tersebut.
+3. Buka alamat yang tampil di layar OLED, atau `http://bel-madrasah.local`.
+4. Masuk dengan password bawaan `P@ssw0rd`, lalu ganti password saat diminta.
+5. Periksa Dashboard. Jika ada peringatan waktu belum tepercaya, tunggu sinkronisasi NTP atau atur waktu di Pengaturan.
+6. Di halaman Jadwal: atur mode (manual atau rentang tanggal), hari aktif per mode, nama track, lalu bel.
+7. Di halaman Libur: tambahkan tanggal libur atau impor libur nasional.
+8. Uji tiap track dengan tombol Putar.
 
-### Panel di halaman web
+### Halaman web
 
-| Kartu | Fungsi |
+| Halaman | Isi |
 |---|---|
-| Status | Waktu, sumber waktu, jaringan, IP, track diputar, bel terakhir, DFPlayer, mode libur, mode tidur |
-| Kontrol | Volume, mode jadwal aktif, mode libur, tombol Stop Bel |
-| Mode Tidur | Aktif/nonaktif, jam mulai, jam selesai, opsi matikan OLED |
-| Atur Waktu | Set tanggal dan jam manual |
-| Backup | Unduh dan pulihkan jadwal, nama track, dan pengaturan |
-| Jaringan | Info WiFi, IP statis, reset WiFi |
-| Jadwal Bel | Lihat, filter per hari, tambah, ubah, hapus, aktif/nonaktif per bel |
-| Daftar Track | Beri nama, uji putar, dan hapus nama track |
+| Dashboard | Peringatan, waktu, mode aktif, status hari, bel terakhir, jadwal hari ini, aksi cepat, info perangkat |
+| Jadwal | Mode jadwal dan rentang tanggal, hari aktif per mode, daftar bel, tambah dan ubah bel, daftar track |
+| Libur | Libur manual, tanggal libur, impor libur nasional |
+| Log | Riwayat bel berbunyi dan gagal |
+| Pengaturan | Audio dan equalizer, mode tidur, waktu, akun, firmware, backup, jaringan |
 
 ## 9. Penjelasan Fitur Penting
 
+### Login
+
+- Semua pengaturan memerlukan login. Password disimpan sebagai hash PBKDF2-HMAC-SHA256 dengan salt acak.
+- Sesi berlaku 7 hari, atau berakhir setelah 12 jam tidak aktif. Restart perangkat mengakhiri semua sesi.
+- Lima kali salah password dari alamat yang sama mengunci login selama 15 menit.
+- Mengganti password mengakhiri sesi di perangkat lain.
+- Lupa password: sambungkan perangkat ke komputer lewat USB, buka Serial Monitor 115200, ketik `reset-password`. Password kembali ke `P@ssw0rd` dan wajib diganti saat login berikutnya. Cara ini memerlukan akses fisik sehingga tidak bisa dilakukan dari jaringan.
+
+### Mode jadwal
+
+- Mode manual: mode yang dipilih selalu dipakai.
+- Mode otomatis: perangkat memilih mode dari rentang tanggal. Bila rentang tumpang tindih, prioritasnya PTS, PAS, Pesantren, lalu Ramadhan. Di luar semua rentang dipakai Reguler.
+- Hari aktif per mode menonaktifkan hari tertentu, misalnya Sabtu untuk mode PTS, tanpa menghapus belnya.
+- Mode Pesantren dan Lainnya tidak punya jadwal bawaan. Selama kosong, bel tidak berbunyi pada mode tersebut.
+
+### Hari libur
+
+Bel tidak berbunyi bila salah satu kondisi ini berlaku: tanggal hari ini ada di daftar libur, libur manual aktif, hari ini dinonaktifkan untuk mode aktif, atau mode tidur sedang berlangsung.
+
+Impor libur nasional diambil perangkat dari kalender hari libur Indonesia milik Google lewat HTTPS dengan verifikasi sertifikat. Perayaan yang bukan hari libur (misalnya 1 Ramadan) tidak ikut, dan cuti bersama ditandai sehingga bisa disertakan atau tidak.
+
+### Log aktivitas
+
+Setiap bel terjadwal dicatat sebagai Berbunyi atau Gagal. Gagal berarti DFPlayer atau kartu SD tidak siap saat bel jatuh, atau DFPlayer melaporkan galat dalam 15 detik setelah bel dipicu (misalnya file tidak ada). Log menyimpan 150 entri terakhir.
+
+### Pembaruan firmware
+
+- **Dari file**: unggah `bel-madrasah-fw-<versi>-esp32c3-app.bin` di Pengaturan, bagian Firmware.
+- **Dari GitHub**: tombol Periksa pembaruan mencari release `fw-v*` terbaru. Unduhan memakai HTTPS dengan verifikasi sertifikat, dan SHA-256 file dicocokkan dengan `checksums.txt` sebelum dipasang.
+- **Otomatis** (bawaan aktif): perangkat memeriksa setiap 6 jam dan memasang versi baru hanya bila waktu tepercaya, tidak ada bel yang berbunyi, dan tidak ada bel dalam 5 menit ke depan. Bila belum aman, dicoba lagi 30 menit kemudian.
+- **Rollback**: firmware baru dinyatakan sehat setelah berjalan normal sekitar 60 detik. Bila firmware baru macet atau restart sebelum itu, bootloader kembali ke versi sebelumnya dan Dashboard menampilkan peringatan.
+
 ### Pengamanan waktu
 
-Bel hanya berbunyi bila waktu dinilai tepercaya. Hal ini mencegah bel berbunyi di jam yang salah (misalnya tengah malam) akibat RTC bermasalah.
+Bel hanya berbunyi bila waktu dinilai tepercaya. Hal ini mencegah bel berbunyi di jam yang salah akibat RTC bermasalah.
 
 Waktu dianggap tidak tepercaya bila:
 - RTC berhenti berjalan (tiga pemeriksaan berturut-turut, sekitar 15 detik).
-- Tahun di luar rentang 2025 sampai 2099, atau terjadi lompatan waktu (mundur, atau maju lebih dari 120 detik), dan kondisi itu berlangsung terus selama sekitar 1,5 detik. Satu pembacaan aneh akibat gangguan I2C hanya dilewati: bel pada pembacaan itu tidak diproses, tetapi waktu tetap tepercaya.
-- RTC pernah kehilangan daya (baterai habis atau tidak ada) dan belum disinkronkan ulang.
-- Modul RTC tidak terpasang dan NTP belum berhasil. Tanpa RTC, perangkat memakai jam dari NTP.
+- Tahun di luar rentang 2025 sampai 2099, atau terjadi lompatan waktu (mundur, atau maju lebih dari 120 detik), dan kondisi itu berlangsung terus selama sekitar 1,5 detik. Satu pembacaan aneh akibat gangguan I2C hanya dilewati.
+- RTC pernah kehilangan daya dan belum disinkronkan ulang.
+- Modul RTC tidak terpasang dan NTP belum berhasil.
 
-Waktu menjadi tepercaya kembali setelah sinkronisasi NTP berhasil atau waktu diatur manual lewat web.
+Waktu menjadi tepercaya kembali setelah sinkronisasi NTP berhasil atau waktu diatur manual lewat web. Penanda "waktu pernah diverifikasi" dan menit bel terakhir disimpan di NVRAM DS1307, sehingga restart biasa tidak menghapus penanda dan tidak membunyikan ulang bel di menit yang sama.
 
-Sinkronisasi NTP dan pengaturan manual dilakukan dalam satu kunci yang sama dengan pembacaan waktu oleh task bel, sehingga koreksi waktu yang sah tidak dianggap lompatan.
+### Mode tidur
 
-Penanda "waktu pernah diverifikasi" disimpan di NVRAM DS1307. NVRAM ikut hilang saat RTC kehilangan daya, sehingga penanda terhapus otomatis pada kondisi tersebut. Restart biasa (misalnya setelah menyimpan IP statis) tidak menghapus penanda.
-
-Saat waktu tidak tepercaya:
-- Bel tidak berbunyi.
-- Web menampilkan peringatan merah.
-- OLED menampilkan "WAKTU BELUM VALID".
-
-Tombol "Putar" dan "Stop Bel" di web tetap berfungsi.
-
-### Mode Tidur
-
-Pada rentang jam yang diatur:
-- Bel terjadwal tidak berbunyi.
-- Layar OLED dimatikan (jika opsi aktif). Bila opsi tidak aktif, OLED menampilkan "MODE TIDUR" beserta jam selesai.
-- Web server, WiFi, dan RTC tetap aktif sehingga perangkat tetap dapat diatur.
-- Bel yang sedang diputar saat masuk jam tidur otomatis dihentikan.
-- Tombol "Putar" dan "Stop Bel" di web tetap berfungsi.
-
-Aturan rentang:
-- Rentang boleh melewati tengah malam, misalnya 22:00 sampai 05:00.
-- Jam mulai dan jam selesai tidak boleh sama.
-- Batas mulai termasuk dalam rentang tidur, batas selesai tidak. Bel yang jatuh persis pada jam mulai tidak berbunyi, sedangkan bel pada jam selesai masih berbunyi.
-- Mode tidur tidak dihitung bila waktu belum tepercaya.
-
-Mode Libur dan Mode Tidur bekerja terpisah. Salah satu aktif sudah cukup untuk membungkam bel.
+Pada rentang jam yang diatur, bel terjadwal tidak berbunyi, bel yang sedang diputar dihentikan, dan OLED dapat dimatikan. Rentang boleh melewati tengah malam; jam mulai termasuk rentang, jam selesai tidak.
 
 ### Jaringan dan IP statis
 
-- Perangkat mencoba tersambung ke WiFi tersimpan. Bila gagal lebih dari 20 detik, perangkat mengaktifkan AP cadangan (192.168.4.1) sambil terus mencoba tersambung kembali.
-- IP statis harus berada dalam rentang jaringan yang sama. Pilih IP di luar rentang DHCP router agar tidak bentrok. Setelah disimpan, perangkat restart.
-- IP statis otomatis dinonaktifkan bila perangkat terhubung ke jaringan (SSID) yang berbeda.
-- Reset WiFi menghapus kredensial tersimpan dan membuka portal konfigurasi di 192.168.4.1 setelah restart.
+- Bila WiFi tersimpan gagal tersambung lebih dari 20 detik, perangkat mengaktifkan AP cadangan (192.168.4.1) sambil terus mencoba tersambung kembali.
+- IP statis harus berada dalam rentang jaringan yang sama dan di luar rentang DHCP router. IP statis otomatis dinonaktifkan bila perangkat terhubung ke SSID lain.
+- Reset WiFi menghapus kredensial tersimpan dan membuka portal di 192.168.4.1 setelah restart.
 
 ### Penyimpanan
 
-Semua pengaturan disimpan lewat penulisan berkas sementara lalu diganti (atomik), sehingga lebih aman dari kerusakan saat listrik padam. Berkas lama tanpa blok pengaturan baru (misalnya `config.json` tanpa blok `sleep`) tetap kompatibel dan memakai nilai bawaan.
+Semua berkas ditulis lewat berkas sementara lalu diganti (atomik). Konfigurasi dari firmware lama (mode tunggal tanpa rentang tanggal) tetap terbaca: mode selain Reguler dianggap pilihan manual. Backup dari firmware 1.1.0 juga dapat dipulihkan.
 
 ## 10. Pemecahan Masalah
 
 | Gejala | Kemungkinan penyebab | Solusi |
 |---|---|---|
-| Bel tidak berbunyi sama sekali | DFPlayer atau kartu SD tidak terdeteksi | Periksa kabel TX/RX dan kartu SD; perhatikan peringatan di web |
+| Bel tidak berbunyi sama sekali | DFPlayer atau kartu SD tidak terdeteksi | Periksa kabel TX/RX dan kartu SD; lihat peringatan di Dashboard dan Log |
 | Bel tidak berbunyi, ada peringatan waktu | Waktu belum tepercaya | Sambungkan internet atau atur waktu manual |
-| Bel tidak berbunyi di jam tertentu | Mode libur aktif, mode tidur aktif, atau mode jadwal salah | Periksa kartu Kontrol dan Mode Tidur |
-| Bel berbunyi di jam salah | RTC tanpa baterai, atau gangguan I2C | Pasang CR2032; periksa pull-up dan level tegangan I2C; cek log Serial |
-| Waktu sering salah setelah listrik padam | Baterai RTC habis atau tidak ada | Ganti baterai, atau ganti modul ke DS3231 |
-| DFPlayer reset saat suara keras | Catu daya kurang stabil | Pindahkan VCC DFPlayer ke 5V, tambahkan kapasitor |
-| Suara tidak muncul, ada pesan "File track N tidak ada di kartu SD" | Nomor file tidak ada di kartu SD | Pastikan `mp3/0001.mp3` dan seterusnya sesuai nomor track |
+| Bel tidak berbunyi di hari tertentu | Libur, libur manual, hari dinonaktifkan untuk mode aktif, atau mode tidur | Lihat Status hari di Dashboard |
+| Mode aktif tidak sesuai | Mode manual masih aktif, atau rentang tanggal tumpang tindih | Periksa kartu Mode jadwal |
+| Log menampilkan "File track N tidak ada di kartu SD" | Nomor file tidak ada di kartu SD | Pastikan `mp3/0001.mp3` dan seterusnya sesuai nomor track |
 | Pesan "Jadwal sudah berubah di perangkat" | Jadwal diubah dari perangkat lain sejak halaman dibuka | Muat ulang halaman, lalu ulangi perubahan |
-| Upload gagal, "Sketch too big" | Partisi masih bawaan | Pilih partisi Minimal SPIFFS (lihat bagian 6) |
+| Login terkunci 15 menit | Lima kali salah password | Tunggu, atau gunakan `reset-password` lewat Serial |
+| Impor libur nasional gagal | Perangkat tidak terhubung internet atau DNS bermasalah | Periksa koneksi WiFi, coba lagi |
+| Dashboard: firmware dikembalikan ke versi sebelumnya | Firmware baru gagal berjalan | Laporkan versi tersebut; perangkat tetap berjalan dengan versi lama |
+| Upload firmware gagal, "Sketch too big" | Partisi masih bawaan | Pilih partisi Minimal SPIFFS (lihat bagian 6) |
 | Halaman web tidak terbuka setelah ganti IP | IP berubah | Lihat IP di layar OLED atau gunakan `bel-madrasah.local` |
-| OLED kosong | Mode tidur dengan opsi matikan OLED aktif, atau modul tidak terdeteksi | Periksa pengaturan Mode Tidur dan alamat I2C 0x3C |
+| OLED kosong | Mode tidur dengan opsi matikan OLED aktif, atau modul tidak terdeteksi | Periksa pengaturan Mode tidur dan alamat I2C 0x3C |
 
-Log Serial (115200 baud) memuat jam saat bel dipicu beserta uptime, dan pesan saat bel dikunci karena waktu tidak valid. Log ini berguna untuk menelusuri kejadian bel yang berbunyi di jam tidak wajar.
+Log Serial (115200 baud) memuat jam saat bel dipicu, alasan bel dikunci, dan proses pembaruan firmware. Perintah Serial yang tersedia: `versi` dan `reset-password`.
 
 ## 11. Catatan Keamanan
 
+- Ganti password admin saat login pertama (diwajibkan oleh halaman web).
 - Ganti password AP bawaan (`P@ssw0rd`) pada `AP_PASS` di `bel-madrasah.ino` sebelum dipakai di lingkungan nyata.
-- File backup berisi jadwal dan pengaturan, tanpa password WiFi.
-- Halaman web tidak memakai login. Siapa pun yang terhubung ke jaringan yang sama dapat mengatur perangkat. Gunakan jaringan WiFi yang terpercaya.
-- Mode Tidur dan pengamanan waktu mengurangi risiko bel berbunyi di jam tidak wajar, tetapi perbaikan paling mendasar tetap pada perangkat keras: baterai RTC yang sehat dan catu daya yang stabil.
+- Halaman web memakai HTTP, bukan HTTPS. Password dan cookie dapat terbaca oleh pihak lain di jaringan yang sama, jadi gunakan WiFi sekolah yang terpercaya, bukan WiFi publik.
+- Pembaruan firmware dari GitHub memverifikasi sertifikat TLS dan SHA-256. Firmware dari file tidak diverifikasi tanda tangannya; hanya unggah file dari release resmi.
+- File backup berisi jadwal dan pengaturan, tanpa password admin dan password WiFi.
+- Mode tidur dan pengamanan waktu mengurangi risiko bel berbunyi di jam tidak wajar, tetapi perbaikan paling mendasar tetap pada perangkat keras: baterai RTC yang sehat dan catu daya yang stabil.
