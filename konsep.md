@@ -25,7 +25,7 @@ Rujukan baku untuk membangun panel admin berbasis web yang cepat, ringan, dan se
 | Framework | Astro 7 (static, `client:only="react"`) |
 | UI | React 19 |
 | Data | TanStack Query 5 |
-| Animasi | framer-motion (hanya Modal dan InstallPrompt) |
+| Animasi | framer-motion lewat `LazyMotion` dan `m` (hanya Modal dan InstallPrompt) |
 | Ikon | lucide-react |
 | Notifikasi | react-hot-toast |
 | CSS | Tailwind v4 (hanya grid) dan CSS variable |
@@ -37,10 +37,12 @@ Rujukan baku untuk membangun panel admin berbasis web yang cepat, ringan, dan se
 Catatan perkakas:
 - Pakai TypeScript 6. `astro check` belum mendukung TypeScript 7 dan membawa dependensi yang bentrok, jadi pemeriksaan tipe memakai `tsc`.
 - `astro sync` harus jalan sebelum `tsc` agar tipe `import.meta.env` tersedia.
+- Uji unit frontend memakai `node:test` bawaan Node dengan type stripping, tanpa dependensi tambahan. Berkas uji berupa `tests/*.test.mjs` yang mengimpor modul `.ts` secara langsung, sehingga hanya modul tanpa impor runtime (fungsi murni dengan `import type`) yang dapat diuji.
 - Skrip `package.json`:
 
 ```json
 "check": "astro sync && tsc --noEmit",
+"test": "node --test \"tests/*.test.mjs\" && go test ./...",
 "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
 ```
 
@@ -70,6 +72,8 @@ src/
     constants.ts      konstanta domain bersama
     layout.ts         ukuran tetap layout
     footer.ts         tipe dan nilai FOOTER dari konstanta build
+    motion.ts         pemuat fitur framer-motion untuk LazyMotion
+    motionFeatures.ts domAnimation, dimuat async
     landing.ts        seluruh konten landing (teks, daftar, ikon, contoh data)
     types.ts          tipe respons dan body API
     errors.ts         errorMessage
@@ -86,11 +90,14 @@ src/
   components/
     App.tsx           pemetaan halaman dan inisialisasi
     layout/           Shell, Sidebar, TopBar, Footer, InstallPrompt, StatusPill, SocialIcons
-    ui/               Button, Card, Modal, Badge, Toggle, Slider, Skeleton,
-                      PageHeader, EmptyState, ListRow, SettingRow, Field, ConfirmHost
+    ui/               Button, LinkButton, buttonStyle, Card, Modal, Badge, Chip, Toggle,
+                      Slider, Skeleton, PageHeader, EmptyState, ListRow, SettingRow,
+                      Field, ConfirmHost
     auth/             LoginPage
     landing/          LandingPage, LandingNav, Hero, bagian-bagian, landingStyle
     <fitur>/          satu folder per halaman panel
+tests/                uji unit frontend (*.test.mjs)
+*_test.go             uji backend
 ```
 
 Layanan non-React yang memegang state sendiri (contoh: `audioManager.ts`) berupa kelas dengan `subscribe`, dibungkus satu hook agar React ikut berlangganan.
@@ -101,7 +108,7 @@ Halaman besar dipecah menjadi komponen kecil, fungsi murni (`grouping.ts`), dan 
 
 **`app.config.ts`**: `APP.name`, `APP.logo`, `APP.themeColor` (satu-satunya tempat nilai heksadesimal tema selain `global.css`), `APP.watermark`, dan `APP.login` (judul, deskripsi, headline, lead, daftar keunggulan). Nama aplikasi tidak boleh ditulis langsung di komponen atau halaman.
 
-**`routes.ts`**: `ROUTES` berisi `key`, `path`, `label`, `title`, dan `icon`. Menu sidebar, bottom nav, judul topbar, prefetch, dan pemetaan path ke halaman semuanya membaca berkas ini. Turunannya: `PATHS`, `PATH_TO_KEY`, `titleOf`. `GUEST_PATHS` memuat path publik (`/login`, `/landing`) yang bukan bagian panel.
+**`routes.ts`**: `ROUTES` berisi `key`, `path`, `label`, `short` (opsional, label pendek untuk bottom nav bila `label` tidak muat di 1/6 lebar layar 360px), `title`, dan `icon`. Menu sidebar, bottom nav, judul topbar, prefetch, dan pemetaan path ke halaman semuanya membaca berkas ini. Turunannya: `PATHS`, `PATH_TO_KEY`, `titleOf`. `GUEST_PATHS` memuat path publik (`/login`, `/landing`) yang bukan bagian panel.
 
 **`constants.ts`**: label, varian badge, daftar nilai, dan kunci yang dipakai lebih dari satu berkas. Satu deklarasi untuk seluruh aplikasi. Fungsi kecil seperti `modeLabel` ikut di sini.
 
@@ -187,7 +194,7 @@ Tema disimpan di `localStorage` dengan kunci `theme`. `initTheme()` dipanggil di
 
 ### Kelas utilitas dan keyframe
 
-Kelas: `btn` (efek tekan dan filter), `row-hover`, `card-hover`, `tabular`, `input-group` dan `addon`, `wave-bar`, `animate-fade-in`.
+Kelas: `btn` (efek tekan dan filter), `row-hover`, `card-hover`, `tabular`, `input-group` dan `addon`, `wave-bar`, `animate-fade-in`, `select-sm` (select ringkas, tinggi minimal 32px), `slider-input` dan `slider-thumb`.
 Keyframe: `spin`, `wave`, `fade-in`, `shimmer`, `pulse-ring`.
 
 Elemen `input`, `select`, `textarea` bergaya global. Fokus ditandai garis dan cincin warna aksen (`--accent-soft`), satu aturan untuk kedua tema. Scrollbar tipis 6px dan seleksi teks berwarna aksen juga diatur global.
@@ -209,7 +216,12 @@ Satu titik pemisah: 768px, dibaca lewat hook `useIsMobile(breakpoint = 768)`. Lo
 
 - Sidebar dan footer tidak ditampilkan.
 - Topbar menampilkan logo, judul halaman, status, tombol tema, dan tombol keluar.
-- **Bottom nav** tetap di bawah dengan ikon dan label, memperhitungkan `safe-area-inset-bottom`.
+- **Bottom nav** tetap di bawah dengan ikon dan `short ?? label`, memperhitungkan `safe-area-inset-bottom`. Label dipotong dengan elipsis sebagai pengaman.
+- `StatusPill` memakai teks pendek ("Aktif"/"Berhenti") dan teks lengkap di `title`, tidak pernah membungkus baris.
+- Input, select, dan textarea memakai font 16px (aturan global `max-width: 767px`) agar iOS tidak memperbesar layar saat fokus.
+- Header `Card` dan `Footer` membungkus baris (`flexWrap: wrap`) alih-alih meluap. Kontrol yang lebih lebar dari satu tombol kecil ditaruh di badan kartu sebagai toolbar, bukan di header.
+- Pada daftar dengan banyak aksi per baris, tombol berlabel menjadi ikon saja di mobile (prop `compact`), tetap dengan `aria-label`.
+- Teks petunjuk mengikuti perangkat: "Ketuk" di mobile, "Drag dan drop atau klik" di desktop.
 - Konten memiliki padding `16px 12px 88px` agar tidak tertutup bottom nav.
 - Tinggi layar memakai `100dvh`. Yang discroll hanya `main`, bukan halaman.
 
@@ -258,8 +270,10 @@ Semua komponen memakai named export. Pengecualian hanya `App` (default, dibutuhk
 | `Card` | `title`, `action`, `bodyStyle`, `hover`, `onClick`, `style`. Jika ada judul atau aksi, header 48px dengan garis bawah |
 | `Modal` | `open`, `onClose`, `title`, `width` (480). Tutup dengan klik latar atau Escape. Fokus terkunci di dalam dialog dan dikembalikan ke pemicu saat ditutup. Konten panjang discroll |
 | `Badge` | `variant`: default, success, danger, warning, accent. `dot` |
-| `Toggle` | `checked`, `onChange(val)`, `disabled` |
-| `Slider` | `value`, `min`, `max`, `step`, `onChange`, `disabled`, `formatLabel` |
+| `LinkButton` | tautan `<a>` dengan `variant`, `size`, `icon` yang sama dengan `Button`. Gaya keduanya dari `buttonStyle(variant, size)` |
+| `Chip` | `active`, `onClick`, `count`, `dot` (warna CSS), `disabled`, `title`. Pil dengan `aria-pressed`, tinggi minimal 30px. Satu-satunya gaya pil di aplikasi |
+| `Toggle` | `checked`, `onChange(val)`, `label` (wajib, menjadi `aria-label`), `disabled`. Area sentuh 28px |
+| `Slider` | `value`, `label` (wajib), `valueText`, `min`, `max`, `step`, `origin` (titik awal isian, contoh 0 dB), `onChange`, `disabled`, `formatLabel`. Fokus keyboard tampil sebagai cincin pada thumb |
 | `Skeleton`, `SkeletonCard` | `width`, `height`, `radius`, `style` |
 | `PageHeader` | `title`, `description`, `action` |
 | `EmptyState` | `text`, `icon`, `padding` (32) |
@@ -438,9 +452,10 @@ Komponen `BellDemo` memperagakan fitur inti tanpa memanggil API: tombol memicu a
 ### Aturan
 
 - Gaya berulang (container, section, tautan sebagai tombol, label) berada di `landingStyle.ts`.
-- Tautan bergaya tombol memakai `<a>` dengan gaya dari `landingStyle.ts` dan kelas `btn`, bukan `Button`, agar tetap tautan sungguhan.
+- Tautan bergaya tombol memakai `LinkButton`, bukan `Button`, agar tetap tautan sungguhan dengan tampilan yang identik.
 - Jangkar memakai `scrollMarginTop: BAR_H`. `scroll-behavior: smooth` sudah global.
 - Dipasang tanpa framer-motion. Tidak ada animasi gulir.
+- Footer landing tampil di mobile, jadi wajib diuji pada 360px tanpa sesi.
 - Tema, font, token, dan komponen sama dengan panel. Tidak ada warna atau ukuran baru.
 - `description` dikirim ke Layout untuk meta SEO dan Open Graph.
 
@@ -449,7 +464,10 @@ Komponen `BellDemo` memperagakan fitur inti tanpa memanggil API: tombol memicu a
 - Tombol ikon memiliki `title` dan `aria-label`
 - Modal memiliki `role="dialog"`, `aria-modal`, dan `aria-label`, menjebak fokus, dan mengembalikan fokus ke pemicu
 - Label form terhubung ke input lewat `htmlFor`
-- Chip dan tombol pilihan memakai `aria-pressed`
+- Chip dan tombol pilihan memakai `Chip` (sudah ber-`aria-pressed`)
+- `Toggle` dan `Slider` wajib diberi `label`; tipe menolak pemanggilan tanpa label
+- Elemen non-tombol yang dapat diklik (contoh zona upload) diberi `role="button"`, `tabIndex={0}`, dan menangani Enter serta Spasi
+- Tautan navigasi aktif memakai `aria-current="page"`
 - Fokus input terlihat jelas
 - Target sentuh minimal sekitar 28px untuk aksi sekunder dan 34px untuk aksi utama
 - Tabel lebar dibungkus kontainer `overflow-x: auto` dengan `min-width`
@@ -481,13 +499,20 @@ Sebelum commit:
 ```bash
 pnpm format
 pnpm check
+pnpm test
 pnpm build
 grep -rnE "any\b|confirm\(|#[0-9a-fA-F]{3,6}" src --include=*.ts --include=*.tsx | grep -v "#fff"
 ```
 
 Satu-satunya temuan yang sah adalah `themeColor` di `app.config.ts`.
 
-Setelah build, bandingkan ukuran `dist/_astro/*.br` dengan build sebelumnya. Kenaikan di chunk halaman atau chunk bersama perlu dijelaskan. Berkas `.br` baru ada setelah `deploy.sh` (tahap precompress), bukan setelah `pnpm build`.
+Setelah build, bandingkan ukuran `dist/_astro/*.br` dengan build sebelumnya. Kenaikan di chunk halaman atau chunk bersama perlu dijelaskan. Berkas `.br` baru ada setelah `deploy.sh` (tahap precompress), bukan setelah `pnpm build`. Untuk perbandingan cepat tanpa deploy:
+
+```bash
+for f in dist/_astro/*.js dist/_astro/*.css; do echo "$(brotli -q 11 -c "$f" | wc -c) $(basename "$f")"; done | sort -rn
+```
+
+Acuan terakhir: total sekitar 150 KB brotli. `Modal` sekitar 6 KB, ditambah inti motion bersama sekitar 10 KB dan `motionFeatures` sekitar 13 KB yang dimuat async setelah render pertama.
 
 ## 19. Build dan Rilis
 
@@ -507,7 +532,8 @@ Berkas `_astro/` diberi cache `immutable` satu tahun karena namanya berhash.
 Frontend mengandalkan perilaku berikut dari server:
 
 - Setiap halaman panel punya entri di peta path ke berkas HTML dan dilindungi sesi. Tanpa sesi, halaman diarahkan (303) ke `/login`.
-- `/landing` dan `/login` publik. `/login` yang diakses dengan sesi sah diarahkan ke `/`.
+- `/landing` dan `/login` publik. Keduanya diarahkan (303) ke `/` bila diakses dengan sesi sah.
+- Sesi bertahan setelah server dimulai ulang. Server hanya menyimpan hash SHA-256 token di `data/sessions.json` (izin 0600), tidak pernah token mentah.
 - `/` tanpa sesi diarahkan (303) ke `/landing`. Dengan sesi, menyajikan dashboard.
 - Endpoint `/api/*` mengembalikan `401` berbentuk JSON `{"error": ...}` untuk permintaan tanpa sesi yang menyertakan `Accept: application/json` atau `Content-Type: application/json`. Tanpa header itu, server mengarahkan ke `/login`.
 - `/healthz` publik dan mengembalikan teks `ok`.
@@ -522,7 +548,9 @@ curl -s -o /dev/null -w "%{http_code}\n" https://HOST/landing
 curl -s -o /dev/null -w "%{http_code}\n" -H "Accept: application/json" https://HOST/api/config
 ```
 
-Hasil yang diharapkan: `303` ke `/landing`, `200`, dan `401`.
+Hasil yang diharapkan: `303` ke `/landing`, `200`, dan `401`. Kontrak ini juga diuji otomatis oleh `TestPublicRoutingContract` di `main_test.go`.
+
+Direktori dasar backend dapat dipindah lewat `BEL_BASE_DIR` (bawaan `/opt/bel-madrasah`) untuk menjalankan server lokal pada salinan data, misalnya saat uji visual dengan peramban headless.
 
 ## 20. Memulai Proyek Baru
 
@@ -543,7 +571,7 @@ Daftar yang masih ditulis manual di lebih dari satu tempat saat menambah halaman
 
 ## 21. Daftar Periksa Sebelum Rilis
 
-- `pnpm check` bersih, `pnpm format` tidak mengubah apa pun
+- `pnpm check` bersih, `pnpm test` lulus, `pnpm format` tidak mengubah apa pun
 - Tidak ada `any`, `confirm(`, `window.confirm`, atau `catch (e: any)` di `src`
 - Tidak ada warna heksadesimal di komponen selain `#fff`
 - Tidak ada nama aplikasi atau kalimat pemasaran yang tertulis langsung di komponen
@@ -554,17 +582,30 @@ Daftar yang masih ditulis manual di lebih dari satu tempat saat menambah halaman
 - `<title>` halaman panel berasal dari `titleOf`
 - Kontrak backend lolos tiga uji `curl` di bagian 19
 - Ukuran aset dibandingkan dengan rilis sebelumnya
+- Tidak ada elemen yang meluap pada lebar 360px di semua halaman panel, landing, dan login (`document.documentElement.scrollWidth === 360`)
 - Uji manual: tema terang dan gelap, lebar 360px dan 1280px, mode luring, instal PWA, Tab di dalam Modal, tombol Keluar, dan demo landing
 
-## 22. Utang Teknis yang Diketahui
+## 22. Fitur Audio Acuan
+
+Dua fitur pada halaman Audio menjadi contoh pola baku untuk pengaturan dan aksi berkas.
+
+**Ganti nama file** (`RenameModal`, `POST /api/tones/rename`):
+- Input menampilkan nama tanpa ekstensi; ekstensi asli selalu dipertahankan dan ditampilkan sebagai `addon`.
+- Server menyanitasi nama dengan aturan yang sama seperti upload, menolak nama yang sudah dipakai (`409`), lalu memperbarui setiap entri jadwal yang menunjuk file tersebut dalam satu kunci. Bila pembaruan jadwal gagal, nama file dikembalikan.
+- Mutasi menginvalidasi `tones`, `jadwal`, dan `service-status`. Pesan sukses menyebut nama akhir dari server dan jumlah jadwal yang ikut berubah; frontend tidak menebak hasil sanitasi.
+
+**Equalizer** (`EqualizerCard`, `GET`/`POST /api/equalizer`):
+- Lima band tetap (60 Hz, 250 Hz, 1 kHz, 4 kHz, 12 kHz), rentang -12 sampai 12 dB, langkah 0,5 dB. Frekuensi dan rentang berasal dari server, preset (`EQ_PRESETS`) dari `constants.ts`.
+- Pola draf: sakelar dan slider mengubah state lokal, tombol Simpan dan Batal aktif hanya bila ada perubahan. Tidak ada simpan otomatis per slider.
+- Server menerapkan equalizer lewat ffmpeg (`lowshelf`, `equalizer`, `highshelf`, lalu `alimiter` bila ada band yang dinaikkan) sebelum `volume`, mulai pemutaran berikutnya.
+- Pratinjau di browser melewati rantai Web Audio yang meniru rantai server (`BiquadFilterNode` dan `DynamicsCompressorNode` sebagai limiter), sehingga perubahan slider langsung terdengar. Rantai hanya aktif selama halaman Audio terbuka.
+- `POST /api/config` mempertahankan nilai equalizer yang tersimpan, karena form konfigurasi tidak mengirimnya.
+
+## 23. Utang Teknis yang Diketahui
 
 Penyimpangan kode acuan dari aturan di atas:
 
-- `Toggle` dan input `range` pada `Slider` belum menerima `aria-label`, sehingga pembaca layar tidak tahu fungsinya
-- Gaya chip (pil dengan keadaan aktif) ditulis terpisah di `Chip.tsx`, `EntryModal.tsx`, dan `LiburPage.tsx`. Jadikan satu komponen
-- Tombol hari aktif di `JadwalPage` memakai gaya pil sendiri yang mirip chip
-- Tautan bergaya tombol di landing tidak berbagi gaya dengan `Button`. Pertimbangkan `LinkButton`
-- Chunk `Modal` (framer-motion, sekitar 37 KB terkompresi) dimuat di semua halaman. Ukur dampaknya, lalu evaluasi `LazyMotion`
-- Sesi tersimpan di memori server, sehingga setiap rilis mengeluarkan semua pengguna (sisi backend)
-- Pengguna yang sudah login dan membuka `/landing` tetap melihat landing, tidak diarahkan ke `/`
-- Belum ada pengujian otomatis
+- Daftar halaman panel masih ditulis manual di empat tempat: `routes.ts`, berkas `.astro`, peta halaman di `App.tsx`, dan `pageRoutes` di backend
+- Pratinjau equalizer di browser adalah pendekatan: filter shelf Web Audio tidak memakai parameter lebar seperti ffmpeg, sehingga respons pada band 60 Hz dan 12 kHz sedikit berbeda dari speaker
+- Uji otomatis mencakup fungsi murni frontend dan backend (handler, sesi, kontrak routing). Belum ada uji komponen React maupun uji end-to-end di repositori; uji tampilan 360px dan alur ganti nama serta equalizer dijalankan manual dengan Chromium headless
+- Menghapus file audio yang masih dipakai jadwal tidak diperingatkan; entri jadwal tetap menunjuk file yang hilang dan dilewati saat diputar

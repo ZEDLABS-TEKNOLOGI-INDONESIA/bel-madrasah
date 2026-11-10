@@ -11,8 +11,8 @@ Sistem bel sekolah otomatis berbasis web. Backend ditulis dalam Go, frontend dib
 | Backend | Go 1.21+, net/http, bcrypt, ALSA via ffmpeg |
 | Frontend | Astro 7, React 19, TanStack Query 5, Tailwind CSS 4, Framer Motion |
 | Package manager | pnpm |
-| Audio | ffmpeg `-filter:a volume=X -f alsa` |
-| Auth | Session cookie (HttpOnly, SameSite=Lax), bcrypt cost 10 |
+| Audio | ffmpeg `-filter:a <equalizer>,volume=X -f alsa` |
+| Auth | Session cookie (HttpOnly, SameSite=Lax), bcrypt cost 10, sesi disimpan ter-hash di `data/sessions.json` sehingga tetap berlaku setelah restart |
 | Storage | JSON flat-file (`/opt/bel-madrasah/data/`) |
 
 ---
@@ -102,8 +102,20 @@ GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" 
 | `BEL_TRUST_PROXY` | `0` | Set `1` untuk baca `X-Forwarded-For` / `X-Real-IP` |
 | `BEL_ORIGINS` | localhost | Comma-separated list origin yang diizinkan CORS |
 | `BEL_ALSA_DEVICE` | `hw:1,0` | ALSA device untuk output audio |
+| `BEL_BASE_DIR` | `/opt/bel-madrasah` | Direktori dasar `tone/`, `data/`, dan `static/`. Ubah hanya untuk pengembangan lokal atau pengujian |
 
 Variabel dibaca dari environment, bukan dari file `.env` di production. File `.env` hanya digunakan saat development Astro (Vite proxy).
+
+---
+
+## Pengujian
+
+```bash
+pnpm test     # unit test frontend (node:test) lalu go test ./...
+pnpm check    # astro sync dan tsc
+```
+
+Uji backend memakai direktori sementara lewat `setBaseDir`, sehingga tidak menyentuh `/opt/bel-madrasah`.
 
 ---
 
@@ -153,6 +165,8 @@ Semua endpoint kecuali `/login`, `/logout`, dan `/healthz` memerlukan session co
 | POST | `/api/config` | Simpan config. Body: `Config` object |
 | GET | `/api/volume` | Ambil volume saat ini |
 | POST | `/api/volume` | Set volume. Body: `{"volume": 0.0–2.0}` |
+| GET | `/api/equalizer` | Ambil equalizer: `enabled`, `gains` (dB), `frequencies` (Hz), `min_gain`, `max_gain` |
+| POST | `/api/equalizer` | Simpan equalizer. Body: `{"enabled": bool, "gains": [5 angka, -12 sampai 12]}`. Berlaku mulai pemutaran berikutnya |
 
 ### Jadwal
 
@@ -170,6 +184,7 @@ Semua endpoint kecuali `/login`, `/logout`, dan `/healthz` memerlukan session co
 | GET | `/api/tones/<filename>` | Stream file audio |
 | POST | `/api/tones/upload` | Upload file. Multipart, field `file`, max 32MB |
 | POST | `/api/tones/delete` | Hapus file. Body: `{"filename": "..."}` |
+| POST | `/api/tones/rename` | Ganti nama file. Body: `{"filename": "...", "new_name": "..."}`. Ekstensi dipertahankan, nama disanitasi, entri jadwal yang memakai file ikut diperbarui. `409` bila nama sudah dipakai |
 | POST | `/api/tones/preview` | Putar file di server. Body: `{"filename": "..."}` |
 | POST | `/api/tones/stop` | Stop semua audio yang sedang diputar |
 
@@ -179,7 +194,7 @@ Semua endpoint kecuali `/login`, `/logout`, dan `/healthz` memerlukan session co
 |---|---|---|
 | GET | `/api/libur` | List tanggal libur lokal |
 | POST | `/api/libur` | Add/delete libur. Body: `{action, date, keterangan}` |
-| GET | `/api/libur/nasional?year=<year>` | Proxy ke `libur.deno.dev/api` |
+| GET | `/api/libur/nasional?year=<year>` | Proxy ke `api.kemendesa.link/libur-nasional` |
 
 ### Service & Misc
 

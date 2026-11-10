@@ -1,6 +1,7 @@
 import { CheckCircle2, FileAudio, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 import { useUploadTone } from "../../hooks/useTones";
 import { errorMessage } from "../../lib/errors";
 import { Card } from "../ui/Card";
@@ -13,6 +14,7 @@ export function UploadZone() {
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const upload = useUploadTone();
+  const isMobile = useIsMobile();
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -66,6 +68,14 @@ export function UploadZone() {
           handleFiles(e.dataTransfer.files);
         }}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          inputRef.current?.click();
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label="Pilih file audio untuk diupload"
         style={{
           border: `1px dashed ${dragging ? "var(--accent)" : "var(--border)"}`,
           borderRadius: "var(--radius-lg)",
@@ -94,7 +104,11 @@ export function UploadZone() {
               color: dragging ? "var(--accent)" : "var(--text)",
             }}
           >
-            {upload.isPending ? "Mengupload..." : "Drag dan drop atau klik untuk pilih file"}
+            {upload.isPending
+              ? "Mengupload..."
+              : isMobile
+                ? "Ketuk untuk pilih file"
+                : "Drag dan drop atau klik untuk pilih file"}
           </div>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
             MP3, WAV, OGG, maks 32MB

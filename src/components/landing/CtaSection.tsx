@@ -1,7 +1,8 @@
 import { FOOTER } from "../../lib/footer";
 import { LANDING } from "../../lib/landing";
 import { Card } from "../ui/Card";
-import { primaryLink, section } from "./landingStyle";
+import { LinkButton } from "../ui/LinkButton";
+import { section } from "./landingStyle";
 
 export function CtaSection() {
   return (
@@ -18,9 +19,9 @@ export function CtaSection() {
       >
         <h2 style={{ fontSize: 24, fontWeight: 600, color: "var(--text)" }}>{LANDING.ctaTitle}</h2>
         <p style={{ fontSize: 14, color: "var(--text-muted)" }}>{LANDING.ctaLead}</p>
-        <a href="/login" className="btn" style={{ ...primaryLink, marginTop: 8 }}>
+        <LinkButton href="/login" variant="primary" size="lg" style={{ marginTop: 8 }}>
           {LANDING.primaryCta}
-        </a>
+        </LinkButton>
         {FOOTER.schoolName && (
           <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
             {LANDING.nowAt} {FOOTER.schoolName}

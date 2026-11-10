@@ -1,14 +1,14 @@
-import React from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 type BadgeVariant = "default" | "success" | "danger" | "warning" | "accent";
 
 interface BadgeProps {
-  children: React.ReactNode;
+  children: ReactNode;
   variant?: BadgeVariant;
   dot?: boolean;
 }
 
-const variantStyle: Record<BadgeVariant, React.CSSProperties> = {
+const variantStyle: Record<BadgeVariant, CSSProperties> = {
   default: { background: "var(--bg-tertiary)", color: "var(--text-muted)" },
   success: { background: "var(--success-soft)", color: "var(--success)" },
   danger: { background: "var(--danger-soft)", color: "var(--danger)" },

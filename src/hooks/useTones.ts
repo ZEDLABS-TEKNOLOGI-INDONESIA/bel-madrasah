@@ -1,7 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { POLICY, createResource, useApiMutation } from "../lib/createResource";
-import type { TonesQuery, TonesResponse } from "../lib/types";
+import type { RenameToneBody, RenameToneResponse, TonesQuery, TonesResponse } from "../lib/types";
 
 const useTonesResource = createResource<TonesResponse, TonesQuery>({
   key: "tones",
@@ -27,14 +26,9 @@ export function useDeleteTone() {
   );
 }
 
-export function usePreviewTone() {
-  return useMutation({
-    mutationFn: (filename: string) => api.post("/api/tones/preview", { filename }),
-  });
-}
-
-export function useStopTone() {
-  return useMutation({
-    mutationFn: () => api.post("/api/tones/stop", {}),
-  });
+export function useRenameTone() {
+  return useApiMutation(
+    (body: RenameToneBody) => api.post<RenameToneResponse>("/api/tones/rename", body),
+    () => [["tones"], ["jadwal"], ["service-status"]],
+  );
 }

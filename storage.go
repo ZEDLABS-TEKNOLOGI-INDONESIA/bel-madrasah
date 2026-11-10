@@ -11,9 +11,6 @@ import (
 )
 
 const (
-	jadwalFile  = dataDir + "/jadwal.json"
-	logFile     = dataDir + "/activity.log"
-	configFile  = dataDir + "/config.json"
 	maxLogLines = 500
 	logRotateAt = maxLogLines * 2
 )
@@ -39,6 +36,7 @@ type Config struct {
 	LiburDates     []LiburDate         `json:"libur_dates"`
 	Volume         float64             `json:"volume"`
 	DisabledDays   map[string][]string `json:"disabled_days"`
+	Equalizer      Equalizer           `json:"equalizer"`
 }
 
 type LiburDate struct {
@@ -70,6 +68,7 @@ func defaultConfig() Config {
 		Volume:       0.85,
 		LiburDates:   []LiburDate{},
 		DisabledDays: map[string][]string{},
+		Equalizer:    defaultEqualizer(),
 	}
 }
 
@@ -94,6 +93,7 @@ func loadConfig() (Config, error) {
 	if c.Volume == 0 {
 		c.Volume = 0.85
 	}
+	c.Equalizer = normalizeEqualizer(c.Equalizer)
 	return c, nil
 }
 
@@ -186,6 +186,42 @@ func saveJadwal(j ModeJadwal) error {
 		return err
 	}
 	return atomicWrite(jadwalFile, data, 0644)
+}
+
+func updateJadwal(fn func(ModeJadwal) bool) error {
+	jadwalMu.Lock()
+	defer jadwalMu.Unlock()
+	data, err := os.ReadFile(jadwalFile)
+	if err != nil {
+		return err
+	}
+	var j ModeJadwal
+	if err := json.Unmarshal(data, &j); err != nil {
+		return err
+	}
+	if !fn(j) {
+		return nil
+	}
+	out, err := json.MarshalIndent(j, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicWrite(jadwalFile, out, 0644)
+}
+
+func replaceAudioPath(j ModeJadwal, from, to string) int {
+	n := 0
+	for _, days := range j {
+		for _, entries := range days {
+			for i := range entries {
+				if entries[i].Audio == from {
+					entries[i].Audio = to
+					n++
+				}
+			}
+		}
+	}
+	return n
 }
 
 func atomicWrite(path string, data []byte, perm os.FileMode) error {

@@ -100,3 +100,24 @@ export interface NasionalItem {
   name: string;
   is_national_holiday: boolean;
 }
+
+export interface EqualizerSettings {
+  enabled: boolean;
+  gains: number[];
+}
+
+export interface EqualizerResponse extends EqualizerSettings {
+  frequencies: number[];
+  min_gain: number;
+  max_gain: number;
+}
+
+export interface RenameToneBody {
+  filename: string;
+  new_name: string;
+}
+
+export interface RenameToneResponse {
+  filename: string;
+  updated: number;
+}

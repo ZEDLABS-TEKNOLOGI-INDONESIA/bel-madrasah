@@ -58,6 +58,8 @@ export function VolumeSlider() {
       bodyStyle={{ display: "flex", flexDirection: "column", gap: 16 }}
     >
       <Slider
+        label="Volume output"
+        valueText={`${Math.round(local * 100)}%`}
         value={local}
         min={0}
         max={2}

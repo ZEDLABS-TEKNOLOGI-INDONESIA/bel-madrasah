@@ -52,7 +52,7 @@ export function BellDemo() {
       action={
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
           <span style={{ color: "var(--text-muted)" }}>{DEMO.liburLabel}</span>
-          <Toggle checked={libur} onChange={setLibur} />
+          <Toggle checked={libur} onChange={setLibur} label={DEMO.liburLabel} />
         </label>
       }
       bodyStyle={{ display: "flex", flexDirection: "column", gap: 14 }}

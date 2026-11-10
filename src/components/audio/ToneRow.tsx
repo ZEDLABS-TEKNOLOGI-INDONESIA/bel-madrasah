@@ -1,4 +1,4 @@
-import { Music2, Play, Square, Trash2 } from "lucide-react";
+import { Music2, Pencil, Play, Square, Trash2 } from "lucide-react";
 import { Button } from "../ui/Button";
 import { ListRow } from "../ui/ListRow";
 
@@ -7,8 +7,10 @@ interface ToneRowProps {
   isPlaying: boolean;
   onPlay: () => void;
   onStop: () => void;
+  onRename: () => void;
   onDelete: () => void;
   deleteLoading?: boolean;
+  compact?: boolean;
   last?: boolean;
 }
 
@@ -17,13 +19,16 @@ export function ToneRow({
   isPlaying,
   onPlay,
   onStop,
+  onRename,
   onDelete,
   deleteLoading,
+  compact,
   last,
 }: ToneRowProps) {
   return (
-    <ListRow highlighted={isPlaying} last={last} style={{ padding: "8px 16px" }}>
+    <ListRow highlighted={isPlaying} last={last} style={{ padding: "8px 12px 8px 16px" }}>
       <div
+        aria-hidden="true"
         style={{
           width: 32,
           height: 32,
@@ -47,6 +52,7 @@ export function ToneRow({
       </div>
 
       <span
+        title={filename}
         style={{
           flex: 1,
           fontSize: 13,
@@ -61,7 +67,7 @@ export function ToneRow({
         {filename}
       </span>
 
-      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
         {isPlaying ? (
           <Button
             variant="danger"
@@ -69,8 +75,9 @@ export function ToneRow({
             icon={<Square size={12} />}
             onClick={onStop}
             title="Stop"
+            aria-label={`Stop ${filename}`}
           >
-            Stop
+            {!compact && "Stop"}
           </Button>
         ) : (
           <Button
@@ -79,10 +86,19 @@ export function ToneRow({
             icon={<Play size={12} />}
             onClick={onPlay}
             title="Putar"
+            aria-label={`Putar ${filename}`}
           >
-            Play
+            {!compact && "Putar"}
           </Button>
         )}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Pencil size={12} />}
+          onClick={onRename}
+          title="Ganti nama"
+          aria-label={`Ganti nama ${filename}`}
+        />
         <Button
           variant="ghost"
           size="sm"

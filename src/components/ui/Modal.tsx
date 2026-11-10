@@ -1,6 +1,7 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, LazyMotion, m } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
+import { loadMotionFeatures } from "../../lib/motion";
 
 const FOCUSABLE = [
   "a[href]",
@@ -70,83 +71,85 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
   }, [open]);
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            background: "var(--overlay)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-          onClick={(e) => e.target === e.currentTarget && onClose()}
-        >
-          <motion.div
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={title}
-            tabIndex={-1}
-            initial={{ scale: 0.97, opacity: 0, y: 8 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.97, opacity: 0, y: 8 }}
-            transition={{ type: "spring", stiffness: 400, damping: 32 }}
+    <LazyMotion features={loadMotionFeatures} strict>
+      <AnimatePresence>
+        {open && (
+          <m.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             style={{
-              width: "100%",
-              maxWidth: width,
-              maxHeight: "calc(100dvh - 32px)",
+              position: "fixed",
+              inset: 0,
+              zIndex: 1000,
+              background: "var(--overlay)",
               display: "flex",
-              flexDirection: "column",
-              background: "var(--card-bg)",
-              border: "1px solid var(--card-border)",
-              borderRadius: "var(--radius-lg)",
-              boxShadow: "0 16px 48px rgba(1, 4, 9, 0.3)",
-              overflow: "hidden",
-              outline: "none",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
             }}
+            onClick={(e) => e.target === e.currentTarget && onClose()}
           >
-            <div
+            <m.div
+              ref={dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={title}
+              tabIndex={-1}
+              initial={{ scale: 0.97, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.97, opacity: 0, y: 8 }}
+              transition={{ type: "spring", stiffness: 400, damping: 32 }}
               style={{
-                padding: "14px 20px",
-                borderBottom: "1px solid var(--border)",
+                width: "100%",
+                maxWidth: width,
+                maxHeight: "calc(100dvh - 32px)",
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexShrink: 0,
+                flexDirection: "column",
+                background: "var(--card-bg)",
+                border: "1px solid var(--card-border)",
+                borderRadius: "var(--radius-lg)",
+                boxShadow: "0 16px 48px rgba(1, 4, 9, 0.3)",
+                overflow: "hidden",
+                outline: "none",
               }}
             >
-              <span style={{ fontWeight: 600, fontSize: 15 }}>{title}</span>
-              <button
-                onClick={onClose}
-                aria-label="Tutup"
-                title="Tutup"
-                className="row-hover"
+              <div
                 style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--text-muted)",
+                  padding: "14px 20px",
+                  borderBottom: "1px solid var(--border)",
                   display: "flex",
-                  padding: 4,
-                  borderRadius: "var(--radius)",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexShrink: 0,
                 }}
               >
-                <X size={16} />
-              </button>
-            </div>
-            <div ref={bodyRef} style={{ padding: 20, overflowY: "auto" }}>
-              {children}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+                <span style={{ fontWeight: 600, fontSize: 15 }}>{title}</span>
+                <button
+                  onClick={onClose}
+                  aria-label="Tutup"
+                  title="Tutup"
+                  className="row-hover"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "var(--text-muted)",
+                    display: "flex",
+                    padding: 4,
+                    borderRadius: "var(--radius)",
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div ref={bodyRef} style={{ padding: 20, overflowY: "auto" }}>
+                {children}
+              </div>
+            </m.div>
+          </m.div>
+        )}
+      </AnimatePresence>
+    </LazyMotion>
   );
 }
