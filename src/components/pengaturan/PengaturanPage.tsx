@@ -13,6 +13,7 @@ import { Card } from "../ui/Card";
 import { Field } from "../ui/Field";
 import { PageHeader } from "../ui/PageHeader";
 import { SettingRow } from "../ui/SettingRow";
+import { AudioDeviceCard } from "./AudioDeviceCard";
 
 const MIN_PASSWORD = 8;
 
@@ -256,12 +257,16 @@ function InfoSection() {
 export function PengaturanPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <PageHeader title="Pengaturan" description="Volume, keamanan akun, dan backup data" />
+      <PageHeader
+        title="Pengaturan"
+        description="Perangkat audio, volume, keamanan akun, dan backup data"
+      />
       <div className="grid grid-cols-12 gap-4">
         <div
           className="col-span-12 md:col-span-6"
           style={{ display: "flex", flexDirection: "column", gap: 16 }}
         >
+          <AudioDeviceCard />
           <VolumeSlider />
           <PasswordSection />
         </div>

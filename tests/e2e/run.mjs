@@ -139,6 +139,23 @@ try {
   const added = lainnya.jadwal.Senin.find((e) => e.waktu === "09:15");
   check("jadwal: add bell with bare filename", added?.audio === join(base, "tone/literasi.mp3"), added?.audio);
 
+  await page.goto(`${BASE}/settings`);
+  check("audio: device card rendered", await page.waitFor(`!!document.querySelector("#audio-device")`));
+  check(
+    "audio: automatic option offered",
+    await page.eval(`document.querySelector("#audio-device").options[0].textContent.startsWith("Otomatis")`),
+  );
+  check("audio: test button present", await page.waitFor(`[...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Tes speaker")`));
+  await page.select("#audio-device", "default");
+  await page.clickText("button", "Simpan");
+  const savedDevice = await page.waitFor(`/Perangkat audio disimpan/.test(document.body.textContent)`);
+  const devices = await page.api("/api/audio/devices");
+  check("audio: choice saved", savedDevice && devices.selected === "default" && devices.source === "pengaturan", JSON.stringify({ selected: devices.selected, source: devices.source }));
+  await page.select("#audio-device", "");
+  await page.clickText("button", "Simpan");
+  await page.waitFor(`/Deteksi otomatis/.test(document.body.textContent)`);
+  check("audio: back to automatic", (await page.api("/api/audio/devices")).source === "otomatis");
+
   check("no console errors", page.errors.length === 0, page.errors.join(" || "));
 } catch (e) {
   failures.push(String(e));

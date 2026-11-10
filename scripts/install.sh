@@ -23,8 +23,6 @@ ENABLE_TLS=0
 DOMAIN=""
 EMAIL=""
 IS_UPDATE=0
-ALSA_DEVICE="hw:0,0"
-AUDIO_FORMAT="alsa"
 
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -243,58 +241,14 @@ install_tools() {
     fi
 }
 
-detect_alsa_device() {
-    info "Mendeteksi audio device ALSA..."
-    if ! aplay -l 2>/dev/null | grep -q "^card"; then
-        warning "Tidak ada audio device ALSA ditemukan, menggunakan default."
-        ALSA_DEVICE="default"
-        return
-    fi
-
-    local card=""
-    while IFS= read -r line; do
-        if echo "$line" | grep -q "^card" && ! echo "$line" | grep -qi "hdmi\|displayport"; then
-            card=$(echo "$line" | grep -o "^card [0-9]*" | awk '{print $2}')
-            break
-        fi
-    done < <(aplay -l 2>/dev/null)
-
-    if [ -n "$card" ]; then
-        ALSA_DEVICE="hw:${card},0"
-        success "Audio device dipilih: ${ALSA_DEVICE}"
+show_audio_devices() {
+    info "Perangkat audio terdeteksi:"
+    if [ -r /proc/asound/cards ] && grep -q "^ *[0-9]" /proc/asound/cards; then
+        grep "^ *[0-9]" /proc/asound/cards | sed 's/^/    /'
+        info "Bel memilih perangkat otomatis (USB, lalu jack analog, HDMI terakhir)."
+        info "Ganti dan tes kapan saja di Pengaturan > Perangkat audio."
     else
-        card=$(aplay -l 2>/dev/null | grep "^card" | head -1 | grep -o "^card [0-9]*" | awk '{print $2}')
-        ALSA_DEVICE="hw:${card},0"
-        warning "Hanya ditemukan HDMI, menggunakan: ${ALSA_DEVICE}"
-    fi
-}
-
-prompt_audio_backend() {
-    echo
-    info "Backend audio default: ALSA (${ALSA_DEVICE})"
-    read -rp "Gunakan output Bluetooth/PulseAudio-PipeWire sebagai gantinya? [y/N]: " -n 1; echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if cmd_exists pipewire && pactl info 2>/dev/null | grep -qi "pipewire"; then
-            AUDIO_FORMAT="pipewire"
-            ALSA_DEVICE="default"
-            success "Backend diset ke PipeWire (Bluetooth)."
-        elif cmd_exists pulseaudio || cmd_exists pactl; then
-            if pactl info &>/dev/null; then
-                AUDIO_FORMAT="pulse"
-                ALSA_DEVICE="default"
-                success "Backend diset ke PulseAudio (Bluetooth)."
-            else
-                warning "PulseAudio terdeteksi tapi server tidak aktif, tetap menggunakan ALSA."
-                AUDIO_FORMAT="alsa"
-            fi
-        else
-            warning "PipeWire/PulseAudio tidak ditemukan, tetap menggunakan ALSA."
-            AUDIO_FORMAT="alsa"
-        fi
-        warning "Catatan: output Bluetooth memerlukan 'sudo loginctl enable-linger ${SERVICE_USER}' agar tetap berfungsi tanpa sesi login desktop."
-    else
-        AUDIO_FORMAT="alsa"
-        success "Backend: ALSA (${ALSA_DEVICE})"
+        warning "Tidak ada perangkat ALSA. Pasang speaker atau USB sound card, lalu pilih di Pengaturan."
     fi
 }
 
@@ -515,7 +469,6 @@ Restart=on-failure
 RestartSec=10
 User=${SERVICE_USER}
 Group=audio
-Environment=BEL_ALSA_DEVICE=${ALSA_DEVICE}
 ${tls_env}
 StandardOutput=journal
 StandardError=journal
@@ -656,7 +609,7 @@ show_summary() {
     info "Direktori  : ${PROJECT_DIR}"
     info "Service    : ${SERVICE_NAME}"
     info "User       : ${SERVICE_USER}"
-    info "Audio      : -f ${AUDIO_FORMAT} ${ALSA_DEVICE}"
+    info "Audio      : Pengaturan > Perangkat audio (bawaan: deteksi otomatis)"
     if [ "$ENABLE_TLS" -eq 1 ]; then
         info "Akses      : https://${DOMAIN}"
     elif [ -n "$local_ip" ]; then
@@ -694,8 +647,7 @@ main() {
     echo
     check_requirements
     install_tools
-    detect_alsa_device
-    prompt_audio_backend
+    show_audio_devices
     clone_repo
     install_node
     install_pnpm

@@ -651,6 +651,12 @@ Dua fitur pada halaman Audio menjadi contoh pola baku untuk pengaturan dan aksi 
 - Pratinjau di browser melewati rantai Web Audio (`BiquadFilterNode` dan `DynamicsCompressorNode` sebagai limiter), sehingga perubahan slider langsung terdengar. Rantai hanya aktif selama halaman Audio terbuka.
 - Respons filter browser identik dengan speaker: server memakai shelf dengan slope 1 (`t=s:w=1`) dan peaking dengan Q (`t=q`), yaitu rumus RBJ yang sama dengan spesifikasi Web Audio. Nilai Q (`peak_q`) dikirim server, tidak ditulis di frontend. Satu-satunya perbedaan adalah limiter (`alimiter` versus kompresor), yang hanya bekerja saat sinyal mendekati 0 dBFS.
 
+**Perangkat audio** (`AudioDeviceCard` di Pengaturan, `/api/audio/devices`, `/api/audio/test`):
+- Backend membaca `/proc/asound/cards` dan `/proc/asound/pcm`, tidak bergantung pada `aplay`. Setiap output playback menjadi `plughw:CARD=<id>,DEV=<n>`: nama card stabil walau nomornya berubah, nomor device diambil dari sistem, dan `plughw` mengonversi kanal serta sample rate.
+- Urutan sumber: pilihan di Pengaturan, lalu `BEL_ALSA_DEVICE` (nilai `hw:` dinormalkan ke `plughw:`), lalu deteksi otomatis (USB, jack analog, HDMI terakhir, `default` bila tidak ada). Kartu menampilkan sumber yang sedang berlaku.
+- "Tes speaker" menguji pilihan di dropdown sebelum disimpan dan menunggu ffmpeg selesai, sehingga galat ALSA tampil sebagai pesan, bukan bel yang diam.
+- Pilihan yang perangkatnya tercabut tetap terlihat sebagai "(tidak terhubung)" disertai peringatan.
+
 **Hapus file** (`ToneList`, `POST /api/tones/delete`):
 - Daftar audio menampilkan jumlah jadwal pemakai tiap file (`usage` dari `GET /api/tones`) sebagai badge.
 - Dialog konfirmasi menyebut jumlah itu. Server menghapus file lalu semua entri jadwal yang menunjuknya, dan mengembalikan `removed`. Jadwal tidak pernah menunjuk file yang sudah hilang.
