@@ -38,6 +38,7 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 		existing, _ := loadConfig()
 		body.LiburDates = existing.LiburDates
 		body.Equalizer = existing.Equalizer
+		body.AudioDevice = existing.AudioDevice
 		if body.DisabledDays == nil {
 			body.DisabledDays = existing.DisabledDays
 		}

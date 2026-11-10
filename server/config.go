@@ -22,6 +22,7 @@ type Config struct {
 	Volume         float64             `json:"volume"`
 	DisabledDays   map[string][]string `json:"disabled_days"`
 	Equalizer      Equalizer           `json:"equalizer"`
+	AudioDevice    string              `json:"audio_device"`
 }
 
 type LiburDate struct {
@@ -71,8 +72,11 @@ func loadConfig() (Config, error) {
 	if c.DisabledDays == nil {
 		c.DisabledDays = map[string][]string{}
 	}
-	if c.Volume == 0 {
-		c.Volume = 0.85
+	var present struct {
+		Volume *float64 `json:"volume"`
+	}
+	if json.Unmarshal(data, &present) == nil && present.Volume == nil {
+		c.Volume = defaultConfig().Volume
 	}
 	c.Equalizer = normalizeEqualizer(c.Equalizer)
 	return c, nil

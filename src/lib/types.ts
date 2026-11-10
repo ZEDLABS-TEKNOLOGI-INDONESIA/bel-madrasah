@@ -128,3 +128,22 @@ export interface RenameToneResponse {
   filename: string;
   updated: number;
 }
+
+export interface AudioDevice {
+  id: string;
+  label: string;
+  hdmi: boolean;
+  usb: boolean;
+}
+
+export type AudioSource = "pengaturan" | "env" | "otomatis";
+
+export interface AudioDevicesResponse {
+  devices: AudioDevice[];
+  selected: string;
+  active: string;
+  active_label: string;
+  source: AudioSource;
+  auto: string;
+  auto_label: string;
+}

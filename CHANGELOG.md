@@ -2,6 +2,21 @@
 
 Format: satu bagian `## vX.Y.Z` per release. Workflow release mengambil isi bagian yang sesuai dengan tag sebagai catatan rilis, dan gagal bila bagian itu tidak ada.
 
+## v2.1.0
+
+### Fitur
+
+- Pilihan perangkat audio di Pengaturan: dropdown berisi semua output yang terdeteksi (jack analog, USB sound card, HDMI) dan tombol "Tes speaker" yang memutar bunyi pendek lalu melaporkan galat bila speaker tidak dapat dibuka. Perangkat dapat diganti tanpa SSH
+- Deteksi otomatis memilih USB sound card, lalu jack analog, dan HDMI paling akhir. Perangkat dirujuk berdasarkan nama (`plughw:CARD=Headphones,DEV=0`), sehingga tetap benar walau nomor card berubah saat boot atau USB dicolok ulang
+
+### Perbaikan
+
+- Output memakai `plughw` sehingga file mono atau sample rate yang tidak didukung kartu suara tetap berbunyi; sebelumnya `hw:` menolaknya
+- Nomor device diambil dari sistem, tidak lagi diasumsikan 0 (HDMI sering berada di device 3 atau lebih)
+- Nilai lama `BEL_ALSA_DEVICE=hw:N,0` di service otomatis dibaca sebagai `plughw:N,0`; pilihan di Pengaturan menimpanya
+- Volume 0% kini tersimpan; sebelumnya dikembalikan ke 85%
+- Installer tidak lagi menulis perangkat audio ke service dan tidak lagi menawarkan opsi Bluetooth/PipeWire yang tidak pernah dipakai backend
+
 ## v2.0.0
 
 Bel Madrasah ditulis ulang dari skrip Python menjadi aplikasi web: backend Go dan panel admin Astro + React, dikelola sepenuhnya dari browser.

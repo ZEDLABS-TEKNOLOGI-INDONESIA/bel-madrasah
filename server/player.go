@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -17,21 +16,6 @@ var (
 	nowPlaying   string
 	nowPlayingMu sync.Mutex
 )
-
-func alsaDevice() string {
-	if d := os.Getenv("BEL_ALSA_DEVICE"); d != "" {
-		return d
-	}
-	// fallback: deteksi card pertama yang tersedia
-	if out, err := exec.Command("sh", "-c",
-		"aplay -l | grep '^card' | head -1 | grep -oP '(?<=card )\\d+'").Output(); err == nil {
-		card := strings.TrimSpace(string(out))
-		if card != "" {
-			return "hw:" + card + ",0"
-		}
-	}
-	return "hw:0,0"
-}
 
 func playSound(filePath string) {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {

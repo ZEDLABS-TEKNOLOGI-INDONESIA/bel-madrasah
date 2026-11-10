@@ -51,3 +51,11 @@ export function matchPreset(gains: readonly number[]): string | null {
   );
   return found ? found.key : null;
 }
+
+export const AUDIO_SOURCE_LABEL: Record<string, string> = {
+  pengaturan: "Dipilih manual",
+  env: "Dari konfigurasi service",
+  otomatis: "Deteksi otomatis",
+};
+
+export const ALSA_DEFAULT = "default";

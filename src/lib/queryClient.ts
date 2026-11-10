@@ -12,6 +12,7 @@ const PERSISTED = new Set([
   "log",
   "volume",
   "equalizer",
+  "audio-devices",
 ]);
 
 interface PersistedCache {

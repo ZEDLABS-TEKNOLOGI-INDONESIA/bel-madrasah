@@ -115,7 +115,7 @@ GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" 
 | `BEL_TLS` | `0` | Set `1` untuk enforce Secure cookie dan HTTPS |
 | `BEL_TRUST_PROXY` | `0` | Set `1` untuk baca `X-Forwarded-For` / `X-Real-IP` |
 | `BEL_ORIGINS` | localhost | Comma-separated list origin yang diizinkan CORS |
-| `BEL_ALSA_DEVICE` | `hw:1,0` | ALSA device untuk output audio |
+| `BEL_ALSA_DEVICE` | kosong | Opsional. Perangkat ALSA bila tidak dipilih di Pengaturan. `hw:` otomatis diubah menjadi `plughw:`. Kosongkan untuk deteksi otomatis |
 | `BEL_BASE_DIR` | `/opt/bel-madrasah` | Direktori dasar `tone/`, `data/`, dan `static/`. Ubah hanya untuk pengembangan lokal atau pengujian |
 
 Variabel dibaca dari environment, bukan dari file `.env` di production. File `.env` hanya digunakan saat development Astro (Vite proxy).
@@ -234,6 +234,9 @@ Semua endpoint kecuali `/login`, `/logout`, dan `/healthz` memerlukan session co
 | POST | `/api/config` | Simpan config. Body: `Config` object |
 | GET | `/api/volume` | Ambil volume saat ini |
 | POST | `/api/volume` | Set volume. Body: `{"volume": 0.0–2.0}` |
+| GET | `/api/audio/devices` | Daftar output ALSA (`devices`), pilihan tersimpan (`selected`, kosong berarti otomatis), perangkat yang dipakai (`active`), dan asalnya (`source`: pengaturan, env, otomatis) |
+| POST | `/api/audio/devices` | Simpan pilihan. Body: `{"device": ""}` untuk otomatis, `"default"`, atau salah satu `id` dari daftar |
+| POST | `/api/audio/test` | Putar bunyi tes pada perangkat di body (`{"device": ...}`, aturan sama). `502` berisi galat ALSA bila speaker tidak dapat dibuka |
 | GET | `/api/equalizer` | Ambil equalizer: `enabled`, `gains` (dB), `frequencies` (Hz), `min_gain`, `max_gain` |
 | POST | `/api/equalizer` | Simpan equalizer. Body: `{"enabled": bool, "gains": [5 angka, -12 sampai 12]}`. Berlaku mulai pemutaran berikutnya |
 

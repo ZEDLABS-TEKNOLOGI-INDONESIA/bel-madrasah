@@ -44,6 +44,8 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/config", requireAuth(handleConfig))
 	mux.HandleFunc("/api/volume", requireAuth(handleVolume))
 	mux.HandleFunc("/api/equalizer", requireAuth(handleEqualizer))
+	mux.HandleFunc("/api/audio/devices", requireAuth(handleAudioDevices))
+	mux.HandleFunc("/api/audio/test", requireAuth(handleAudioTest))
 
 	mux.HandleFunc("/api/libur", requireAuth(handleLibur))
 	mux.HandleFunc("/api/libur/nasional", requireAuth(handleLiburNasional))

@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 )
@@ -53,5 +54,23 @@ func TestEqualizerEndpointAndConfigPreserve(t *testing.T) {
 	cfg, _ := loadConfig()
 	if !cfg.Equalizer.Enabled || cfg.Equalizer.Gains[0] != 3 || cfg.Equalizer.Gains[4] != -2 {
 		t.Fatalf("equalizer lost after config save: %+v", cfg.Equalizer)
+	}
+}
+
+func TestVolumeZeroIsKept(t *testing.T) {
+	setupTestDir(t)
+	if rec := postJSON(t, handleVolume, map[string]float64{"volume": 0}); rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	cfg, _ := loadConfig()
+	if cfg.Volume != 0 {
+		t.Fatalf("volume 0 dibaca sebagai %v", cfg.Volume)
+	}
+	if err := os.WriteFile(configFile, []byte(`{"mode":"reguler"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ = loadConfig()
+	if cfg.Volume != defaultConfig().Volume {
+		t.Fatalf("volume tanpa field harus bawaan, dapat %v", cfg.Volume)
 	}
 }
