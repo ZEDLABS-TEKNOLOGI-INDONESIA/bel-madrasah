@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ -f /etc/default/bel-madrasah-update ]; then
-  . /etc/default/bel-madrasah-update
+DEFAULTS_FILE="${BEL_UPDATE_DEFAULTS:-/etc/default/bel-madrasah-update}"
+if [ -r "$DEFAULTS_FILE" ]; then
+  while IFS='=' read -r key value; do
+    case "$key" in
+      BEL_[A-Z_]*)
+        value="${value%\"}"; value="${value#\"}"
+        value="${value%\'}"; value="${value#\'}"
+        [ -z "${!key+x}" ] && export "$key=$value"
+        ;;
+    esac
+  done < "$DEFAULTS_FILE"
 fi
 
 REPO="${BEL_UPDATE_REPO:-ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah}"

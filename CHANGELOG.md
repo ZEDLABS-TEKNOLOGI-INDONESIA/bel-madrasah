@@ -2,6 +2,14 @@
 
 Format: satu bagian `## vX.Y.Z` per release. Workflow release mengambil isi bagian yang sesuai dengan tag sebagai catatan rilis, dan gagal bila bagian itu tidak ada.
 
+## Belum dirilis
+
+Ganti judul bagian ini menjadi `## vX.Y.Z` sebelum membuat tag.
+
+### Perbaikan
+
+- `bel-madrasah-update`: variabel yang di-set saat perintah dijalankan kini menang atas `/etc/default/bel-madrasah-update`, dan file tersebut dibaca sebagai pasangan `KEY=VALUE`, tidak dieksekusi
+
 ## v2.1.1
 
 ### Perbaikan
