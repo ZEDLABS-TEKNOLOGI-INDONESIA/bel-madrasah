@@ -1,6 +1,7 @@
 #include "../bell_logic.h"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 using namespace bell;
 
@@ -114,6 +115,84 @@ static void testSignature()
     CHECK(slotSignature(0, "mon", "07:001", 3) != slotSignature(0, "mon0", "7:001", 3));
 }
 
+static void testDates()
+{
+    CHECK(validDate("2026-02-28") && validDate("2024-02-29") && validDate("2026-12-31"));
+    CHECK(!validDate("2026-02-29") && !validDate("2100-02-29") && !validDate("2026-04-31"));
+    CHECK(!validDate("2026-13-01") && !validDate("2026-1-01") && !validDate("26-01-01") && !validDate("2026/01/01"));
+    CHECK(inDateRange("2026-03-01", "2026-02-18", "2026-03-19"));
+    CHECK(!inDateRange("2026-03-20", "2026-02-18", "2026-03-19"));
+    CHECK(inDateRange("2026-02-18", "2026-02-18", "2026-02-18"));
+    CHECK(!inDateRange("2026-03-01", "", "2026-03-19"));
+}
+
+static void testResolveMode()
+{
+    DateRange ranges[] = {
+        {2, "2026-03-09", "2026-03-14"},
+        {3, "", ""},
+        {4, "2026-07-01", "2026-07-10"},
+        {1, "2026-02-18", "2026-03-19"},
+    };
+    size_t n = sizeof(ranges) / sizeof(ranges[0]);
+    CHECK(resolveMode(false, 0, ranges, n, "2026-03-10", 0) == 2);
+    CHECK(resolveMode(false, 0, ranges, n, "2026-03-01", 0) == 1);
+    CHECK(resolveMode(false, 0, ranges, n, "2026-05-01", 0) == 0);
+    CHECK(resolveMode(true, 5, ranges, n, "2026-03-10", 0) == 5);
+}
+
+static void testVersion()
+{
+    CHECK(compareVersion("1.2.0", "1.1.9") > 0);
+    CHECK(compareVersion("fw-v2.0.0", "1.10.0") > 0);
+    CHECK(compareVersion("1.10.0", "1.9.9") > 0);
+    CHECK(compareVersion("v1.1.0", "1.1.0") == 0);
+    CHECK(compareVersion("abc", "0.0.1") < 0);
+    CHECK(compareVersion("1.2", "1.1.0") < 0);
+    CHECK(compareVersion("1.2.0-rc1", "1.1.0") < 0);
+}
+
+static void testIcs()
+{
+    const char *lines[] = {
+        "BEGIN:VCALENDAR",
+        "BEGIN:VEVENT", "DTSTART;VALUE=DATE:20260321", "SUMMARY:Hari Idul Fitri",
+        "DESCRIPTION:Hari libur nasional\\nUntuk menyembunyikan", "END:VEVENT",
+        "BEGIN:VEVENT", "DTSTART;VALUE=DATE:20260320", "SUMMARY:Cuti Bersama Idul Fitri",
+        "DESCRIPTION:Hari libur nasional", "END:VEVENT",
+        "BEGIN:VEVENT", "DTSTART;VALUE=DATE:20260219", "SUMMARY:1 Ramadan",
+        "DESCRIPTION:Perayaan\\nUntuk menyembunyikan perayaan", "END:VEVENT",
+        "BEGIN:VEVENT", "DTSTART;VALUE=DATE:20270101", "SUMMARY:Hari Tahun Baru",
+        "DESCRIPTION:Hari libur nasional", "END:VEVENT",
+        "BEGIN:VEVENT", "DTSTART;VALUE=DATE:20260817", "SUMMARY:Hari Proklamasi\\, R.I.", "END:VEVENT",
+        "END:VCALENDAR",
+    };
+    IcsHolidayParser parser(2026);
+    IcsHolidayParser::Holiday h;
+    int count = 0;
+    bool sawCuti = false, sawFitri = false, sawProklamasi = false;
+    for (const char *l : lines)
+    {
+        if (!parser.feed(l, h))
+            continue;
+        count++;
+        if (strcmp(h.date, "2026-03-20") == 0 && h.cuti)
+            sawCuti = true;
+        if (strcmp(h.date, "2026-03-21") == 0 && !h.cuti && strcmp(h.name, "Hari Idul Fitri") == 0)
+            sawFitri = true;
+        if (strcmp(h.name, "Hari Proklamasi, R.I.") == 0)
+            sawProklamasi = true;
+    }
+    CHECK(count == 3);
+    CHECK(sawCuti && sawFitri && sawProklamasi);
+}
+
+static void testConstantTime()
+{
+    uint8_t a[4] = {1, 2, 3, 4}, b[4] = {1, 2, 3, 4}, c[4] = {1, 2, 3, 5};
+    CHECK(constantTimeEqual(a, b, 4) && !constantTimeEqual(a, c, 4));
+}
+
 int main()
 {
     testDays();
@@ -122,6 +201,11 @@ int main()
     testPickSlot();
     testTimeGuard();
     testSignature();
+    testDates();
+    testResolveMode();
+    testVersion();
+    testIcs();
+    testConstantTime();
     if (failures)
     {
         std::printf("%d pemeriksaan gagal\n", failures);
