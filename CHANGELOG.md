@@ -2,9 +2,7 @@
 
 Format: satu bagian `## vX.Y.Z` per release. Workflow release mengambil isi bagian yang sesuai dengan tag sebagai catatan rilis, dan gagal bila bagian itu tidak ada.
 
-## Belum dirilis
-
-Ganti judul bagian ini menjadi `## vX.Y.Z` sebelum membuat tag.
+## v2.1.2
 
 ### Perbaikan
 
