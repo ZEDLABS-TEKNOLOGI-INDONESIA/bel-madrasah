@@ -345,7 +345,7 @@ Aturan:
 | `config` | 30 detik | 15 detik |
 | `log` | 30 detik | 30 detik |
 | `schedule` (data daftar yang jarang berubah) | 60 detik | tidak ada |
-| `holiday` (data eksternal yang hampir statis) | 24 jam | tidak ada |
+| `holiday` (data eksternal yang hampir statis) | 24 jam | tidak ada, `retry: 0` karena backend sudah mencoba beberapa sumber |
 
 Jenis baru ditambahkan ke `POLICY`, bukan ditulis di hook.
 
@@ -374,7 +374,7 @@ if (!ok) return;
 Tiga lapis:
 
 1. **Memori**: TanStack Query dengan `gcTime` 24 jam.
-2. **Persisten**: cache query disimpan ke `localStorage` (kunci `app-query-cache-v1`, maksimal 24 jam) hanya untuk kunci pertama yang ada di daftar putih `PERSISTED`. Data yang dipulihkan divalidasi bentuknya sebelum `hydrate`. Dipulihkan saat aplikasi dibuka sehingga tampilan langsung terisi lalu menyegarkan diri. Cache dihapus saat logout lewat `clearPersistedCache()`.
+2. **Persisten**: cache query disimpan ke `localStorage` (kunci `app-query-cache-v2`, maksimal 24 jam) hanya untuk kunci pertama yang ada di daftar putih `PERSISTED`. Data yang dipulihkan divalidasi bentuknya sebelum `hydrate`. Dipulihkan saat aplikasi dibuka sehingga tampilan langsung terisi lalu menyegarkan diri. Cache dihapus saat logout lewat `clearPersistedCache()`.
 3. **Service worker**: lihat bagian 12.
 
 Aturan:

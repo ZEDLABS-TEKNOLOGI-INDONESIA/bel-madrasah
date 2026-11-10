@@ -23,6 +23,10 @@ export function formatDate(dateStr: string, withYear = true): string {
   );
 }
 
+export function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+}
+
 export function formatFrequency(hz: number): string {
   if (hz < 1000) return `${hz} Hz`;
   const k = hz / 1000;

@@ -266,7 +266,7 @@ Semua endpoint kecuali `/login`, `/logout`, dan `/healthz` memerlukan session co
 |---|---|---|
 | GET | `/api/libur` | List tanggal libur lokal |
 | POST | `/api/libur` | Add/delete libur. Body: `{action, date, keterangan}` |
-| GET | `/api/libur/nasional?year=<year>` | Proxy ke `api.kemendesa.link/libur-nasional` |
+| GET | `/api/libur/nasional?year=<year>` | Libur nasional dan cuti bersama: `{year, holidays, source, stale, fetched_at}`. Sumber utama Google Kalender (hari libur Indonesia), cadangan `api.kemendesa.link`. Disimpan 12 jam di `data/holidays.json`; bila semua sumber mati, data tersimpan dikirim dengan `stale: true`, tanpa data sama sekali `502` |
 
 ### Service & Misc
 

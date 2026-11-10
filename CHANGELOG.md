@@ -2,6 +2,15 @@
 
 Format: satu bagian `## vX.Y.Z` per release. Workflow release mengambil isi bagian yang sesuai dengan tag sebagai catatan rilis, dan gagal bila bagian itu tidak ada.
 
+## v2.1.1
+
+### Perbaikan
+
+- Libur nasional kembali terisi. Sumber lama (`api.kemendesa.link`) dihentikan penyedianya (`503 DEPLOYMENT_PAUSED`); sumber utama kini kalender hari libur Indonesia milik Google, lengkap dengan hari besar Islam dan cuti bersama, dengan sumber lama sebagai cadangan
+- Data libur disimpan 12 jam di server dan tetap ditampilkan, dengan peringatan, saat semua sumber tidak dapat dihubungi
+- Panel libur nasional menampilkan pesan galat dan tombol "Coba lagi", tidak lagi "Tidak ada data" yang menyesatkan, serta menyebut sumber data yang sebenarnya
+- Permintaan libur nasional tidak diulang otomatis oleh browser, sehingga galat tampil seketika
+
 ## v2.1.0
 
 ### Fitur
