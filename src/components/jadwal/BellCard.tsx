@@ -13,6 +13,7 @@ interface BellCardProps {
 }
 
 export function BellCard({ item, playing, onPlay, onStop, onEdit, onDelete }: BellCardProps) {
+  const name = `bel ${item.waktu} ${fileLabel(item.audio)}`;
   return (
     <div
       style={{
@@ -58,7 +59,7 @@ export function BellCard({ item, playing, onPlay, onStop, onEdit, onDelete }: Be
             icon={<Square size={12} />}
             onClick={onStop}
             title="Stop"
-            aria-label="Stop"
+            aria-label={`Stop ${name}`}
           />
         ) : (
           <Button
@@ -67,7 +68,7 @@ export function BellCard({ item, playing, onPlay, onStop, onEdit, onDelete }: Be
             icon={<Play size={12} />}
             onClick={onPlay}
             title="Putar"
-            aria-label="Putar"
+            aria-label={`Putar ${name}`}
           />
         )}
         <Button
@@ -76,7 +77,7 @@ export function BellCard({ item, playing, onPlay, onStop, onEdit, onDelete }: Be
           icon={<Pencil size={12} />}
           onClick={onEdit}
           title="Edit"
-          aria-label="Edit"
+          aria-label={`Edit ${name}`}
         />
         <Button
           variant="ghost"
@@ -84,7 +85,7 @@ export function BellCard({ item, playing, onPlay, onStop, onEdit, onDelete }: Be
           icon={<Trash2 size={12} />}
           onClick={onDelete}
           title="Hapus"
-          aria-label="Hapus"
+          aria-label={`Hapus ${name}`}
           style={{ color: "var(--danger)" }}
         />
       </div>

@@ -21,25 +21,37 @@ Sistem bel sekolah otomatis berbasis web. Backend ditulis dalam Go, frontend dib
 
 ```
 bel-madrasah/
-├── main.go            # Entry point, scheduler, audio playback
-├── handler.go         # HTTP handlers semua endpoint API
-├── auth.go            # Session management, login throttling, bcrypt
-├── storage.go         # Read/write JSON (jadwal, config, log)
-├── middleware.go      # CORS, max body size
-├── pwa.go             # Service worker route
-├── go.mod
-├── go.sum
-├── install.sh
-├── uninstall.sh
-├── src/
-│   ├── components/    # React components per fitur
-│   ├── hooks/         # TanStack Query hooks
-│   ├── lib/           # api.ts, queryClient.ts, theme.ts, router.ts
-│   ├── pages/         # Astro pages (index, jadwal, audio, libur, log, settings, login)
-│   └── styles/
-│       └── global.css
-├── tone/              # File audio (.mp3 .wav .ogg)
-└── static/            # Output build Astro (dist → static)
+├── server/                  # Backend Go (package main), satu berkas per domain
+│   ├── main.go              # Entry point, wiring, graceful shutdown
+│   ├── paths.go             # BEL_BASE_DIR dan semua path berkas
+│   ├── routes.go            # Daftar seluruh route HTTP
+│   ├── static.go            # Halaman panel (ditemukan dari static/), landing, PWA, aset precompressed
+│   ├── middleware.go        # CORS, batas ukuran body
+│   ├── respond.go           # jsonOK, jsonError
+│   ├── auth.go              # User, sesi (persisten, ter-hash), throttling login
+│   ├── config.go            # Config, mode aktif, hari libur
+│   ├── jadwal.go            # Penyimpanan jadwal
+│   ├── jadwal_default.go    # Jadwal bawaan
+│   ├── activity.go          # Log aktivitas dan rotasi
+│   ├── tones.go             # Berkas audio: sanitasi, resolusi path, pemakaian di jadwal
+│   ├── equalizer.go         # Filter ffmpeg equalizer
+│   ├── player.go            # Pemutaran ffmpeg ke ALSA
+│   ├── scheduler.go         # Loop scheduler bel
+│   ├── storage.go           # Inisialisasi data, atomicWrite
+│   ├── api_*.go             # Handler HTTP per domain (auth, config, jadwal, tones, libur, system)
+│   └── *_test.go            # Uji backend
+├── src/                     # Frontend Astro + React (lihat konsep.md bagian 3)
+│   ├── pages/               # [...page].astro (semua halaman panel dari routes.ts), landing, login, 404
+│   ├── components/          # Komponen per fitur, ui/, layout/
+│   ├── hooks/               # Satu hook TanStack Query per resource
+│   ├── lib/                 # Konfigurasi, data layer, utilitas
+│   └── styles/global.css
+├── public/                  # Ikon, manifest, service worker
+├── tests/                   # Uji unit frontend (*.test.mjs) dan tests/e2e/
+├── scripts/                 # install.sh, uninstall.sh, deploy.sh, generate.sh
+├── tone/                    # File audio bawaan
+├── konsep.md                # Standar frontend dan kontrak backend
+└── go.mod                   # Modul Go di root, build dengan ./server
 ```
 
 ---
@@ -60,7 +72,7 @@ bel-madrasah/
 ```bash
 git clone https://github.com/ZEDLABS-TEKNOLOGI-INDONESIA/bel-madrasah.git
 cd bel-madrasah
-sudo ./install.sh
+sudo ./scripts/install.sh
 ```
 
 Script mendeteksi audio backend (PipeWire > PulseAudio > ALSA), memilih ALSA device, build frontend dan backend, mendaftarkan systemd service, dan mengkonfigurasi nginx sebagai reverse proxy.
@@ -76,7 +88,7 @@ pnpm build
 cp -r dist/. /opt/bel-madrasah/static/
 
 # Build backend
-CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /opt/bel-madrasah/bel-madrasah .
+CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /opt/bel-madrasah/bel-madrasah ./server
 
 # Buat direktori data
 mkdir -p /opt/bel-madrasah/{data,tone}
@@ -86,10 +98,10 @@ mkdir -p /opt/bel-madrasah/{data,tone}
 
 ```bash
 # arm64 (Raspberry Pi 4+)
-GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bel-madrasah .
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bel-madrasah ./server
 
 # armv7 (Raspberry Pi 3 dan sebelumnya)
-GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bel-madrasah .
+GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bel-madrasah ./server
 ```
 
 ---
@@ -111,11 +123,20 @@ Variabel dibaca dari environment, bukan dari file `.env` di production. File `.e
 ## Pengujian
 
 ```bash
-pnpm test     # unit test frontend (node:test) lalu go test ./...
 pnpm check    # astro sync dan tsc
+pnpm test     # unit test frontend (node:test) lalu go test ./...
+pnpm e2e      # build, jalankan server sementara, uji tampilan 360px/1280px dan alur utama di Chromium headless
 ```
 
-Uji backend memakai direktori sementara lewat `setBaseDir`, sehingga tidak menyentuh `/opt/bel-madrasah`.
+Uji backend dan e2e memakai direktori sementara (`setBaseDir` / `BEL_BASE_DIR`), sehingga tidak menyentuh `/opt/bel-madrasah`. Uji e2e membutuhkan Go dan Chromium atau Chrome (atur `CHROME_BIN` bila tidak di lokasi standar).
+
+### Deploy
+
+```bash
+HOST=server-ssh ./scripts/deploy.sh
+```
+
+Membangun frontend dan backend arm64, mengunggah, mengganti binary dengan cadangan, lalu mengecek `/healthz`.
 
 ---
 
@@ -173,17 +194,17 @@ Semua endpoint kecuali `/login`, `/logout`, dan `/healthz` memerlukan session co
 | Method | Path | Keterangan |
 |---|---|---|
 | GET | `/api/jadwal?mode=<mode>` | Ambil jadwal untuk mode tertentu |
-| POST | `/api/jadwal/entry` | Add/edit/delete/preview/stop entry. Body: `{action, mode, hari, index, entry}` |
+| POST | `/api/jadwal/entry` | Add/edit/delete/preview/stop entry. Body: `{action, mode, hari, index, entry}`. `entry.audio` boleh nama file saja, server melengkapinya dengan direktori tone |
 | POST | `/api/jadwal/day-toggle` | Aktifkan atau nonaktifkan hari. Body: `{mode, hari, disable}` |
 
 ### Audio
 
 | Method | Path | Keterangan |
 |---|---|---|
-| GET | `/api/tones` | List file audio. Query: `page`, `per_page` (max 500) |
+| GET | `/api/tones` | List file audio. Query: `page`, `per_page` (max 500). `usage` memuat jumlah entri jadwal per file |
 | GET | `/api/tones/<filename>` | Stream file audio |
 | POST | `/api/tones/upload` | Upload file. Multipart, field `file`, max 32MB |
-| POST | `/api/tones/delete` | Hapus file. Body: `{"filename": "..."}` |
+| POST | `/api/tones/delete` | Hapus file beserta entri jadwal yang memakainya. Body: `{"filename": "..."}`. Respons memuat `removed` |
 | POST | `/api/tones/rename` | Ganti nama file. Body: `{"filename": "...", "new_name": "..."}`. Ekstensi dipertahankan, nama disanitasi, entri jadwal yang memakai file ikut diperbarui. `409` bila nama sudah dipakai |
 | POST | `/api/tones/preview` | Putar file di server. Body: `{"filename": "..."}` |
 | POST | `/api/tones/stop` | Stop semua audio yang sedang diputar |
@@ -205,7 +226,7 @@ Semua endpoint kecuali `/login`, `/logout`, dan `/healthz` memerlukan session co
 | GET | `/api/log` | Ambil log aktivitas (max 500, urutan terbaru di atas) |
 | POST | `/api/log/reset` | Kosongkan log |
 | GET | `/api/backup` | Download jadwal sebagai JSON |
-| POST | `/api/restore` | Restore jadwal dari file JSON. Multipart, field `file`, max 4MB |
+| POST | `/api/restore` | Restore jadwal dari file JSON. Multipart, field `file`, max 4MB. Path audio dipindahkan ke direktori tone server ini, sehingga backup dapat dipakai lintas instalasi |
 | POST | `/api/change-password` | Ganti password. Body: `{old_password, new_password}` |
 | GET | `/healthz` | Health check, response `200 ok` |
 

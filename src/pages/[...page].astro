@@ -1,0 +1,18 @@
+---
+import type { GetStaticPaths } from "astro";
+import App from "../components/App";
+import Layout from "../layouts/Layout.astro";
+import { ROUTES } from "../lib/routes";
+
+export const getStaticPaths = (() =>
+  ROUTES.map((route) => ({
+    params: { page: route.path === "/" ? undefined : route.path.slice(1) },
+    props: { route },
+  }))) satisfies GetStaticPaths;
+
+const { route } = Astro.props;
+---
+
+<Layout title={route.title}>
+  <App page={route.key} client:only="react" />
+</Layout>

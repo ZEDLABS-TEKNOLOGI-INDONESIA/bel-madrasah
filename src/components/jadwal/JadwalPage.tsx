@@ -2,7 +2,7 @@ import { Plus, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useConfig } from "../../hooks/useConfig";
 import { useJadwal } from "../../hooks/useJadwal";
-import { ALL_MODES, MODE_LABELS, TONE_DIR } from "../../lib/constants";
+import { ALL_MODES, MODE_LABELS } from "../../lib/constants";
 import type { JadwalEntry } from "../../lib/types";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
@@ -174,7 +174,6 @@ export function JadwalPage() {
         initialDays={editing?.days}
         hariList={hariList}
         loading={actions.savePending}
-        toneDir={TONE_DIR}
       />
     </div>
   );

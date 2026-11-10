@@ -25,7 +25,6 @@ export function EqualizerCard() {
   const [gains, setGains] = useState<number[]>(NO_GAINS);
 
   const savedGains = data?.gains ?? NO_GAINS;
-  const frequencies = data?.frequencies ?? NO_GAINS;
 
   useEffect(() => {
     if (!data) return;
@@ -34,9 +33,9 @@ export function EqualizerCard() {
   }, [data]);
 
   useEffect(() => {
-    if (frequencies.length === 0) return;
-    audioManager.setEqualizer({ enabled, gains, frequencies });
-  }, [enabled, gains, frequencies]);
+    if (!data) return;
+    audioManager.setEqualizer({ enabled, gains, frequencies: data.frequencies, q: data.peak_q });
+  }, [enabled, gains, data]);
 
   useEffect(() => () => audioManager.setEqualizer(null), []);
 
@@ -86,7 +85,7 @@ export function EqualizerCard() {
           transition: "opacity 0.15s",
         }}
       >
-        {frequencies.map((freq, i) => {
+        {data.frequencies.map((freq, i) => {
           const gain = gains[i] ?? 0;
           return (
             <div

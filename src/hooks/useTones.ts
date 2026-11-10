@@ -1,6 +1,12 @@
 import { api } from "../lib/api";
 import { POLICY, createResource, useApiMutation } from "../lib/createResource";
-import type { RenameToneBody, RenameToneResponse, TonesQuery, TonesResponse } from "../lib/types";
+import type {
+  DeleteToneResponse,
+  RenameToneBody,
+  RenameToneResponse,
+  TonesQuery,
+  TonesResponse,
+} from "../lib/types";
 
 const useTonesResource = createResource<TonesResponse, TonesQuery>({
   key: "tones",
@@ -21,8 +27,8 @@ export function useUploadTone() {
 
 export function useDeleteTone() {
   return useApiMutation(
-    (filename: string) => api.post("/api/tones/delete", { filename }),
-    () => [["tones"]],
+    (filename: string) => api.post<DeleteToneResponse>("/api/tones/delete", { filename }),
+    () => [["tones"], ["jadwal"], ["service-status"]],
   );
 }
 

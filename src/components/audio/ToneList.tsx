@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { useAudio } from "../../hooks/useAudio";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { useDeleteTone, useTones } from "../../hooks/useTones";
+import { audioManager } from "../../lib/audioManager";
 import { confirmAction } from "../../lib/confirm";
 import { errorMessage } from "../../lib/errors";
 import { Badge } from "../ui/Badge";
@@ -25,6 +26,7 @@ export function ToneList() {
   const { preview, stop, isPlaying } = useAudio();
 
   const tones = data?.tones ?? [];
+  const usage = data?.usage ?? {};
   const totalPages = data?.pages ?? 1;
   const total = data?.total ?? 0;
 
@@ -45,16 +47,22 @@ export function ToneList() {
   }
 
   async function handleDelete(filename: string) {
+    const used = usage[filename] ?? 0;
     const ok = await confirmAction({
       title: "Hapus audio",
-      message: `Hapus ${filename}?`,
+      message:
+        used > 0
+          ? `${filename} dipakai ${used} jadwal. File dan jadwal tersebut akan dihapus permanen.`
+          : `Hapus ${filename}?`,
       confirmLabel: "Hapus",
       danger: true,
     });
     if (!ok) return;
     try {
-      await deleteTone.mutateAsync(filename);
-      toast.success(`${filename} dihapus`);
+      if (audioManager.isPlaying(filename)) audioManager.stopBrowser();
+      const res = await deleteTone.mutateAsync(filename);
+      const scheduled = res.removed > 0 ? `, ${res.removed} jadwal ikut dihapus` : "";
+      toast.success(`${filename} dihapus${scheduled}`);
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -83,6 +91,7 @@ export function ToneList() {
               isPlaying={isPlaying(filename)}
               onPlay={() => handlePlay(filename)}
               onStop={handleStop}
+              usage={usage[filename] ?? 0}
               onRename={() => setRenaming(filename)}
               onDelete={() => handleDelete(filename)}
               deleteLoading={deleteTone.isPending && deleteTone.variables === filename}

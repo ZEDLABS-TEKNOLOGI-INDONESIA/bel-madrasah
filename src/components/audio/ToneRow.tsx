@@ -1,10 +1,12 @@
 import { Music2, Pencil, Play, Square, Trash2 } from "lucide-react";
+import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { ListRow } from "../ui/ListRow";
 
 interface ToneRowProps {
   filename: string;
   isPlaying: boolean;
+  usage: number;
   onPlay: () => void;
   onStop: () => void;
   onRename: () => void;
@@ -17,6 +19,7 @@ interface ToneRowProps {
 export function ToneRow({
   filename,
   isPlaying,
+  usage,
   onPlay,
   onStop,
   onRename,
@@ -66,6 +69,12 @@ export function ToneRow({
       >
         {filename}
       </span>
+
+      {usage > 0 && (
+        <span title={`Dipakai ${usage} jadwal`} style={{ flexShrink: 0 }}>
+          <Badge variant="accent">{compact ? usage : `${usage} jadwal`}</Badge>
+        </span>
+      )}
 
       <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
         {isPlaying ? (

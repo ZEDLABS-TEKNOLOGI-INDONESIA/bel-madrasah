@@ -59,6 +59,7 @@ export interface PreviewResponse {
 
 export interface TonesResponse {
   tones: string[];
+  usage: Record<string, number>;
   pages: number;
   total: number;
 }
@@ -110,11 +111,16 @@ export interface EqualizerResponse extends EqualizerSettings {
   frequencies: number[];
   min_gain: number;
   max_gain: number;
+  peak_q: number;
 }
 
 export interface RenameToneBody {
   filename: string;
   new_name: string;
+}
+
+export interface DeleteToneResponse {
+  removed: number;
 }
 
 export interface RenameToneResponse {

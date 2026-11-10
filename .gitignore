@@ -22,3 +22,10 @@ pnpm-debug.log*
 # jetbrains setting folder
 .idea/
 # .env
+
+# generated source dump (scripts/generate.sh)
+draft.md
+
+# local binaries
+/bel-madrasah
+/bel-madrasah-*

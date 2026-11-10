@@ -1,9 +1,0 @@
----
-import App from "../components/App";
-import Layout from "../layouts/Layout.astro";
-import { titleOf } from "../lib/routes";
----
-
-<Layout title={titleOf("/")}>
-  <App page="dashboard" client:only="react" />
-</Layout>

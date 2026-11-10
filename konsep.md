@@ -38,11 +38,13 @@ Catatan perkakas:
 - Pakai TypeScript 6. `astro check` belum mendukung TypeScript 7 dan membawa dependensi yang bentrok, jadi pemeriksaan tipe memakai `tsc`.
 - `astro sync` harus jalan sebelum `tsc` agar tipe `import.meta.env` tersedia.
 - Uji unit frontend memakai `node:test` bawaan Node dengan type stripping, tanpa dependensi tambahan. Berkas uji berupa `tests/*.test.mjs` yang mengimpor modul `.ts` secara langsung, sehingga hanya modul tanpa impor runtime (fungsi murni dengan `import type`) yang dapat diuji.
+- Uji end-to-end (`tests/e2e/`) memakai Chromium lewat DevTools Protocol dengan `WebSocket` bawaan Node, juga tanpa dependensi. Runner membangun backend, menjalankannya pada direktori sementara (`BEL_BASE_DIR`) berisi salinan `dist/` dan `tone/`, lalu memeriksa tata letak dan alur utama.
 - Skrip `package.json`:
 
 ```json
 "check": "astro sync && tsc --noEmit",
 "test": "node --test \"tests/*.test.mjs\" && go test ./...",
+"e2e": "astro build && node tests/e2e/run.mjs",
 "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
 ```
 
@@ -64,7 +66,8 @@ public/
   icons/icon-192.png  icons/icon-512.png
 src/
   layouts/Layout.astro  kepala HTML tunggal untuk semua halaman
-  pages/              satu .astro per halaman, membungkus Layout dan satu komponen React
+  pages/              [...page].astro untuk semua halaman panel (dibangkitkan dari ROUTES),
+                      landing.astro, login.astro, 404.astro
   styles/global.css   token tema, reset, kelas utilitas, keyframe
   lib/
     app.config.ts     identitas aplikasi, warna tema, konten halaman login
@@ -97,8 +100,13 @@ src/
     landing/          LandingPage, LandingNav, Hero, bagian-bagian, landingStyle
     <fitur>/          satu folder per halaman panel
 tests/                uji unit frontend (*.test.mjs)
-*_test.go             uji backend
+  e2e/                run.mjs (skenario), cdp.mjs (pembungkus Chromium)
+server/               backend Go, package main, satu berkas per domain (lihat bagian 19)
+scripts/              install.sh, uninstall.sh, deploy.sh, generate.sh
+tone/                 audio bawaan yang disalin saat instalasi
 ```
+
+Root hanya berisi konfigurasi perkakas (`package.json`, `astro.config.mjs`, `tsconfig.json`, `go.mod`, `.env.example`) dan dokumen. Kode tidak diletakkan di root.
 
 Layanan non-React yang memegang state sendiri (contoh: `audioManager.ts`) berupa kelas dengan `subscribe`, dibungkus satu hook agar React ikut berlangganan.
 
@@ -407,21 +415,30 @@ Aturan:
 
 `src/layouts/Layout.astro` adalah satu-satunya tempat `<head>`: charset, favicon `.ico` dan `.svg`, viewport, `theme-color`, manifest, `<title>`, dan meta Open Graph. Props: `title` (wajib) dan `description` (opsional). Judul akhir `"{title} - {APP.name}"`. Impor `global.css` dilakukan di layout. `lang` mengikuti bahasa antarmuka.
 
-Setiap berkas `.astro` hanya memuat layout dan satu komponen React dengan `client:only="react"`:
+Semua halaman panel dibangkitkan oleh satu berkas `src/pages/[...page].astro` dari `ROUTES`. Path `/` menjadi parameter `undefined` sehingga menghasilkan `index.html`; path lain menghasilkan `<nama>.html` karena `format: "file"`.
 
 ```astro
 ---
+import type { GetStaticPaths } from "astro";
 import App from "../components/App";
 import Layout from "../layouts/Layout.astro";
-import { titleOf } from "../lib/routes";
+import { ROUTES } from "../lib/routes";
+
+export const getStaticPaths = (() =>
+  ROUTES.map((route) => ({
+    params: { page: route.path === "/" ? undefined : route.path.slice(1) },
+    props: { route },
+  }))) satisfies GetStaticPaths;
+
+const { route } = Astro.props;
 ---
 
-<Layout title={titleOf("/jadwal")}>
-  <App page="jadwal" client:only="react" />
+<Layout title={route.title}>
+  <App page={route.key} client:only="react" />
 </Layout>
 ```
 
-Halaman panel mengambil judul dari `titleOf` agar selalu sama dengan `routes.ts`. Halaman publik memberi judul sendiri.
+Judul berasal dari `route.title`, sumber yang sama dengan `titleOf`. Halaman publik (`landing.astro`, `login.astro`) tetap berupa berkas sendiri, hanya memuat Layout dan satu komponen React dengan `client:only="react"`, dan memberi judul sendiri.
 
 Halaman 404 memakai Layout dan token CSS yang sama, bukan nilai literal.
 
@@ -500,13 +517,13 @@ Sebelum commit:
 pnpm format
 pnpm check
 pnpm test
-pnpm build
+pnpm e2e
 grep -rnE "any\b|confirm\(|#[0-9a-fA-F]{3,6}" src --include=*.ts --include=*.tsx | grep -v "#fff"
 ```
 
 Satu-satunya temuan yang sah adalah `themeColor` di `app.config.ts`.
 
-Setelah build, bandingkan ukuran `dist/_astro/*.br` dengan build sebelumnya. Kenaikan di chunk halaman atau chunk bersama perlu dijelaskan. Berkas `.br` baru ada setelah `deploy.sh` (tahap precompress), bukan setelah `pnpm build`. Untuk perbandingan cepat tanpa deploy:
+Setelah build, bandingkan ukuran `dist/_astro/*.br` dengan build sebelumnya. Kenaikan di chunk halaman atau chunk bersama perlu dijelaskan. Berkas `.br` baru ada setelah `scripts/deploy.sh` (tahap precompress), bukan setelah `pnpm build`. Untuk perbandingan cepat tanpa deploy:
 
 ```bash
 for f in dist/_astro/*.js dist/_astro/*.css; do echo "$(brotli -q 11 -c "$f" | wc -c) $(basename "$f")"; done | sort -rn
@@ -516,12 +533,12 @@ Acuan terakhir: total sekitar 150 KB brotli. `Modal` sekitar 6 KB, ditambah inti
 
 ## 19. Build dan Rilis
 
-`deploy.sh` menjalankan urutan berikut, dengan `HOST` dan `SERVICE` dapat diganti lewat variabel lingkungan:
+`scripts/deploy.sh` menjalankan urutan berikut dari root repositori, dengan `HOST` dan `SERVICE` dapat diganti lewat variabel lingkungan:
 
 1. `pnpm build` menghasilkan `dist/` dengan `format: "file"` (satu HTML per halaman)
 2. Berkas HTML, JS, CSS, SVG, JSON, dan ICO dibuat versi Brotli (kualitas 11) dan gzip (zopfli bila tersedia). Server menyajikan versi terkecil sesuai `Accept-Encoding`
 3. Peta sumber dihapus
-4. Backend dibangun statis untuk target server
+4. Backend dibangun statis untuk target server dari `./server`
 5. Unggah frontend memakai `rsync -az --delete`
 6. Unggah backend ke berkas sementara, cadangkan versi lama, hentikan layanan, ganti, jalankan, lalu cek `/healthz`
 
@@ -531,7 +548,7 @@ Berkas `_astro/` diberi cache `immutable` satu tahun karena namanya berhash.
 
 Frontend mengandalkan perilaku berikut dari server:
 
-- Setiap halaman panel punya entri di peta path ke berkas HTML dan dilindungi sesi. Tanpa sesi, halaman diarahkan (303) ke `/login`.
+- Halaman panel ditemukan dari hasil build: `/<nama>` menyajikan `static/<nama>.html` bila berkas itu ada, `/` menyajikan `index.html`. Nama harus cocok `^[a-z0-9-]+$`, dan `login`, `landing`, `404` dikecualikan. Semua halaman panel dilindungi sesi; tanpa sesi diarahkan (303) ke `/login`. Backend tidak menyimpan daftar halaman.
 - `/landing` dan `/login` publik. Keduanya diarahkan (303) ke `/` bila diakses dengan sesi sah.
 - Sesi bertahan setelah server dimulai ulang. Server hanya menyimpan hash SHA-256 token di `data/sessions.json` (izin 0600), tidak pernah token mentah.
 - `/` tanpa sesi diarahkan (303) ke `/landing`. Dengan sesi, menyajikan dashboard.
@@ -548,30 +565,52 @@ curl -s -o /dev/null -w "%{http_code}\n" https://HOST/landing
 curl -s -o /dev/null -w "%{http_code}\n" -H "Accept: application/json" https://HOST/api/config
 ```
 
-Hasil yang diharapkan: `303` ke `/landing`, `200`, dan `401`. Kontrak ini juga diuji otomatis oleh `TestPublicRoutingContract` di `main_test.go`.
+Hasil yang diharapkan: `303` ke `/landing`, `200`, dan `401`. Kontrak ini juga diuji otomatis oleh `TestPublicRoutingContract` di `server/routes_test.go`.
+
+### Struktur backend
+
+Satu `package main` di `server/`, dibangun dengan `go build ./server`. Satu berkas per domain, handler HTTP dipisah dari logika:
+
+| Berkas | Isi |
+| --- | --- |
+| `main.go` | wiring, start dan shutdown |
+| `paths.go` | `BEL_BASE_DIR` dan semua path berkas data |
+| `routes.go` | satu-satunya daftar route |
+| `static.go` | halaman panel, landing, PWA, aset precompressed |
+| `respond.go`, `middleware.go` | helper respons JSON, CORS, batas body |
+| `config.go`, `jadwal.go`, `activity.go`, `tones.go`, `equalizer.go`, `auth.go` | model dan penyimpanan per domain |
+| `player.go`, `scheduler.go` | pemutaran ffmpeg dan loop bel |
+| `api_<domain>.go` | handler HTTP, hanya memvalidasi input lalu memanggil logika domain |
+| `<domain>_test.go` | uji per domain, memakai `setupTestDir` dari `helpers_test.go` |
+
+Aturan backend:
+- Daftar nilai ditulis sekali (`AllModes`, `AllHari`); turunan seperti `validModes` dibangun dari daftar itu.
+- Path audio di jadwal disimpan absolut, tetapi API menerima nama file saja (`resolveAudioPath`), sehingga frontend tidak perlu tahu lokasi direktori tone.
+- Perubahan jadwal yang membaca lalu menulis memakai `updateJadwal` agar terkunci dari awal sampai akhir.
+- Nama file dari klien harus persis nama dasar (`safeFilename(x) == x`); input berisi path ditolak, tidak dirapikan diam-diam.
 
 Direktori dasar backend dapat dipindah lewat `BEL_BASE_DIR` (bawaan `/opt/bel-madrasah`) untuk menjalankan server lokal pada salinan data, misalnya saat uji visual dengan peramban headless.
 
 ## 20. Memulai Proyek Baru
 
-1. Salin struktur folder bagian 3, `package.json`, `tsconfig.json`, `.prettierrc`, `astro.config.mjs`, `deploy.sh`, `.env.example`.
+1. Salin struktur folder bagian 3, `package.json`, `tsconfig.json`, `.prettierrc`, `astro.config.mjs`, `scripts/`, `tests/e2e/cdp.mjs`, `.env.example`.
 2. Ubah `app.config.ts`: nama, logo, warna tema, watermark, dan konten login. Ubah awalan variabel env (`BEL_` menjadi awalan project).
 3. Ubah `manifest.json`: nama, deskripsi, warna. Ganti `icon.svg`, `favicon.ico`, dan ikon PNG. Siapkan ikon maskable terpisah dengan area aman sekitar 80% dari kanvas.
 4. Naikkan versi nama cache di `sw.js` ke nama project baru.
 5. Ganti konstanta domain di `constants.ts` dan tipe di `types.ts`.
 6. Tulis ulang `landing.ts`: teks, langkah, keunggulan, peran, FAQ, contoh data, dan teks demo. Sesuaikan `BellDemo` dan cuplikan di `RoleSection` dengan domain baru.
-7. Daftarkan halaman panel: tambah entri (termasuk `icon`) di `routes.ts`, buat berkas `.astro` berbasis `Layout`, tambahkan ke peta halaman di `App.tsx`, dan daftarkan path di backend.
+7. Daftarkan halaman panel: tambah entri (termasuk `icon`) di `routes.ts`, lalu tambahkan komponennya ke `PAGES` di `App.tsx`. Berkas HTML dibangkitkan otomatis dan backend menemukannya sendiri.
 8. Untuk setiap halaman: `PageHeader`, lalu grid 12 kolom berisi `Card`, dengan tiga keadaan baku.
 9. Untuk setiap resource: satu hook lewat `createResource`, mutasi lewat `useApiMutation`. Tambahkan kunci yang boleh dipersist di `queryClient.ts`.
 10. Isi `.env.example` dan atur identitas footer.
 11. Penuhi kontrak backend bagian 19 (rute `/landing`, redirect `/`).
 12. Jalankan `pnpm check`, `pnpm build`.
 
-Daftar yang masih ditulis manual di lebih dari satu tempat saat menambah halaman panel: `routes.ts`, berkas `.astro`, peta halaman di `App.tsx`, dan peta path di backend.
+Menambah halaman panel hanya menyentuh dua tempat: `routes.ts` dan `PAGES` di `App.tsx`. Yang kedua bertipe `Record<PageKey, ReactNode>`, sehingga `tsc` gagal bila ada halaman yang lupa dipetakan.
 
 ## 21. Daftar Periksa Sebelum Rilis
 
-- `pnpm check` bersih, `pnpm test` lulus, `pnpm format` tidak mengubah apa pun
+- `pnpm check` bersih, `pnpm test` dan `pnpm e2e` lulus, `pnpm format` tidak mengubah apa pun
 - Tidak ada `any`, `confirm(`, `window.confirm`, atau `catch (e: any)` di `src`
 - Tidak ada warna heksadesimal di komponen selain `#fff`
 - Tidak ada nama aplikasi atau kalimat pemasaran yang tertulis langsung di komponen
@@ -582,8 +621,8 @@ Daftar yang masih ditulis manual di lebih dari satu tempat saat menambah halaman
 - `<title>` halaman panel berasal dari `titleOf`
 - Kontrak backend lolos tiga uji `curl` di bagian 19
 - Ukuran aset dibandingkan dengan rilis sebelumnya
-- Tidak ada elemen yang meluap pada lebar 360px di semua halaman panel, landing, dan login (`document.documentElement.scrollWidth === 360`)
-- Uji manual: tema terang dan gelap, lebar 360px dan 1280px, mode luring, instal PWA, Tab di dalam Modal, tombol Keluar, dan demo landing
+- Halaman atau alur baru ditambahkan ke `tests/e2e/run.mjs` (daftar `PANEL`/`PUBLIC` dan skenario), karena e2e yang memeriksa luapan 360px dan area sentuh
+- Uji manual untuk yang belum diotomasi: tema terang, mode luring, instal PWA, Tab di dalam Modal, tombol Keluar, dan demo landing
 
 ## 22. Fitur Audio Acuan
 
@@ -598,14 +637,17 @@ Dua fitur pada halaman Audio menjadi contoh pola baku untuk pengaturan dan aksi 
 - Lima band tetap (60 Hz, 250 Hz, 1 kHz, 4 kHz, 12 kHz), rentang -12 sampai 12 dB, langkah 0,5 dB. Frekuensi dan rentang berasal dari server, preset (`EQ_PRESETS`) dari `constants.ts`.
 - Pola draf: sakelar dan slider mengubah state lokal, tombol Simpan dan Batal aktif hanya bila ada perubahan. Tidak ada simpan otomatis per slider.
 - Server menerapkan equalizer lewat ffmpeg (`lowshelf`, `equalizer`, `highshelf`, lalu `alimiter` bila ada band yang dinaikkan) sebelum `volume`, mulai pemutaran berikutnya.
-- Pratinjau di browser melewati rantai Web Audio yang meniru rantai server (`BiquadFilterNode` dan `DynamicsCompressorNode` sebagai limiter), sehingga perubahan slider langsung terdengar. Rantai hanya aktif selama halaman Audio terbuka.
+- Pratinjau di browser melewati rantai Web Audio (`BiquadFilterNode` dan `DynamicsCompressorNode` sebagai limiter), sehingga perubahan slider langsung terdengar. Rantai hanya aktif selama halaman Audio terbuka.
+- Respons filter browser identik dengan speaker: server memakai shelf dengan slope 1 (`t=s:w=1`) dan peaking dengan Q (`t=q`), yaitu rumus RBJ yang sama dengan spesifikasi Web Audio. Nilai Q (`peak_q`) dikirim server, tidak ditulis di frontend. Satu-satunya perbedaan adalah limiter (`alimiter` versus kompresor), yang hanya bekerja saat sinyal mendekati 0 dBFS.
+
+**Hapus file** (`ToneList`, `POST /api/tones/delete`):
+- Daftar audio menampilkan jumlah jadwal pemakai tiap file (`usage` dari `GET /api/tones`) sebagai badge.
+- Dialog konfirmasi menyebut jumlah itu. Server menghapus file lalu semua entri jadwal yang menunjuknya, dan mengembalikan `removed`. Jadwal tidak pernah menunjuk file yang sudah hilang.
 - `POST /api/config` mempertahankan nilai equalizer yang tersimpan, karena form konfigurasi tidak mengirimnya.
 
 ## 23. Utang Teknis yang Diketahui
 
-Penyimpangan kode acuan dari aturan di atas:
+Tidak ada penyimpangan yang diketahui dari aturan di atas. Batasan yang disengaja:
 
-- Daftar halaman panel masih ditulis manual di empat tempat: `routes.ts`, berkas `.astro`, peta halaman di `App.tsx`, dan `pageRoutes` di backend
-- Pratinjau equalizer di browser adalah pendekatan: filter shelf Web Audio tidak memakai parameter lebar seperti ffmpeg, sehingga respons pada band 60 Hz dan 12 kHz sedikit berbeda dari speaker
-- Uji otomatis mencakup fungsi murni frontend dan backend (handler, sesi, kontrak routing). Belum ada uji komponen React maupun uji end-to-end di repositori; uji tampilan 360px dan alur ganti nama serta equalizer dijalankan manual dengan Chromium headless
-- Menghapus file audio yang masih dipakai jadwal tidak diperingatkan; entri jadwal tetap menunjuk file yang hilang dan dilewati saat diputar
+- Uji e2e membutuhkan Go dan Chromium di mesin pengembang; belum dijalankan di CI karena repositori belum memiliki pipeline
+- Unit test frontend hanya menjangkau modul tanpa impor runtime; komponen React diuji lewat e2e, bukan uji komponen terpisah
